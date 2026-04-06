@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.financetracker.app</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/opt/homebrew/bin/npm</string>
+    <string>run</string>
+    <string>start</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>FINANCE_TRACKER_PATH</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key>
+    <string>3000</string>
+    <key>HOSTNAME</key>
+    <string>0.0.0.0</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>FINANCE_TRACKER_PATH/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>FINANCE_TRACKER_PATH/logs/stderr.log</string>
+</dict>
+</plist>
