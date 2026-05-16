@@ -33,20 +33,29 @@ interface DashboardData {
   priorMonthLabel: string | null
 }
 
+interface BalanceData {
+  balances: { bank: string; balance: number; recorded_at: string }[]
+  total: number
+}
+
 export default function HomePage() {
   const [selectedBank, setSelectedBank] = useState<string>('all')
   const [data, setData] = useState<DashboardData | null>(null)
+  const [balanceData, setBalanceData] = useState<BalanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     const params = selectedBank !== 'all' ? `?bank=${selectedBank}` : ''
-    fetch(`/api/dashboard${params}`)
-      .then(r => r.json())
-      .then(d => {
+    Promise.all([
+      fetch(`/api/dashboard${params}`).then(r => r.json()),
+      fetch('/api/balances').then(r => r.json()),
+    ])
+      .then(([d, b]) => {
         if (d.error) setError(d.error)
         else setData(d)
+        setBalanceData(b)
       })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
@@ -109,27 +118,56 @@ export default function HomePage() {
           {/* AI insight card */}
           <InsightCard hasTransactions={data.recentTransactions.length > 0 || data.topCategories.length > 0} />
 
-          {/* Monthly summary card */}
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-zinc-400 font-normal">
-                {new Date(data.month + '-01').toLocaleString('en-SG', { month: 'long', year: 'numeric' })} spend
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-mono font-semibold text-white">
-                {formatSGD(data.totalSpend)}
-              </p>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-xs text-zinc-500">Day {data.daysElapsed} of month</p>
-                {data.momDelta !== null && data.momDeltaPct !== null && data.priorMonthLabel && (
-                  <p className={`text-xs font-mono ${data.momDelta > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {data.momDelta > 0 ? '↑' : '↓'} {formatSGD(Math.abs(data.momDelta))} vs {data.priorMonthLabel} ({data.momDelta > 0 ? '+' : ''}{data.momDeltaPct.toFixed(0)}%)
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Balance + Spend side-by-side */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Balance card */}
+            <Link href="/accounts">
+              <Card className="bg-zinc-900 border-zinc-800 hover:bg-zinc-800/50 transition-colors cursor-pointer h-full">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-zinc-400 font-normal">Total balance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {balanceData && balanceData.balances.length > 0 ? (
+                    <>
+                      <p className="text-2xl font-mono font-semibold text-white">
+                        {formatSGD(balanceData.total)}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        across {balanceData.balances.length} {balanceData.balances.length === 1 ? 'bank' : 'banks'} →
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-zinc-500 mt-1">No balances set</p>
+                      <p className="text-xs text-blue-400 mt-1">Set up →</p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </Link>
+
+            {/* Spend card */}
+            <Card className="bg-zinc-900 border-zinc-800 h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-zinc-400 font-normal">
+                  {new Date(data.month + '-01').toLocaleString('en-SG', { month: 'short' })} spend
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-mono font-semibold text-white">
+                  {formatSGD(data.totalSpend)}
+                </p>
+                <div className="mt-1">
+                  <p className="text-xs text-zinc-500">Day {data.daysElapsed} of month</p>
+                  {data.momDelta !== null && data.momDeltaPct !== null && data.priorMonthLabel && (
+                    <p className={`text-xs font-mono ${data.momDelta > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {data.momDelta > 0 ? '↑' : '↓'} {formatSGD(Math.abs(data.momDelta))} ({data.momDelta > 0 ? '+' : ''}{data.momDeltaPct.toFixed(0)}%)
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Top categories */}
           {data.topCategories.length > 0 && (

@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { CATEGORY_COLORS, formatSGD } from '@/lib/display'
 import { CATEGORIES, BANKS } from '@/lib/schema'
+import Link from 'next/link'
 
 interface Transaction {
   id: string
@@ -114,7 +115,15 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4 p-4 max-w-3xl mx-auto">
-      <h1 className="text-xl font-semibold">Transactions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Transactions</h1>
+        <Link
+          href="/upload"
+          className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
+        >
+          Upload
+        </Link>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
