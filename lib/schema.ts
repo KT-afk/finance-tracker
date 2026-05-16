@@ -53,3 +53,10 @@ export const aiMemory = sqliteTable('ai_memory', {
   source: text('source', { enum: ['user', 'inferred'] }).notNull(),
   created_at: text('created_at').notNull(),
 })
+
+export const balanceHistory = sqliteTable('balance_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  bank: text('bank', { enum: BANKS }).notNull(),
+  balance: real('balance').notNull(),
+  recorded_at: text('recorded_at').notNull(),
+})

@@ -6,6 +6,8 @@ import { parseUOB } from './uob'
 import { parseTrust } from './trust'
 import { extractTextFromPDF } from './pdf'
 import { parseUOBCreditCardPDF } from './uob-pdf'
+import { parseOCBCPDF } from './ocbc-pdf'
+import { parseTrustPDF } from './trust-pdf'
 
 export type { RawTransaction } from './types'
 
@@ -43,6 +45,12 @@ export async function parseFile(
 
     if (bank === 'uob') {
       return parseUOBCreditCardPDF(text)
+    }
+    if (bank === 'ocbc') {
+      return parseOCBCPDF(text)
+    }
+    if (bank === 'trust') {
+      return parseTrustPDF(text)
     }
     throw new Error(`PDF upload is not supported for ${bank}. Please upload a CSV file.`)
   }

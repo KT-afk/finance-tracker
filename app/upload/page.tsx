@@ -23,49 +23,85 @@ interface PreviewData {
   bank: string
 }
 
-interface UploadResult {
-  preview: PreviewData
-  transactions: unknown[]
-}
-
 export default function UploadPage() {
   const router = useRouter()
   const [bank, setBank] = useState<string>('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [pendingTransactions, setPendingTransactions] = useState<unknown[]>([])
   const [confirming, setConfirming] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
 
   const missingApiKey = !process.env.NEXT_PUBLIC_HAS_ANTHROPIC_KEY
 
   async function handleUpload() {
-    if (!bank || !file) return
+    if (!bank || files.length === 0) return
     setLoading(true)
     setError(null)
     setPreview(null)
+    setPendingTransactions([])
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('bank', bank)
+      let allTransactions: unknown[] = []
+      let totalParsed = 0
+      let totalNew = 0
+      let totalSkipped = 0
+      let dateFrom = ''
+      let dateTo = ''
 
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
+      const skippedFiles: string[] = []
 
-      if (!res.ok) {
-        setError(data.error ?? 'Upload failed')
+      for (let i = 0; i < files.length; i++) {
+        setProgress(`Processing file ${i + 1} of ${files.length}…`)
+
+        const formData = new FormData()
+        formData.append('file', files[i])
+        formData.append('bank', bank)
+
+        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const data = await res.json()
+
+        if (!res.ok) {
+          // Skip files that fail (e.g., no transactions, wrong format) instead of aborting
+          skippedFiles.push(files[i].name)
+          continue
+        }
+
+        totalParsed += data.preview.total
+        totalNew += data.preview.newCount
+        totalSkipped += data.preview.skippedCount
+        allTransactions = [...allTransactions, ...data.transactions]
+
+        if (!dateFrom || data.preview.dateFrom < dateFrom) dateFrom = data.preview.dateFrom
+        if (!dateTo || data.preview.dateTo > dateTo) dateTo = data.preview.dateTo
+      }
+
+      if (allTransactions.length === 0 && skippedFiles.length > 0) {
+        setError(`No transactions found in any file. Skipped: ${skippedFiles.join(', ')}`)
         return
       }
 
-      setPreview(data.preview)
-      setPendingTransactions(data.transactions)
+      if (skippedFiles.length > 0) {
+        setError(`Skipped ${skippedFiles.length} file${skippedFiles.length > 1 ? 's' : ''} with no transactions: ${skippedFiles.join(', ')}`)
+      }
+
+      setPreview({
+        total: totalParsed,
+        newCount: totalNew,
+        skippedCount: totalSkipped,
+        dateFrom,
+        dateTo,
+        bank,
+      })
+      setPendingTransactions(allTransactions)
     } catch {
       setError('Network error — please try again')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -98,7 +134,7 @@ export default function UploadPage() {
   function handleReset() {
     setPreview(null)
     setPendingTransactions([])
-    setFile(null)
+    setFiles([])
     setError(null)
     setConfirmed(false)
   }
@@ -119,7 +155,7 @@ export default function UploadPage() {
       {!preview && !confirmed && (
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-base">Select bank &amp; file</CardTitle>
+            <CardTitle className="text-base">Select bank &amp; files</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -139,13 +175,17 @@ export default function UploadPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm text-zinc-400">Statement file</label>
+              <label className="text-sm text-zinc-400">Statement files</label>
               <input
                 type="file"
                 accept=".csv,.pdf,text/csv,application/pdf"
+                multiple
                 className="block w-full text-sm text-zinc-400 file:mr-3 file:rounded file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:text-zinc-100 hover:file:bg-zinc-600"
-                onChange={e => setFile(e.target.files?.[0] ?? null)}
+                onChange={e => setFiles(e.target.files ? Array.from(e.target.files) : [])}
               />
+              {files.length > 1 && (
+                <p className="text-xs text-zinc-500">{files.length} files selected</p>
+              )}
             </div>
 
             {error && (
@@ -156,10 +196,10 @@ export default function UploadPage() {
 
             <Button
               className="w-full bg-blue-600 hover:bg-blue-500"
-              disabled={!bank || !file || loading}
+              disabled={!bank || files.length === 0 || loading}
               onClick={handleUpload}
             >
-              {loading ? 'Parsing & categorizing…' : 'Preview'}
+              {loading ? (progress ?? 'Processing…') : 'Preview'}
             </Button>
           </CardContent>
         </Card>
@@ -194,7 +234,7 @@ export default function UploadPage() {
             </div>
 
             <p className="text-xs text-zinc-500">
-              Date range: {preview.dateFrom} → {preview.dateTo}
+              {files.length > 1 ? `${files.length} files · ` : ''}Date range: {preview.dateFrom} → {preview.dateTo}
             </p>
 
             {error && (
