@@ -55,6 +55,8 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [recategorizing, setRecategorizing] = useState(false)
+  const [recategorizeResult, setRecategorizeResult] = useState<string | null>(null)
 
   const months = getAvailableMonths()
 
@@ -117,17 +119,103 @@ export default function TransactionsPage() {
     <div className="space-y-4 p-4 max-w-3xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Transactions</h1>
-        <Link
-          href="/upload"
-          className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
-        >
-          Upload
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setRecategorizing(true)
+              setRecategorizeResult(null)
+              try {
+                const res = await fetch('/api/transactions/recategorize', { method: 'POST' })
+                if (!res.ok) {
+                  let message = 'Failed to recategorize'
+                  try {
+                    const data = await res.json()
+                    if (typeof data?.error === 'string' && data.error) {
+                      message = data.error
+                    }
+                  } catch {
+                    // Ignore invalid error responses and keep the fallback message.
+                  }
+                  throw new Error(message)
+                }
+
+                const reader = res.body?.getReader()
+                if (!reader) throw new Error('No stream')
+                const decoder = new TextDecoder()
+                let buffer = ''
+                let lastResult = ''
+                let streamError = ''
+                let sawDone = false
+
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  buffer += decoder.decode(value, { stream: true })
+                  const lines = buffer.split('\n')
+                  buffer = lines.pop() ?? ''
+                  for (const line of lines) {
+                    if (!line.trim()) continue
+                    const data = JSON.parse(line)
+                    if (data.error) {
+                      streamError = data.error
+                    } else if (data.done) {
+                      sawDone = true
+                      lastResult = data.message
+                    } else {
+                      setRecategorizeResult(`Processing ${data.progress} of ${data.total}... (${data.updated} updated)`)
+                    }
+                  }
+                }
+
+                if (buffer.trim()) {
+                  const data = JSON.parse(buffer)
+                  if (data.error) {
+                    streamError = data.error
+                  } else if (data.done) {
+                    sawDone = true
+                    lastResult = data.message
+                  }
+                }
+
+                if (streamError) {
+                  throw new Error(streamError)
+                }
+
+                if (!sawDone) {
+                  throw new Error('Recategorization ended before completion')
+                }
+
+                setRecategorizeResult(lastResult || 'Done')
+                fetchTransactions()
+              } catch (error) {
+                setRecategorizeResult(error instanceof Error ? error.message : 'Failed to recategorize')
+              } finally {
+                setRecategorizing(false)
+              }
+            }}
+            disabled={recategorizing}
+            className="rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors disabled:opacity-50"
+          >
+            {recategorizing ? 'Recategorizing…' : 'Recategorize'}
+          </button>
+          <Link
+            href="/upload"
+            className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
+          >
+            Upload
+          </Link>
+        </div>
       </div>
+
+      {recategorizeResult && (
+        <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300">
+          {recategorizeResult}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        <Select value={month} onValueChange={setMonth}>
+        <Select value={month} onValueChange={setMonth} disabled={recategorizing}>
           <SelectTrigger className="bg-zinc-900 border-zinc-700 w-36 text-sm">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
@@ -141,7 +229,7 @@ export default function TransactionsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={category} onValueChange={setCategory}>
+        <Select value={category} onValueChange={setCategory} disabled={recategorizing}>
           <SelectTrigger className="bg-zinc-900 border-zinc-700 w-44 text-sm">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -153,7 +241,7 @@ export default function TransactionsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={bank} onValueChange={setBank}>
+        <Select value={bank} onValueChange={setBank} disabled={recategorizing}>
           <SelectTrigger className="bg-zinc-900 border-zinc-700 w-32 text-sm">
             <SelectValue placeholder="Bank" />
           </SelectTrigger>
@@ -225,7 +313,7 @@ export default function TransactionsPage() {
                     <Select
                       value={t.category}
                       onValueChange={val => handleCategoryChange(t.id, val)}
-                      disabled={updatingId === t.id}
+                        disabled={updatingId === t.id || recategorizing}
                     >
                       <SelectTrigger
                         className="w-36 h-7 text-xs border-zinc-700 bg-zinc-800"
