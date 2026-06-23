@@ -13,7 +13,7 @@ export async function DELETE(
     if (isNaN(numId)) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
     }
-    db.delete(aiMemory).where(eq(aiMemory.id, numId)).run()
+    await db.delete(aiMemory).where(eq(aiMemory.id, numId))
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'

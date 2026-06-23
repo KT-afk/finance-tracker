@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/output
 
 # next.js
 /.next/
@@ -53,3 +54,6 @@ TransactionHistory_*.csv
 
 # logs (from autostart)
 logs/
+
+# local database backups - never commit financial data
+backups/

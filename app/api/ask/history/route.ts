@@ -5,11 +5,10 @@ import { desc } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    const rows = db
+    const rows = await db
       .select()
       .from(aiConversations)
       .orderBy(desc(aiConversations.created_at))
-      .all()
 
     return NextResponse.json({ conversations: rows })
   } catch (e: unknown) {

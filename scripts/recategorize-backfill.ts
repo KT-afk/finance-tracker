@@ -5,27 +5,22 @@
  * Run with: npx tsx scripts/recategorize-backfill.ts
  */
 
-import path from 'path'
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { inArray, eq, and } from 'drizzle-orm'
-import * as schema from '../lib/schema'
-import { categorize } from '../lib/categorize'
-
-// ── Bootstrap DB (same path as lib/db.ts) ──────────────────────────────────
-const DB_PATH = path.join(process.cwd(), 'finance.db')
-const sqlite = new Database(DB_PATH)
-sqlite.pragma('journal_mode = WAL')
-sqlite.pragma('foreign_keys = ON')
-const db = drizzle(sqlite, { schema })
-
 // ── Load .env so ANTHROPIC_API_KEY is available ──────────────────────────────
 // Next.js loads .env.local automatically; for a raw tsx script we do it manually.
+import path from 'path'
 import { config } from 'dotenv'
 config({ path: path.join(process.cwd(), '.env.local') })
 config({ path: path.join(process.cwd(), '.env') })
 
+import { inArray, eq, and } from 'drizzle-orm'
+import * as schema from '../lib/schema'
+
 async function main() {
+  const [{ db }, { categorize }] = await Promise.all([
+    import('../lib/db'),
+    import('../lib/categorize'),
+  ])
+
   console.log('Querying transactions with category = Transfer or Others (is_corrected = false)...\n')
 
   // 4.2: Query uncorrected Transfer/Others transactions

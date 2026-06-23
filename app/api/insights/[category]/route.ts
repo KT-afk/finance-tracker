@@ -39,7 +39,7 @@ export async function GET(
     const sixMonthsAgoStart = getMonthRange(5).start
 
     // --- 1. 6-month trend ---
-    const trendTxns = db
+    const trendTxns = await db
       .select()
       .from(transactions)
       .where(
@@ -49,7 +49,6 @@ export async function GET(
           lt(transactions.amount, 0)
         )
       )
-      .all()
 
     const monthLabels = Array.from({ length: 6 }, (_, i) => getMonthRange(5 - i).label)
     const monthTotals: Record<string, number> = {}
@@ -68,7 +67,7 @@ export async function GET(
     }))
 
     // --- 2. All-time expense txns for this category ---
-    const allTxns = db
+    const allTxns = await db
       .select()
       .from(transactions)
       .where(
@@ -77,7 +76,6 @@ export async function GET(
           lt(transactions.amount, 0)
         )
       )
-      .all()
 
     // --- 3. Top merchants ---
     const merchantTotals: Record<string, number> = {}

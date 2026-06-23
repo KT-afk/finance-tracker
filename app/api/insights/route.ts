@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch last 6 months of data
     const sixMonthsAgo = getMonthRange(5)
-    const allTxns = db
+    const allTxns = await db
       .select()
       .from(transactions)
       .where(
@@ -36,7 +36,6 @@ export async function GET(req: NextRequest) {
           ...bankCondition
         )
       )
-      .all()
 
     // Group by month and category
     const monthlyData: Record<string, Record<string, number>> = {}
@@ -84,7 +83,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Top 5 biggest transactions this month
-    const biggestTxns = db
+    const biggestTxns = (await db
       .select()
       .from(transactions)
       .where(
@@ -95,7 +94,7 @@ export async function GET(req: NextRequest) {
         )
       )
       .orderBy(desc(transactions.amount))
-      .all()
+    )
       .filter(t => t.amount < 0) // expenses only
       .sort((a, b) => a.amount - b.amount) // most negative first
       .slice(0, 5)

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
     }
 
-    saveRule(keyword, category)
+    await saveRule(keyword, category)
 
     // Return the saved rule
     const rules = await db

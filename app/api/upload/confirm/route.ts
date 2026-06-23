@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
-import { sql } from 'drizzle-orm'
 
 interface TransactionPayload {
   id: string
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
     for (const t of txns) {
       try {
         // INSERT OR IGNORE based on unique hash constraint
-        db.insert(transactions)
+        const result = await db.insert(transactions)
           .values({
             id: t.id,
             date: t.date,
@@ -43,8 +42,10 @@ export async function POST(req: NextRequest) {
             uploaded_at: t.uploaded_at,
           })
           .onConflictDoNothing({ target: transactions.hash })
-          .run()
-        inserted++
+          .returning({ id: transactions.id })
+
+        if (result.length > 0) inserted++
+        else skipped++
       } catch {
         skipped++
       }

@@ -19,21 +19,20 @@ export async function PATCH(
     }
 
     // Get the transaction to extract description for rule saving
-    const existing = db
+    const [existing] = await db
       .select()
       .from(transactions)
       .where(eq(transactions.id, id))
-      .get()
+      .limit(1)
 
     if (!existing) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
 
     // Update category and mark as corrected
-    db.update(transactions)
+    await db.update(transactions)
       .set({ category, is_corrected: true })
       .where(eq(transactions.id, id))
-      .run()
 
     // Save a keyword rule from the description
     const keyword = existing.description
@@ -45,9 +44,40 @@ export async function PATCH(
       .join(' ')
 
     if (keyword.length >= 3) {
-      saveRule(keyword, category)
+      await saveRule(keyword, category)
     }
 
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const [existing] = await db
+      .select({ id: transactions.id, hash: transactions.hash })
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .limit(1)
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+    }
+
+    if (!existing.hash.startsWith('manual:')) {
+      return NextResponse.json(
+        { error: 'Only manually added transactions can be deleted' },
+        { status: 403 }
+      )
+    }
+
+    await db.delete(transactions).where(eq(transactions.id, id))
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'

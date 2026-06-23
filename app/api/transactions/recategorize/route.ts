@@ -5,7 +5,7 @@ import { categorize } from '@/lib/categorize'
 
 export async function POST() {
   try {
-    const uncategorized = db
+    const uncategorized = await db
       .select()
       .from(transactions)
       .where(
@@ -14,7 +14,6 @@ export async function POST() {
           eq(transactions.is_corrected, false)
         )
       )
-      .all()
 
     const total = uncategorized.length
 
@@ -36,10 +35,9 @@ export async function POST() {
             const category = await categorize(tx.description)
 
             if (category !== tx.category) {
-              db.update(transactions)
+              await db.update(transactions)
                 .set({ category })
                 .where(eq(transactions.id, tx.id))
-                .run()
               updated++
             }
 

@@ -46,11 +46,10 @@ export async function POST(req: NextRequest) {
 
     // Check which hashes already exist in DB
     const hashes = normalized.map(t => t.hash)
-    const existing = db
+    const existing = await db
       .select({ hash: transactions.hash })
       .from(transactions)
       .where(inArray(transactions.hash, hashes))
-      .all()
     const existingHashes = new Set(existing.map(e => e.hash))
 
     const newTransactions = normalized.filter(t => !existingHashes.has(t.hash))

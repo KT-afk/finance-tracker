@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
-import { and, eq, gte, lte, desc } from 'drizzle-orm'
+import { and, eq, gte, lte, lt, desc } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,11 +23,10 @@ export async function GET(req: NextRequest) {
       whereConditions.push(eq(transactions.bank, bank as 'ocbc' | 'dbs' | 'uob' | 'trust'))
     }
 
-    const monthTxns = db
+    const monthTxns = await db
       .select()
       .from(transactions)
       .where(and(...whereConditions))
-      .all()
 
     // Total spend (sum of negative amounts, show as positive)
     const totalSpend = monthTxns
@@ -52,13 +51,12 @@ export async function GET(req: NextRequest) {
       ? [eq(transactions.bank, bank as 'ocbc' | 'dbs' | 'uob' | 'trust')]
       : []
 
-    const recentTxns = db
+    const recentTxns = await db
       .select()
       .from(transactions)
       .where(recentWhereConditions.length ? and(...recentWhereConditions) : undefined)
       .orderBy(desc(transactions.date), desc(transactions.uploaded_at))
       .limit(5)
-      .all()
 
     // Prior month spend (same bank filter) for MoM delta
     const priorDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -69,17 +67,16 @@ export async function GET(req: NextRequest) {
 
     const priorWhereConditions = [
       gte(transactions.date, priorStart),
-      lte(transactions.date, priorEnd),
+      lt(transactions.date, priorEnd),
     ]
     if (bank && bank !== 'all') {
       priorWhereConditions.push(eq(transactions.bank, bank as 'ocbc' | 'dbs' | 'uob' | 'trust'))
     }
 
-    const priorTxns = db
+    const priorTxns = await db
       .select({ amount: transactions.amount })
       .from(transactions)
       .where(and(...priorWhereConditions))
-      .all()
 
     const priorSpend = priorTxns
       .filter(t => t.amount < 0)

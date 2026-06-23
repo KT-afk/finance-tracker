@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
-import { transactions, aiMemory, aiConversations } from '@/lib/schema'
+import { transactions, aiMemory, aiConversations, CATEGORIES } from '@/lib/schema'
 import { sql, eq } from 'drizzle-orm'
 
 const MODEL = 'claude-sonnet-4-6'
@@ -34,8 +34,8 @@ interface ClaudeResponse {
   }
 }
 
-function buildTransactionSummary(): string {
-  const rows = db
+async function buildTransactionSummary(): Promise<string> {
+  const rows = await db
     .select({
       category: transactions.category,
       description: transactions.description,
@@ -43,7 +43,6 @@ function buildTransactionSummary(): string {
       date: transactions.date,
     })
     .from(transactions)
-    .all()
 
   if (rows.length === 0) return '(no transactions found)'
 
@@ -76,8 +75,8 @@ function buildTransactionSummary(): string {
     .join('\n\n')
 }
 
-function buildMemoryBlock(): string {
-  const memories = db.select().from(aiMemory).all()
+async function buildMemoryBlock(): Promise<string> {
+  const memories = await db.select().from(aiMemory)
   return memories.length > 0
     ? memories.map(m => `- [${m.source}] ${m.key}: ${m.value}`).join('\n')
     : '(none)'
@@ -117,8 +116,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 })
     }
 
-    const txSummary = buildTransactionSummary()
-    const memoryBlock = buildMemoryBlock()
+    const txSummary = await buildTransactionSummary()
+    const memoryBlock = await buildMemoryBlock()
 
     const userPrompt = `## Spending history by month (expenses only, grouped by category + top merchants):
 ${txSummary}
@@ -150,58 +149,60 @@ ${question}`
 
     // Handle correction
     if (parsed.intent === 'correction' && parsed.correction) {
-      const { description_fragment, new_category } = parsed.correction
-      const matching = db
-        .select({ id: transactions.id, description: transactions.description })
-        .from(transactions)
-        .where(sql`lower(${transactions.description}) like lower(${'%' + description_fragment + '%'})`)
-        .all()
+      const descriptionFragment = parsed.correction.description_fragment.trim()
+      const newCategory = parsed.correction.new_category.trim()
 
-      if (matching.length > 0) {
-        for (const tx of matching) {
-          db.update(transactions)
-            .set({ category: new_category, is_corrected: true })
-            .where(eq(transactions.id, tx.id))
-            .run()
+      if (
+        descriptionFragment.length >= 3 &&
+        (CATEGORIES as readonly string[]).includes(newCategory)
+      ) {
+        const matching = await db
+          .select({ id: transactions.id, description: transactions.description })
+          .from(transactions)
+          .where(sql`lower(${transactions.description}) like lower(${'%' + descriptionFragment + '%'})`)
+
+        if (matching.length > 0) {
+          for (const tx of matching) {
+            await db.update(transactions)
+              .set({ category: newCategory, is_corrected: true })
+              .where(eq(transactions.id, tx.id))
+          }
+          // Store as memory so future categorisations know
+          const memKey = `correction_${descriptionFragment.toLowerCase().replace(/\s+/g, '_')}`
+          await db.insert(aiMemory)
+            .values({
+              key: memKey,
+              value: `${descriptionFragment} should be categorised as ${newCategory}`,
+              source: 'user',
+              created_at: new Date().toISOString(),
+            })
+            .onConflictDoUpdate({
+              target: aiMemory.key,
+              set: { value: `${descriptionFragment} should be categorised as ${newCategory}`, created_at: new Date().toISOString() },
+            })
         }
-        // Store as memory so future categorisations know
-        const memKey = `correction_${description_fragment.toLowerCase().replace(/\s+/g, '_')}`
-        db.insert(aiMemory)
-          .values({
-            key: memKey,
-            value: `${description_fragment} should be categorised as ${new_category}`,
-            source: 'user',
-            created_at: new Date().toISOString(),
-          })
-          .onConflictDoUpdate({
-            target: aiMemory.key,
-            set: { value: `${description_fragment} should be categorised as ${new_category}`, created_at: new Date().toISOString() },
-          })
-          .run()
       }
     }
 
     // Handle teaching
     if (parsed.intent === 'teaching' && parsed.memory) {
       const { key, value } = parsed.memory
-      db.insert(aiMemory)
+      await db.insert(aiMemory)
         .values({ key, value, source: 'user', created_at: new Date().toISOString() })
         .onConflictDoUpdate({
           target: aiMemory.key,
           set: { value, created_at: new Date().toISOString() },
         })
-        .run()
     }
 
     // Save conversation
-    db.insert(aiConversations)
+    await db.insert(aiConversations)
       .values({
         question,
         answer_text: parsed.text,
         answer_data: parsed.answer_data ? JSON.stringify(parsed.answer_data) : null,
         created_at: new Date().toISOString(),
       })
-      .run()
 
     return NextResponse.json({
       text: parsed.text,

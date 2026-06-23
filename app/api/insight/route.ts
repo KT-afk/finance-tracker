@@ -45,7 +45,7 @@ export async function POST() {
     const { start: monthStart, end: monthEnd } = getMonthRange(now)
 
     // Current month transactions (expenses only, amount < 0)
-    const currentTxs = db
+    const currentTxs = await db
       .select({
         category: transactions.category,
         description: transactions.description,
@@ -59,15 +59,14 @@ export async function POST() {
           sql`${transactions.amount} < 0`
         )
       )
-      .all()
 
     if (currentTxs.length === 0) {
       return NextResponse.json({ text: 'No transactions yet this month.' })
     }
 
     // Build full monthly summaries for current + 5 prior months
-    function buildMonthSummary(start: string, end: string): string {
-      const rows = db
+    async function buildMonthSummary(start: string, end: string): Promise<string> {
+      const rows = await db
         .select({
           category: transactions.category,
           description: transactions.description,
@@ -75,7 +74,6 @@ export async function POST() {
         })
         .from(transactions)
         .where(and(gte(transactions.date, start), lt(transactions.date, end), sql`${transactions.amount} < 0`))
-        .all()
 
       if (rows.length === 0) return '  (no data)'
 
@@ -102,12 +100,12 @@ export async function POST() {
 
     // All 6 months: current + 5 prior
     const allMonthRanges = [{ label: now.toLocaleString('en-SG', { month: 'long', year: 'numeric' }), start: monthStart, end: monthEnd }, ...getPastMonthRanges(5)]
-    const monthSections = allMonthRanges.map(({ label, start, end }) =>
-      `### ${label}\n${buildMonthSummary(start, end)}`
-    ).join('\n\n')
+    const monthSections = (await Promise.all(allMonthRanges.map(async ({ label, start, end }) =>
+      `### ${label}\n${await buildMonthSummary(start, end)}`
+    ))).join('\n\n')
 
     // Memory
-    const memories = db.select().from(aiMemory).all()
+    const memories = await db.select().from(aiMemory)
     const memoryBlock =
       memories.length > 0
         ? memories.map(m => `- [${m.source}] ${m.key}: ${m.value}`).join('\n')
