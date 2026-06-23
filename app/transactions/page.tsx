@@ -23,6 +23,7 @@ interface Transaction {
   bank: string
   category: string
   is_corrected: boolean
+  is_manual?: boolean
 }
 
 interface ApiResponse {
@@ -45,6 +46,14 @@ function getAvailableMonths(): string[] {
   return months
 }
 
+function getToday(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export default function TransactionsPage() {
   const [month, setMonth] = useState<string>('all')
   const [category, setCategory] = useState<string>('all')
@@ -57,6 +66,16 @@ export default function TransactionsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [recategorizing, setRecategorizing] = useState(false)
   const [recategorizeResult, setRecategorizeResult] = useState<string | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [manualDate, setManualDate] = useState(getToday)
+  const [manualType, setManualType] = useState<'expense' | 'income'>('expense')
+  const [manualAmount, setManualAmount] = useState('')
+  const [manualDescription, setManualDescription] = useState('')
+  const [manualBank, setManualBank] = useState<string>(BANKS[0])
+  const [manualCategory, setManualCategory] = useState<string>('Others')
+  const [addingManual, setAddingManual] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [manualError, setManualError] = useState<string | null>(null)
 
   const months = getAvailableMonths()
 
@@ -115,11 +134,77 @@ export default function TransactionsPage() {
     }
   }
 
+  async function handleManualSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAddingManual(true)
+    setManualError(null)
+
+    const parsedAmount = Number(manualAmount)
+    const signedAmount = manualType === 'expense'
+      ? -Math.abs(parsedAmount)
+      : Math.abs(parsedAmount)
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: manualDate,
+          description: manualDescription,
+          amount: signedAmount,
+          bank: manualBank,
+          category: manualCategory,
+        }),
+      })
+      const json = await res.json()
+
+      if (!res.ok) {
+        setManualError(json.error ?? 'Failed to add transaction')
+        return
+      }
+
+      setManualAmount('')
+      setManualDescription('')
+      setManualCategory('Others')
+      setManualType('expense')
+      setShowAddForm(false)
+      setPage(1)
+      fetchTransactions()
+    } catch {
+      setManualError('Failed to add transaction')
+    } finally {
+      setAddingManual(false)
+    }
+  }
+
+  async function handleDeleteManual(id: string) {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setError(typeof json.error === 'string' ? json.error : 'Failed to delete transaction')
+        return
+      }
+      fetchTransactions()
+    } catch {
+      setError('Failed to delete transaction')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="space-y-4 p-4 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Transactions</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            onClick={() => setShowAddForm(v => !v)}
+            className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
+          >
+            Add
+          </button>
           <button
             onClick={async () => {
               setRecategorizing(true)
@@ -200,12 +285,109 @@ export default function TransactionsPage() {
           </button>
           <Link
             href="/upload"
-            className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
+            className="rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-300 transition-colors"
           >
             Upload
           </Link>
         </div>
       </div>
+
+      {showAddForm && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardContent className="p-3">
+            <form onSubmit={handleManualSubmit} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={e => setManualDate(e.target.value)}
+                  className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100"
+                  required
+                />
+                <Select value={manualType} onValueChange={value => setManualType(value as 'expense' | 'income')}>
+                  <SelectTrigger className="h-10 bg-zinc-800 border-zinc-700 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="income">Income</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="Amount"
+                value={manualAmount}
+                onChange={e => setManualAmount(e.target.value)}
+                className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100 placeholder-zinc-500"
+                required
+              />
+
+              <input
+                type="text"
+                placeholder="Description"
+                value={manualDescription}
+                onChange={e => setManualDescription(e.target.value)}
+                className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100 placeholder-zinc-500"
+                required
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Select value={manualBank} onValueChange={setManualBank}>
+                  <SelectTrigger className="h-10 bg-zinc-800 border-zinc-700 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    {BANKS.map(b => (
+                      <SelectItem key={b} value={b}>{b.toUpperCase()}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={manualCategory} onValueChange={setManualCategory}>
+                  <SelectTrigger className="h-10 bg-zinc-800 border-zinc-700 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    {CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {manualError && (
+                <p className="rounded-md border border-red-700/40 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+                  {manualError}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-zinc-700"
+                  onClick={() => setShowAddForm(false)}
+                  disabled={addingManual}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-blue-600 text-white hover:bg-blue-500"
+                  disabled={addingManual}
+                >
+                  {addingManual ? 'Adding...' : 'Add transaction'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {recategorizeResult && (
         <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300">
@@ -279,14 +461,23 @@ export default function TransactionsPage() {
               const color = CATEGORY_COLORS[t.category] ?? '#94A3B8'
               return (
                 <Card key={t.id} className="bg-zinc-900 border-zinc-800">
-                  <CardContent className="py-2.5 px-3 flex items-center gap-3">
-                    {/* Date */}
-                    <span className="text-xs text-zinc-500 w-20 shrink-0 font-mono">{t.date}</span>
+                  <CardContent className="py-3 px-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+                    <div className="flex items-start justify-between gap-3 sm:contents">
+                      {/* Date */}
+                      <span className="text-xs text-zinc-500 sm:w-20 sm:shrink-0 font-mono">{t.date}</span>
+
+                      {/* Amount */}
+                      <span
+                        className={`font-mono text-sm font-medium whitespace-nowrap sm:order-3 ${t.amount < 0 ? 'text-white' : 'text-green-400'}`}
+                      >
+                        {t.amount < 0 ? '-' : '+'}{formatSGD(Math.abs(t.amount))}
+                      </span>
+                    </div>
 
                     {/* Description */}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-zinc-100 truncate">{t.description}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="min-w-0 flex-1 sm:order-2">
+                      <p className="text-sm text-zinc-100 sm:truncate leading-snug">{t.description}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
                         <Badge
                           className="text-[10px] px-1 py-0 font-normal border-0 h-4"
                           style={{
@@ -299,36 +490,50 @@ export default function TransactionsPage() {
                         {t.is_corrected && (
                           <span className="text-[10px] text-blue-500/70 font-medium">edited</span>
                         )}
+                        {t.is_manual && (
+                          <span className="text-[10px] text-zinc-500 font-medium">manual</span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Amount */}
-                    <span
-                      className={`font-mono text-sm font-medium whitespace-nowrap ${t.amount < 0 ? 'text-white' : 'text-green-400'}`}
-                    >
-                      {t.amount < 0 ? '-' : '+'}{formatSGD(Math.abs(t.amount))}
-                    </span>
-
                     {/* Category selector */}
-                    <Select
-                      value={t.category}
-                      onValueChange={val => handleCategoryChange(t.id, val)}
-                        disabled={updatingId === t.id || recategorizing}
+                    <div
+                      className={`grid gap-2 sm:order-4 ${
+                        t.is_manual ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'
+                      }`}
                     >
-                      <SelectTrigger
-                        className="w-36 h-7 text-xs border-zinc-700 bg-zinc-800"
-                        style={{ color }}
+                      <Select
+                        value={t.category}
+                        onValueChange={val => handleCategoryChange(t.id, val)}
+                        disabled={updatingId === t.id || recategorizing}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-800 border-zinc-700">
-                        {CATEGORIES.map(c => (
-                          <SelectItem key={c} value={c} className="text-xs">
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger
+                          className="w-full sm:w-36 h-9 sm:h-7 text-xs border-zinc-700 bg-zinc-800"
+                          style={{ color }}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-800 border-zinc-700">
+                          {CATEGORIES.map(c => (
+                            <SelectItem key={c} value={c} className="text-xs">
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {t.is_manual && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 sm:h-7 border-zinc-700 px-3 text-xs text-red-300 hover:text-red-200"
+                          disabled={deletingId === t.id}
+                          onClick={() => handleDeleteManual(t.id)}
+                        >
+                          {deletingId === t.id ? '...' : 'Delete'}
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )

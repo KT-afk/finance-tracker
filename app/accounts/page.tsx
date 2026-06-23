@@ -160,8 +160,8 @@ export default function AccountsPage() {
                   return (
                     <div key={bank} className="py-3 space-y-2">
                       <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
-                      <div className="flex gap-2 items-center">
-                        <span className="text-sm text-zinc-400">$</span>
+                      <div className="grid grid-cols-[auto_1fr] sm:flex gap-2 items-center">
+                        <span className="text-sm text-zinc-400 self-center">$</span>
                         <input
                           ref={inputRef}
                           type="text"
@@ -178,13 +178,13 @@ export default function AccountsPage() {
                         <button
                           onClick={() => saveBalance(bank)}
                           disabled={saving}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-md transition-colors cursor-pointer"
+                          className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-md transition-colors cursor-pointer"
                         >
                           Save
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-md transition-colors cursor-pointer"
+                          className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-md transition-colors cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -194,8 +194,8 @@ export default function AccountsPage() {
                 }
 
                 return (
-                  <div key={bank} className="flex items-center justify-between py-3 group">
-                    <div>
+                  <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
                       {entry ? (
                         <p className="text-xs text-zinc-500 mt-0.5">
@@ -205,15 +205,15 @@ export default function AccountsPage() {
                         <p className="text-xs text-zinc-600 mt-0.5">No balance set</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       {entry ? (
-                        <span className="font-mono text-sm text-white">
+                        <span className="font-mono text-sm text-white text-right">
                           {formatSGD(entry.balance)}
                         </span>
                       ) : null}
                       <button
                         onClick={() => startEdit(bank, entry?.balance ?? null)}
-                        className="text-xs text-zinc-500 hover:text-blue-400 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                        className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-blue-400 hover:border-zinc-700 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100"
                       >
                         {entry ? 'Edit' : 'Set balance'}
                       </button>
