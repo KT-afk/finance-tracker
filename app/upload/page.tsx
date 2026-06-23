@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,8 +34,16 @@ export default function UploadPage() {
   const [confirming, setConfirming] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
+  const [hasAnthropicKey, setHasAnthropicKey] = useState<boolean | null>(null)
 
-  const missingApiKey = !process.env.NEXT_PUBLIC_HAS_ANTHROPIC_KEY
+  const missingApiKey = hasAnthropicKey === false
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(data => setHasAnthropicKey(Boolean(data.hasAnthropicKey)))
+      .catch(() => setHasAnthropicKey(null))
+  }, [])
 
   async function handleUpload() {
     if (!bank || files.length === 0) return
@@ -195,7 +203,7 @@ export default function UploadPage() {
             )}
 
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-500"
+              className="w-full bg-blue-600 text-white hover:bg-blue-500"
               disabled={!bank || files.length === 0 || loading}
               onClick={handleUpload}
             >
@@ -248,7 +256,7 @@ export default function UploadPage() {
                 Cancel
               </Button>
               <Button
-                className="flex-1 bg-blue-600 hover:bg-blue-500"
+                className="flex-1 bg-blue-600 text-white hover:bg-blue-500"
                 disabled={confirming || preview.newCount === 0}
                 onClick={handleConfirm}
               >
