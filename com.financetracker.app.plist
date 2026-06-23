@@ -7,10 +7,14 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/node</string>
-    <string>/opt/homebrew/bin/npm</string>
+    <string>FINANCE_TRACKER_NPM_BIN</string>
     <string>run</string>
     <string>start</string>
+    <string>--</string>
+    <string>-H</string>
+    <string>FINANCE_TRACKER_HOSTNAME</string>
+    <string>-p</string>
+    <string>FINANCE_TRACKER_PORT</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -19,11 +23,9 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>PORT</key>
-    <string>3000</string>
-    <key>HOSTNAME</key>
-    <string>0.0.0.0</string>
+    <string>FINANCE_TRACKER_PORT</string>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
 
   <key>RunAtLoad</key>
