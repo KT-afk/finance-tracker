@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: HomeIcon },
-  { href: '/transactions', label: 'Transactions', icon: ListIcon },
-  { href: '/accounts', label: 'Accounts', icon: AccountsIcon },
-  { href: '/insights', label: 'Insights', icon: TrendingIcon },
-  { href: '/ask', label: 'Ask', icon: AskIcon },
+  { href: '/', label: 'Home', mobileLabel: 'Home', icon: HomeIcon },
+  { href: '/transactions', label: 'Transactions', mobileLabel: 'Txns', icon: ListIcon },
+  { href: '/accounts', label: 'Accounts', mobileLabel: 'Accts', icon: AccountsIcon },
+  { href: '/insights', label: 'Insights', mobileLabel: 'Trends', icon: TrendingIcon },
+  { href: '/ask', label: 'Ask', mobileLabel: 'Ask', icon: AskIcon },
 ]
 
 function HomeIcon() {
@@ -62,8 +62,26 @@ function AccountsIcon() {
   )
 }
 
+function LogoutIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
 export default function NavBar() {
   const pathname = usePathname()
+  const isLogin = pathname === '/login'
+
+  async function handleLogout() {
+    await fetch('/api/logout', { method: 'POST' })
+    window.location.href = '/login'
+  }
+
+  if (isLogin) return null
 
   return (
     <>
@@ -94,25 +112,40 @@ export default function NavBar() {
             )
           })}
         </nav>
+        <div className="px-3 py-4 border-t border-zinc-800">
+          <button
+            onClick={handleLogout}
+            className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 transition-colors"
+          >
+            Log out
+          </button>
+        </div>
       </aside>
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950 border-t border-zinc-800 flex">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {NAV_ITEMS.map(({ href, mobileLabel, icon: Icon }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] transition-colors ${
+              className={`min-w-0 flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] transition-colors ${
                 isActive ? 'text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <Icon />
-              {label}
+              <span className="max-w-full truncate">{mobileLabel}</span>
             </Link>
           )
         })}
+        <button
+          onClick={handleLogout}
+          className="min-w-0 flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <LogoutIcon />
+          <span className="max-w-full truncate">Out</span>
+        </button>
       </nav>
     </>
   )
