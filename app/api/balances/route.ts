@@ -5,19 +5,20 @@ import { eq, desc } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    const balances = BANKS.map(bank => {
-      const latest = db
+    const balanceRows = await Promise.all(BANKS.map(async bank => {
+      const [latest] = await db
         .select()
         .from(balanceHistory)
         .where(eq(balanceHistory.bank, bank))
         .orderBy(desc(balanceHistory.recorded_at))
         .limit(1)
-        .get()
+      
 
       return latest
         ? { bank, balance: latest.balance, recorded_at: latest.recorded_at }
         : null
-    }).filter(Boolean) as { bank: string; balance: number; recorded_at: string }[]
+    }))
+    const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; recorded_at: string }[]
 
     const total = balances.reduce((sum, b) => sum + b.balance, 0)
 
@@ -40,13 +41,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid balance' }, { status: 400 })
     }
 
-    db.insert(balanceHistory)
+    await db.insert(balanceHistory)
       .values({
         bank: bank as (typeof BANKS)[number],
         balance,
         recorded_at: new Date().toISOString(),
       })
-      .run()
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {

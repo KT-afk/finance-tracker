@@ -14,11 +14,10 @@ function getMonthLabel(monthsBack: number): string {
 export async function GET() {
   try {
     // Get all balance history entries
-    const allEntries = db
+    const allEntries = await db
       .select()
       .from(balanceHistory)
       .orderBy(desc(balanceHistory.recorded_at))
-      .all()
 
     // Build 6-month labels (newest last)
     const monthLabels = Array.from({ length: 6 }, (_, i) => getMonthLabel(5 - i))

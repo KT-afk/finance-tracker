@@ -115,7 +115,7 @@ export async function categorize(description: string): Promise<Category> {
   // Step 1: Check saved rules — memo first, then recipient, then raw description
   const lookupTargets = [memo, recipient, description].filter(s => s.length > 0)
   for (const target of lookupTargets) {
-    const ruleCategory = findRuleCategory(target)
+    const ruleCategory = await findRuleCategory(target)
     if (ruleCategory && (CATEGORIES as readonly string[]).includes(ruleCategory)) {
       return ruleCategory as Category
     }
@@ -144,7 +144,7 @@ export async function categorize(description: string): Promise<Category> {
       // Step 3: Save keyword rule — memo or merchant, never reference codes or human names
       const keyword = deriveKeyword(memo, recipient)
       if (keyword.length >= 3) {
-        saveRule(keyword, matched)
+        await saveRule(keyword, matched)
       }
       return matched
     }

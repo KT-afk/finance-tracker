@@ -7,11 +7,11 @@ import { eq } from 'drizzle-orm'
  * Persist a keyword→category mapping.
  * Uses upsert (INSERT OR REPLACE) so the same keyword always updates to the latest category.
  */
-export function saveRule(keyword: string, category: string): void {
+export async function saveRule(keyword: string, category: string): Promise<void> {
   const now = new Date().toISOString()
   const normalizedKeyword = keyword.toLowerCase().trim()
 
-  db.insert(categoryRules)
+  await db.insert(categoryRules)
     .values({
       id: randomUUID(),
       keyword: normalizedKeyword,
@@ -22,16 +22,15 @@ export function saveRule(keyword: string, category: string): void {
       target: categoryRules.keyword,
       set: { category, created_at: now },
     })
-    .run()
 }
 
 /**
  * Look up a category for the given description by checking all saved keyword rules.
  * Returns the matching category or null if no rule matches.
  */
-export function findRuleCategory(description: string): string | null {
+export async function findRuleCategory(description: string): Promise<string | null> {
   const lower = description.toLowerCase()
-  const rules = db.select().from(categoryRules).all()
+  const rules = await db.select().from(categoryRules)
 
   for (const rule of rules) {
     if (lower.includes(rule.keyword)) {
