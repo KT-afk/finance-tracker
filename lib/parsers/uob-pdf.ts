@@ -6,8 +6,13 @@ const MONTHS: Record<string, string> = {
   SEP: '09', OCT: '10', NOV: '11', DEC: '12',
 }
 
+const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
+
 // Match: DD MMM  DD MMM  Description  Amount
-const TX_LINE = /^\s+(\d{2}\s+[A-Z]{3})\s+(\d{2}\s+[A-Z]{3})\s+(.+?)\s{2,}([\d,]+\.\d{2})\s*(CR)?\s*$/
+const TX_LINE = new RegExp(
+  String.raw`^\s+(${DATE_TOKEN})\s+(${DATE_TOKEN})\s+(.+?)\s{2,}([\d,]+\.\d{2})\s*(CR)?\s*$`,
+  'i'
+)
 
 // Lines to skip entirely
 const SKIP_PATTERNS = [
@@ -70,7 +75,7 @@ export function parseUOBCreditCardPDF(text: string): RawTransaction[] {
   let currentTx: { date: string; description: string; amount: number } | null = null
 
   for (const line of lines) {
-    if (/Post\s+Trans\s+Description/i.test(line)) {
+    if (/Post(?:ing)?(?:\s+Date)?\s+Trans(?:action)?(?:\s+Date)?\s+Description/i.test(line)) {
       inTransactionSection = true
       continue
     }

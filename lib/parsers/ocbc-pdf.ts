@@ -87,6 +87,8 @@ function resolveDate(ddMmm: string, year: number): string {
   return `${year}-${month}-${day.padStart(2, '0')}`
 }
 
+const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
+
 /**
  * Detect the column boundary between Withdrawal and Deposit columns
  * by finding the header line positions.
@@ -120,7 +122,7 @@ export function parseOCBCPDF(text: string): RawTransaction[] {
 
   for (const line of lines) {
     // Detect start of transaction section (header row with column names)
-    if (/Date\s+Date\s+Description/.test(line)) {
+    if (/Date\s+Date\s+Description/i.test(line)) {
       inTransactionSection = true
       continue
     }
@@ -162,7 +164,7 @@ export function parseOCBCPDF(text: string): RawTransaction[] {
 
     // Try to match a transaction line: DD MMM  DD MMM  Description ... amounts
     const txMatch = line.match(
-      /^\s+(\d{2}\s+[A-Z]{3})\s+\d{2}\s+[A-Z]{3}\s{2,}(.+)/
+      new RegExp(String.raw`^\s+(${DATE_TOKEN})\s+${DATE_TOKEN}\s{2,}(.+)`, 'i')
     )
 
     if (txMatch) {
