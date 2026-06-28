@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const categorized = await Promise.all(
       newTransactions.map(async t => ({
         ...t,
-        category: await categorize(t.description),
+        category: await categorize(t.description, { requireAi: true }),
       }))
     )
 
