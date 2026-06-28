@@ -40,6 +40,19 @@ async function runPdftotext(tmpPath: string): Promise<string> {
   throw new Error(`pdftotext failed. Tried: ${errors.join('; ') || 'no candidates'}`)
 }
 
+async function extractTextWithPdfParse(buffer: Buffer): Promise<string> {
+  await import('pdf-parse/worker')
+  const { PDFParse } = await import('pdf-parse')
+  const parser = new PDFParse({ data: buffer })
+
+  try {
+    const result = await parser.getText()
+    return result.text
+  } finally {
+    await parser.destroy()
+  }
+}
+
 /**
  * Extract text from a PDF buffer using pdftotext (poppler).
  * Uses -layout flag to preserve column alignment.
@@ -49,7 +62,17 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 
   try {
     await writeFile(tmpPath, buffer)
-    return await runPdftotext(tmpPath)
+    try {
+      return await runPdftotext(tmpPath)
+    } catch (pdftotextError) {
+      try {
+        return await extractTextWithPdfParse(buffer)
+      } catch (pdfParseError) {
+        const pdftotextMessage = pdftotextError instanceof Error ? pdftotextError.message : String(pdftotextError)
+        const pdfParseMessage = pdfParseError instanceof Error ? pdfParseError.message : String(pdfParseError)
+        throw new Error(`${pdftotextMessage}; pdf-parse failed: ${pdfParseMessage}`)
+      }
+    }
   } finally {
     await unlink(tmpPath).catch(() => {})
   }

@@ -68,6 +68,20 @@ export function parseUOBCreditCardPDF(text: string): RawTransaction[] {
   const stmtMatch = text.match(/Statement Date\s+\d{1,2}\s+([A-Z]{3})\s+\d{4}/i)
   const statementMonth = stmtMatch ? parseInt(MONTHS[stmtMatch[1].toUpperCase()] ?? '1') : 1
 
+  const layoutTransactions = parseLayoutCreditCardText(text, statementYear, statementMonth)
+  if (layoutTransactions.length > 0) return layoutTransactions
+
+  const stackedTransactions = parseStackedCreditCardText(text, statementYear, statementMonth)
+  if (stackedTransactions.length > 0) return stackedTransactions
+
+  return parseAccountStatementText(text)
+}
+
+function parseLayoutCreditCardText(
+  text: string,
+  statementYear: number,
+  statementMonth: number
+): RawTransaction[] {
   const lines = text.split('\n')
   const results: RawTransaction[] = []
 
@@ -150,6 +164,204 @@ export function parseUOBCreditCardPDF(text: string): RawTransaction[] {
       amount: currentTx.amount,
       bank: 'uob',
     })
+  }
+
+  return results
+}
+
+function parseStackedCreditCardText(
+  text: string,
+  statementYear: number,
+  statementMonth: number
+): RawTransaction[] {
+  const lines = text.split('\n')
+  const results: RawTransaction[] = []
+
+  let inTransactionSection = false
+  let pendingTx: { date: string; description: string } | null = null
+
+  function pushTransaction(description: string, date: string, amountStr: string, cr?: string) {
+    results.push({
+      date,
+      description: description.trim(),
+      amount: cr ? parseFloat(amountStr.replace(/,/g, '')) : -parseFloat(amountStr.replace(/,/g, '')),
+      bank: 'uob',
+    })
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    if (/Description of Transaction Transaction Amount/i.test(trimmed)) {
+      inTransactionSection = true
+      pendingTx = null
+      continue
+    }
+
+    if (/End of Transaction Details/i.test(trimmed)) {
+      inTransactionSection = false
+      pendingTx = null
+      continue
+    }
+
+    if (!inTransactionSection) continue
+    if (SKIP_PATTERNS.some(p => p.test(trimmed))) continue
+    if (/^(SGD|Post|Date|Trans)$/i.test(trimmed)) continue
+    if (/^--\s*\d+\s+of\s+\d+\s*--$/i.test(trimmed)) continue
+    if (/^Page \d+ of \d+/i.test(trimmed)) continue
+    if (/^Please note that/i.test(trimmed)) continue
+    if (/United Overseas Bank Limited/i.test(trimmed)) continue
+    if (/^\d{4}-\d{4}-\d{4}-\d{4}/.test(trimmed)) continue
+
+    const amountOnly = trimmed.match(/^([\d,]+\.\d{2})\s*(CR)?$/i)
+    if (amountOnly && pendingTx) {
+      pushTransaction(pendingTx.description, pendingTx.date, amountOnly[1], amountOnly[2])
+      pendingTx = null
+      continue
+    }
+
+    if (IGNORE_CONTINUATION.some(p => p.test(trimmed))) continue
+
+    const txMatch = trimmed.match(
+      new RegExp(String.raw`^(${DATE_TOKEN})\s+(${DATE_TOKEN})\s+(.+?)(?:\s+([\d,]+\.\d{2})\s*(CR)?)?$`, 'i')
+    )
+
+    if (txMatch) {
+      const [, , transDate, description, amountStr, cr] = txMatch
+      const date = resolveDate(transDate, statementYear, statementMonth)
+
+      if (amountStr) {
+        pushTransaction(description, date, amountStr, cr)
+      } else {
+        pendingTx = { date, description: description.trim() }
+      }
+      continue
+    }
+
+    if (pendingTx) {
+      pendingTx.description += ' ' + trimmed
+    }
+  }
+
+  return results
+}
+
+function parseAccountStatementText(text: string): RawTransaction[] {
+  const periodMatch = text.match(/Period:\s+\d{1,2}\s+([A-Za-z]{3})\s+(\d{4})\s+to/i)
+  const year = periodMatch ? parseInt(periodMatch[2]) : new Date().getFullYear()
+
+  const lines = text.split('\n')
+  const results: RawTransaction[] = []
+  let inTransactionSection = false
+  let runningBalance: number | null = null
+  let pendingTx: { date: string; descriptionParts: string[] } | null = null
+
+  function parseBalance(raw: string): number {
+    const isOverdrawn = /OD$/i.test(raw)
+    const value = parseFloat(raw.replace(/[,\sA-Z]/gi, ''))
+    return isOverdrawn ? -value : value
+  }
+
+  function resolveAccountDate(dateStr: string): string {
+    const [day, mon] = dateStr.trim().split(/\s+/)
+    const month = MONTHS[mon.toUpperCase()]
+    if (!month) throw new Error(`Unknown month: ${mon}`)
+    return `${year}-${month}-${day.padStart(2, '0')}`
+  }
+
+  function cleanDescription(parts: string[]): string {
+    return parts
+      .filter(part => !/^(?=.*\d)[A-Z0-9]{12,}$/i.test(part.trim()))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  function inferAmount(amount: number, nextBalance: number): number {
+    if (runningBalance === null) return -amount
+
+    const depositDelta = Math.abs((runningBalance + amount) - nextBalance)
+    const withdrawalDelta = Math.abs((runningBalance - amount) - nextBalance)
+    return depositDelta <= withdrawalDelta ? amount : -amount
+  }
+
+  function pushPending(amountRaw: string, balanceRaw: string) {
+    if (!pendingTx) return
+
+    const amount = parseFloat(amountRaw.replace(/,/g, ''))
+    const nextBalance = parseBalance(balanceRaw)
+    const signedAmount = inferAmount(amount, nextBalance)
+
+    results.push({
+      date: pendingTx.date,
+      description: cleanDescription(pendingTx.descriptionParts),
+      amount: signedAmount,
+      bank: 'uob',
+    })
+
+    runningBalance = nextBalance
+    pendingTx = null
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    if (/Account Transaction Details/i.test(trimmed)) {
+      inTransactionSection = true
+      pendingTx = null
+      continue
+    }
+
+    if (/End of Transaction Details/i.test(trimmed)) {
+      inTransactionSection = false
+      pendingTx = null
+      continue
+    }
+
+    if (!inTransactionSection) continue
+    if (/^(SGD|Deposits|Withdrawals|Balance)$/i.test(trimmed)) continue
+    if (/^Date Description Withdrawals/i.test(trimmed)) continue
+    if (/^One Account/i.test(trimmed)) continue
+    if (/^Total\s/i.test(trimmed)) continue
+    if (!trimmed) continue
+
+    const balanceMatch = trimmed.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+BALANCE B\/F\s+([\d,]+\.\d{2}(?:OD)?)$/i)
+    if (balanceMatch) {
+      runningBalance = parseBalance(balanceMatch[2])
+      continue
+    }
+
+    const datedAmountMatch = trimmed.match(
+      /^(\d{1,2}\s+[A-Za-z]{3})\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2}(?:OD)?)$/i
+    )
+    if (datedAmountMatch) {
+      const [, dateStr, description, amountRaw, balanceRaw] = datedAmountMatch
+      pendingTx = {
+        date: resolveAccountDate(dateStr),
+        descriptionParts: [description],
+      }
+      pushPending(amountRaw, balanceRaw)
+      continue
+    }
+
+    const amountMatch = trimmed.match(/^([\d,]+\.\d{2})\s+([\d,]+\.\d{2}(?:OD)?)$/i)
+    if (amountMatch) {
+      pushPending(amountMatch[1], amountMatch[2])
+      continue
+    }
+
+    const dateMatch = trimmed.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+(.+)$/)
+    if (dateMatch) {
+      pendingTx = {
+        date: resolveAccountDate(dateMatch[1]),
+        descriptionParts: [dateMatch[2]],
+      }
+      continue
+    }
+
+    if (pendingTx) {
+      pendingTx.descriptionParts.push(trimmed)
+    }
   }
 
   return results
