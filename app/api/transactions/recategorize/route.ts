@@ -32,7 +32,7 @@ export async function POST() {
         try {
           for (let i = 0; i < uncategorized.length; i++) {
             const tx = uncategorized[i]
-            const category = await categorize(tx.description)
+            const category = await categorize(tx.description, { requireAi: true })
 
             if (category !== tx.category) {
               await db.update(transactions)

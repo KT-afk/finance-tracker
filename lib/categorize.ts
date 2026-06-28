@@ -7,6 +7,17 @@ const CATEGORY_LIST = CATEGORIES.join(', ')
 
 let anthropicClient: Anthropic | null = null
 
+type CategorizeOptions = {
+  requireAi?: boolean
+}
+
+export class CategorizationUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CategorizationUnavailableError'
+  }
+}
+
 function getClient(): Anthropic | null {
   if (!process.env.ANTHROPIC_API_KEY) return null
   if (!anthropicClient) {
@@ -108,7 +119,10 @@ Reply with only the category name, nothing else.`
  * 2. Claude Haiku fallback (AI, only if no rule match) with structured PayNow fields
  * 3. "Others" fallback (if Claude fails or key is missing)
  */
-export async function categorize(description: string): Promise<Category> {
+export async function categorize(
+  description: string,
+  options: CategorizeOptions = {}
+): Promise<Category> {
   // Parse PayNow/FAST/NETS/IBG description into structured fields
   const { memo, recipient, method } = parsePayNowDescription(description)
 
@@ -124,6 +138,9 @@ export async function categorize(description: string): Promise<Category> {
   // Step 2: Claude Haiku fallback with structured prompt
   const client = getClient()
   if (!client) {
+    if (options.requireAi) {
+      throw new CategorizationUnavailableError('ANTHROPIC_API_KEY is not configured.')
+    }
     return 'Others'
   }
 
@@ -150,7 +167,11 @@ export async function categorize(description: string): Promise<Category> {
     }
 
     return 'Others'
-  } catch {
+  } catch (error) {
+    if (options.requireAi) {
+      const message = error instanceof Error ? error.message : 'Unknown AI provider error'
+      throw new CategorizationUnavailableError(`AI categorization failed: ${message}`)
+    }
     // Claude API error — fall back silently
     return 'Others'
   }
