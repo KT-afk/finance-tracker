@@ -27,7 +27,9 @@ Use TypeScript strict mode, 2-space indentation, single quotes, and no semicolon
 
 ## Testing
 
-No test runner is configured yet. Run `npm run build` before handoff. For parser, category, database, or financial logic changes, prefer adding focused tests when a test runner exists rather than relying only on manual checks.
+Run `npm test` to execute all tests via `scripts/run-tests.sh`. Run `npm run build` before handoff. For parser, category, database, or financial logic changes, add a focused test in `tests/` and register it in `scripts/run-tests.sh`.
+
+Fixture-optional tests (those gated on an env var like `UOB_MAY_PDF`) skip cleanly when the file is absent; they are included in the run so CI sees them pass without the fixture.
 
 ## Commits and PRs
 

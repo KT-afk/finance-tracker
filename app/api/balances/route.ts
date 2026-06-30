@@ -20,7 +20,7 @@ export async function GET() {
     }))
     const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; recorded_at: string }[]
 
-    const total = balances.reduce((sum, b) => sum + b.balance, 0)
+    const total = Math.round(balances.reduce((sum, b) => sum + b.balance, 0) * 100) / 100
 
     return NextResponse.json({ balances, total })
   } catch (e: unknown) {

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-15
+    env:
+      APP_PASSWORD: test-password
+      ANTHROPIC_API_KEY: test-key
+      FINANCE_DB_PATH: ${{ runner.temp }}/finance-ci.db
+      AUTH_TEST_CLIENT_KEYS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare E2E database
+        run: npx drizzle-kit migrate
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
