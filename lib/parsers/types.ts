@@ -7,6 +7,11 @@ export interface RawTransaction {
   bank: Bank
 }
 
+export interface ParseResult {
+  transactions: RawTransaction[]
+  endingBalance?: number  // Extracted from CSV if available
+}
+
 /**
  * Tokenize an entire CSV string into rows of fields.
  * Correctly handles:

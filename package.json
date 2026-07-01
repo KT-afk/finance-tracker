@@ -10,6 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "db:setup-demo": "npx drizzle-kit migrate && npm run db:seed-demo",
+    "db:seed-demo": "tsx scripts/seed-demo-data.ts",
     "db:copy-cloud": "tsx scripts/copy-local-db-to-cloud.ts",
     "db:verify-cloud": "tsx scripts/verify-cloud-db.ts",
     "db:backup": "bash scripts/backup-db.sh",

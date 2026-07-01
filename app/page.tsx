@@ -36,6 +36,7 @@ interface DashboardData {
 interface BalanceData {
   balances: { bank: string; balance: number; recorded_at: string }[]
   total: number
+  lastUpdated: string
 }
 
 export default function HomePage() {
@@ -66,8 +67,13 @@ export default function HomePage() {
   const maxAmount = data?.topCategories?.[0]?.amount ?? 1
 
   return (
-    <div className="space-y-5 p-4 max-w-2xl mx-auto">
-      <h1 className="text-base font-semibold text-zinc-300 px-0">Overview</h1>
+    <div className="space-y-6 p-4 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-zinc-100">Financial Overview</h1>
+        <div className="text-sm text-zinc-400">
+          {new Date().toLocaleString('en-SG', { month: 'long', year: 'numeric' })}
+        </div>
+      </div>
       {/* Bank filter tabs */}
       <Tabs value={selectedBank} onValueChange={setSelectedBank}>
         <TabsList className="bg-zinc-900 border border-zinc-800 w-full">
@@ -105,6 +111,7 @@ export default function HomePage() {
             <p className="text-sm text-zinc-500">Upload a statement to get started</p>
             <Link
               href="/upload"
+              role="link"
               className="inline-block mt-2 rounded-md bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors"
             >
               Upload statement
@@ -118,62 +125,132 @@ export default function HomePage() {
           {/* AI insight card */}
           <InsightCard hasTransactions={data.recentTransactions.length > 0 || data.topCategories.length > 0} />
 
-          {/* Balance + Spend side-by-side */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Balance card */}
-            <Link href="/accounts">
-              <Card className="bg-zinc-900 border-zinc-800 hover:bg-zinc-800/50 transition-colors cursor-pointer h-full">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-zinc-400 font-normal">Total balance</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {balanceData && balanceData.balances.length > 0 ? (
-                    <>
-                      <p className="text-2xl font-mono font-semibold text-white">
-                        {formatSGD(balanceData.total)}
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        across {balanceData.balances.length} {balanceData.balances.length === 1 ? 'bank' : 'banks'} →
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-zinc-500 mt-1">No balances set</p>
-                      <p className="text-xs text-blue-400 mt-1">Set up →</p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
-
-            {/* Spend card */}
-            <Card className="bg-zinc-900 border-zinc-800 h-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-zinc-400 font-normal">
-                  {new Date(data.month + '-01').toLocaleString('en-SG', { month: 'short' })} spend
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-mono font-semibold text-white">
-                  {formatSGD(data.totalSpend)}
-                </p>
-                <div className="mt-1">
-                  <p className="text-xs text-zinc-500">Day {data.daysElapsed} of month</p>
-                  {data.momDelta !== null && data.momDeltaPct !== null && data.priorMonthLabel && (
-                    <p className={`text-xs font-mono ${data.momDelta > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {data.momDelta > 0 ? '↑' : '↓'} {formatSGD(Math.abs(data.momDelta))} ({data.momDelta > 0 ? '+' : ''}{data.momDeltaPct.toFixed(0)}%)
+          {/* Financial Health Summary */}
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-sm text-zinc-400 font-normal">This Month's Financial Health</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Primary metrics row */}
+              <div className="grid grid-cols-3 gap-4">
+                {/* Balance */}
+                <Link href="/accounts">
+                  <div className="text-center p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors cursor-pointer">
+                    <p className="text-xs text-zinc-400 mb-1">Total Balance</p>
+                    <p className="text-lg font-mono font-semibold text-white">
+                      {balanceData && balanceData.balances.length > 0 ? formatSGD(balanceData.total) : '$0'}
                     </p>
-                  )}
+                    {balanceData && balanceData.balances.length > 0 && (
+                      <p className="text-xs text-zinc-500 mt-1">
+                        {balanceData.balances.length} bank{balanceData.balances.length > 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+                
+                {/* Spend */}
+                <div className="text-center p-3 rounded-lg bg-zinc-800/50">
+                  <p className="text-xs text-zinc-400 mb-1">Spent</p>
+                  <p className="text-lg font-mono font-semibold text-red-400">
+                    {formatSGD(data.totalSpend)}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+                
+                {/* Savings Rate */}
+                <div className="text-center p-3 rounded-lg bg-zinc-800/50">
+                  <p className="text-xs text-zinc-400 mb-1">Saved</p>
+                  <p className="text-lg font-mono font-semibold text-green-400">
+                    {data.momDelta !== null && data.momDelta < 0 ? 
+                      `${Math.abs(data.momDeltaPct || 0).toFixed(0)}%` : 
+                      '0%'
+                    }
+                  </p>
+                </div>
+              </div>
+              
+              {/* Trend indicator with clear context */}
+              {data.momDelta !== null && data.momDeltaPct !== null && data.priorMonthLabel && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/30">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      data.momDelta < 0 ? 'bg-green-400' : 'bg-red-400'
+                    }`} />
+                    <span className="text-sm text-zinc-300">
+                      {data.momDelta < 0 ? 'Spending decreased' : 'Spending increased'} vs {data.priorMonthLabel}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-mono font-medium ${
+                      data.momDelta < 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {data.momDelta < 0 ? '↓' : '↑'} {formatSGD(Math.abs(data.momDelta))}
+                    </p>
+                    <p className={`text-xs font-mono ${
+                      data.momDelta < 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      ({data.momDelta > 0 ? '+' : ''}{data.momDeltaPct.toFixed(0)}%)
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Bank balances breakdown */}
+              {balanceData && balanceData.balances.length > 0 && (
+                <div className="p-3 rounded-lg bg-zinc-800/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-zinc-300">Account Balances</span>
+                    <span className="text-xs text-zinc-400">
+                      Updated {relativeDate(balanceData.lastUpdated)}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {balanceData.balances.map(({ bank, balance }) => (
+                      <div key={bank} className="flex items-center justify-between">
+                        <span className="text-sm text-zinc-200">{bank.toUpperCase()}</span>
+                        <span className="text-sm font-mono text-white">{formatSGD(balance)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-zinc-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-zinc-100">Total</span>
+                      <span className="text-sm font-mono font-semibold text-white">{formatSGD(balanceData.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Progress through month */}
+              <div className="p-3 rounded-lg bg-zinc-800/30">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-zinc-300">Month Progress</span>
+                  <span className="text-xs text-zinc-400">Day {data.daysElapsed} of {new Date(data.month + '-01').getDate() === 1 ? 
+                    new Date(data.month + '-01').toLocaleString('en-SG', { month: 'short' }) + ' has ' + new Date(new Date(data.month + '-01').getFullYear(), new Date(data.month + '-01').getMonth() + 1, 0).getDate() + ' days' : 
+                    '30 days'
+                  }</span>
+                </div>
+                <div className="w-full bg-zinc-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min((data.daysElapsed / 30) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-zinc-400 mt-1">
+                  {Math.round((data.daysElapsed / 30) * 100)}% of month complete
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Top categories */}
           {data.topCategories.length > 0 && (
             <Card className="bg-zinc-900 border-zinc-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Top categories</CardTitle>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm text-zinc-400 font-normal">Top Spending Categories</CardTitle>
+                  <span className="text-xs text-zinc-500">
+                    {new Date(data.month + '-01').toLocaleString('en-SG', { month: 'short' })}
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {data.topCategories.map(cat => {
@@ -213,8 +290,8 @@ export default function HomePage() {
           {/* Recent transactions */}
           {data.recentTransactions.length > 0 && (
             <Card className="bg-zinc-900 border-zinc-800">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Recent</CardTitle>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm text-zinc-400 font-normal">Recent Transactions</CardTitle>
                 <Link href="/transactions" className="text-xs text-blue-400 hover:text-blue-300">
                   View all
                 </Link>

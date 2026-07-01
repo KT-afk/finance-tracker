@@ -1,0 +1,94 @@
+{
+  "$type": "color",
+  "colors": {
+    "primitive": {
+      "blue": {
+        "50": { "$type": "color", "$value": "oklch(0.945 0.013 237.02)", "$description": "Lightest blue" },
+        "100": { "$type": "color", "$value": "oklch(0.913 0.032 237.14)", "$description": "Very light blue" },
+        "200": { "$type": "color", "$value": "oklch(0.843 0.063 237.35)", "$description": "Light blue" },
+        "300": { "$type": "color", "$value": "oklch(0.748 0.099 237.66)", "$description": "Medium light blue" },
+        "400": { "$type": "color", "$value": "oklch(0.637 0.137 238.01)", "$description": "Medium blue" },
+        "500": { "$type": "color", "$value": "oklch(0.518 0.174 238.66)", "$description": "Primary blue" },
+        "600": { "$type": "color", "$value": "oklch(0.423 0.163 240.79)", "$description": "Medium dark blue" },
+        "700": { "$type": "color", "$value": "oklch(0.349 0.135 242.53)", "$description": "Dark blue" },
+        "800": { "$type": "color", "$value": "oklch(0.286 0.108 244.12)", "$description": "Very dark blue" },
+        "900": { "$type": "color", "$value": "oklch(0.226 0.083 245.46)", "$description": "Darkest blue" }
+      },
+      "green": {
+        "50": { "$type": "color", "$value": "oklch(0.946 0.015 142.49)", "$description": "Lightest green" },
+        "100": { "$type": "color", "$value": "oklch(0.916 0.034 142.70)", "$description": "Very light green" },
+        "200": { "$type": "color", "$value": "oklch(0.848 0.067 142.97)", "$description": "Light green" },
+        "300": { "$type": "color", "$value": "oklch(0.756 0.106 143.29)", "$description": "Medium light green" },
+        "400": { "$type": "color", "$value": "oklch(0.647 0.143 143.69)", "$description": "Medium green" },
+        "500": { "$type": "color", "$value": "oklch(0.532 0.177 144.15)", "$description": "Primary green" },
+        "600": { "$type": "color", "$value": "oklch(0.438 0.167 146.61)", "$description": "Medium dark green" },
+        "700": { "$type": "color", "$value": "oklch(0.363 0.138 149.28)", "$description": "Dark green" },
+        "800": { "$type": "color", "$value": "oklch(0.298 0.111 151.66)", "$description": "Very dark green" },
+        "900": { "$type": "color", "$value": "oklch(0.236 0.085 153.77)", "$description": "Darkest green" }
+      },
+      "red": {
+        "50": { "$type": "color", "$value": "oklch(0.951 0.017 27.33)", "$description": "Lightest red" },
+        "100": { "$type": "color", "$value": "oklch(0.921 0.038 27.55)", "$description": "Very light red" },
+        "200": { "$type": "color", "$value": "oklch(0.855 0.074 27.71)", "$description": "Light red" },
+        "300": { "$type": "color", "$value": "oklch(0.765 0.117 27.91)", "$description": "Medium light red" },
+        "400": { "$type": "color", "$value": "oklch(0.656 0.157 28.16)", "$description": "Medium red" },
+        "500": { "$type": "color", "$value": "oklch(0.541 0.193 28.37)", "$description": "Primary red" },
+        "600": { "$type": "color", "$value": "oklch(0.447 0.181 30.72)", "$description": "Medium dark red" },
+        "700": { "$type": "color", "$value": "oklch(0.371 0.150 33.31)", "$description": "Dark red" },
+        "800": { "$type": "color", "$value": "oklch(0.305 0.121 35.79)", "$description": "Very dark red" },
+        "900": { "$type": "color", "$value": "oklch(0.242 0.092 38.17)", "$description": "Darkest red" }
+      },
+      "neutral": {
+        "0": { "$type": "color", "$value": "oklch(1.00 0.000 0.00)", "$description": "Pure white" },
+        "50": { "$type": "color", "$value": "oklch(0.979 0.003 264.38)", "$description": "Off white" },
+        "100": { "$type": "color", "$value": "oklch(0.951 0.006 264.38)", "$description": "Very light gray" },
+        "200": { "$type": "color", "$value": "oklch(0.902 0.013 264.38)", "$description": "Light gray" },
+        "300": { "$type": "color", "$value": "oklch(0.832 0.020 264.38)", "$description": "Medium light gray" },
+        "400": { "$type": "color", "$value": "oklch(0.739 0.028 264.38)", "$description": "Medium gray" },
+        "500": { "$type": "color", "$value": "oklch(0.627 0.037 264.38)", "$description": "Gray" },
+        "600": { "$type": "color", "$value": "oklch(0.514 0.043 264.38)", "$description": "Medium dark gray" },
+        "700": { "$type": "color", "$value": "oklch(0.406 0.045 264.38)", "$description": "Dark gray" },
+        "800": { "$type": "color", "$value": "oklch(0.315 0.043 264.38)", "$description": "Very dark gray" },
+        "900": { "$type": "color", "$value": "oklch(0.223 0.036 264.38)", "$description": "Darkest gray" },
+        "950": { "$type": "color", "$value": "oklch(0.133 0.022 264.38)", "$description": "Near black" }
+      }
+    },
+    "semantic": {
+      "background": {
+        "primary": { "$type": "color", "$value": "{colors.neutral.0}", "$description": "Main background" },
+        "secondary": { "$type": "color", "$value": "{colors.neutral.50}", "$description": "Secondary background" },
+        "tertiary": { "$type": "color", "$value": "{colors.neutral.100}", "$description": "Tertiary background" },
+        "inverse": { "$type": "color", "$value": "{colors.neutral.900}", "$description": "Inverse background" },
+        "card": { "$type": "color", "$value": "{colors.neutral.0}", "$description": "Card background" },
+        "overlay": { "$type": "color", "$value": "oklch(0.0 0.000 0.00 / 0.5)", "$description": "Overlay background" }
+      },
+      "text": {
+        "primary": { "$type": "color", "$value": "{colors.neutral.900}", "$description": "Primary text" },
+        "secondary": { "$type": "color", "$value": "{colors.neutral.600}", "$description": "Secondary text" },
+        "tertiary": { "$type": "color", "$value": "{colors.neutral.400}", "$description": "Tertiary text" },
+        "inverse": { "$type": "color", "$value": "{colors.neutral.0}", "$description": "Inverse text" },
+        "accent": { "$type": "color", "$value": "{colors.blue.600}", "$description": "Accent text" }
+      },
+      "border": {
+        "primary": { "$type": "color", "$value": "{colors.neutral.200}", "$description": "Primary border" },
+        "secondary": { "$type": "color", "$value": "{colors.neutral.300}", "$description": "Secondary border" },
+        "tertiary": { "$type": "color", "$value": "{colors.neutral.100}", "$description": "Tertiary border" },
+        "focus": { "$type": "color", "$value": "{colors.blue.500}", "$description": "Focus border" },
+        "error": { "$type": "color", "$value": "{colors.red.500}", "$description": "Error border" },
+        "success": { "$type": "color", "$value": "{colors.green.500}", "$description": "Success border" }
+      },
+      "brand": {
+        "primary": { "$type": "color", "$value": "{colors.blue.500}", "$description": "Primary brand color" },
+        "secondary": { "$type": "color", "$value": "{colors.blue.600}", "$description": "Secondary brand color" },
+        "accent": { "$type": "color", "$value": "{colors.green.500}", "$description": "Accent brand color" },
+        "danger": { "$type": "color", "$value": "{colors.red.500}", "$description": "Danger brand color" }
+      },
+      "finance": {
+        "income": { "$type": "color", "$value": "{colors.green.500}", "$description": "Income color" },
+        "expense": { "$type": "color", "$value": "{colors.red.500}", "$description": "Expense color" },
+        "investment": { "$type": "color", "$value": "{colors.blue.500}", "$description": "Investment color" },
+        "savings": { "$type": "color", "$value": "{colors.neutral.600}", "$description": "Savings color" }
+      }
+    }
+  }
+}

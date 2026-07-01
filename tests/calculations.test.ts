@@ -38,14 +38,22 @@ function momDeltaPct(currentSpend: number, priorSpend: number, hasPrior: boolean
     : null
 }
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
 function buildMomComparison(currentData: Record<string, number>, prevData: Record<string, number>) {
   const allCategories = new Set([...Object.keys(currentData), ...Object.keys(prevData)])
   return Array.from(allCategories)
     .map(cat => {
-      const current = currentData[cat] ?? 0
-      const previous = prevData[cat] ?? 0
-      const delta = current - previous
-      const deltaPct = previous > 0 ? (delta / previous) * 100 : null
+      const current = roundMoney(currentData[cat] ?? 0)
+      const previous = roundMoney(prevData[cat] ?? 0)
+      const delta = roundMoney(current - previous)
+      const deltaPct = previous > 0 ? roundPercent((delta / previous) * 100) : null
       return { category: cat, current, previous, delta, deltaPct }
     })
     .filter(r => r.current > 0 || r.previous > 0)
@@ -189,6 +197,21 @@ function balancesTotal(balances: { balance: number }[]): number {
 {
   // Both empty: no rows
   assert.equal(buildMomComparison({}, {}).length, 0)
+}
+
+{
+  const result = buildMomComparison(
+    { 'Groceries': 110, 'Food & Drink': 76.5 },
+    { 'Groceries': 142.1, 'Food & Drink': 88.25 }
+  )
+
+  const groceries = result.find(r => r.category === 'Groceries')!
+  assert.equal(groceries.delta, -32.1, 'momComparison rounds money deltas')
+  assert.equal(groceries.deltaPct, -22.6, 'momComparison rounds percent deltas')
+
+  const food = result.find(r => r.category === 'Food & Drink')!
+  assert.equal(food.delta, -11.75, 'momComparison keeps exact cent deltas')
+  assert.equal(food.deltaPct, -13.3, 'momComparison rounds one-decimal percentage')
 }
 
 // ─── pagination ──────────────────────────────────────────────────────────────

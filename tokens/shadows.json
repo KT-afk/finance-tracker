@@ -1,0 +1,61 @@
+{
+  "$type": "shadow",
+  "shadows": {
+    "primitive": {
+      "sm": {
+        "$type": "shadow",
+        "$value": "0 1px 2px 0 oklch(0.0 0.000 0.00 / 0.05)",
+        "$description": "Small shadow"
+      },
+      "md": {
+        "$type": "shadow",
+        "$value": "0 4px 6px -1px oklch(0.0 0.000 0.00 / 0.1), 0 2px 4px -2px oklch(0.0 0.000 0.00 / 0.1)",
+        "$description": "Medium shadow"
+      },
+      "lg": {
+        "$type": "shadow",
+        "$value": "0 10px 15px -3px oklch(0.0 0.000 0.00 / 0.1), 0 4px 6px -4px oklch(0.0 0.000 0.00 / 0.1)",
+        "$description": "Large shadow"
+      },
+      "xl": {
+        "$type": "shadow",
+        "$value": "0 20px 25px -5px oklch(0.0 0.000 0.00 / 0.1), 0 8px 10px -6px oklch(0.0 0.000 0.00 / 0.1)",
+        "$description": "Extra large shadow"
+      }
+    },
+    "semantic": {
+      "card": {
+        "$type": "shadow",
+        "$value": "{shadows.primitive.md}",
+        "$description": "Card shadow"
+      },
+      "modal": {
+        "$type": "shadow",
+        "$value": "{shadows.primitive.xl}",
+        "$description": "Modal shadow"
+      },
+      "dropdown": {
+        "$type": "shadow",
+        "$value": "{shadows.primitive.lg}",
+        "$description": "Dropdown shadow"
+      },
+      "button": {
+        "rest": {
+          "$type": "shadow",
+          "$value": "0 1px 2px 0 oklch(0.0 0.000 0.00 / 0.05)",
+          "$description": "Button rest shadow"
+        },
+        "hover": {
+          "$type": "shadow",
+          "$value": "0 4px 6px -1px oklch(0.0 0.000 0.00 / 0.1)",
+          "$description": "Button hover shadow"
+        },
+        "active": {
+          "$type": "shadow",
+          "$value": "0 1px 2px 0 oklch(0.0 0.000 0.00 / 0.05)",
+          "$description": "Button active shadow"
+        }
+      }
+    }
+  }
+}

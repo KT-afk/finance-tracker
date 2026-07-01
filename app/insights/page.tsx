@@ -3,15 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -66,6 +57,33 @@ export default function InsightsPage() {
     return Object.entries(totals)
       .sort(([, a], [, b]) => b - a) // descending by total (bottom of stack = highest)
   }, [data?.trendData])
+
+  const trendMax = useMemo(() => {
+    if (!data?.trendData) return 0
+    return Math.max(
+      0,
+      ...data.trendData.map(row =>
+        trendCategories.reduce((sum, [cat]) => {
+          const value = row[cat]
+          return sum + (typeof value === 'number' ? value : 0)
+        }, 0)
+      )
+    )
+  }, [data?.trendData, trendCategories])
+
+  const yTicks = useMemo(() => {
+    const roundedMax = Math.max(100, Math.ceil(trendMax / 100) * 100)
+    return [1, 0.75, 0.5, 0.25, 0].map(position => ({
+      position,
+      label: `$${Math.round(roundedMax * position)}`,
+    }))
+  }, [trendMax])
+
+  function monthShort(month: string): string {
+    const [y, mo] = month.split('-')
+    const date = new Date(parseInt(y), parseInt(mo) - 1, 1)
+    return date.toLocaleString('en-SG', { month: 'short' })
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -146,58 +164,91 @@ export default function InsightsPage() {
               {trendCategories.length === 0 ? (
                 <p className="text-center text-zinc-500 text-sm py-8">Not enough data yet</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fill: '#71717a', fontSize: 11 }}
-                      tickFormatter={m => {
-                        const [y, mo] = m.split('-')
-                        const date = new Date(parseInt(y), parseInt(mo) - 1, 1)
-                        return date.toLocaleString('en-SG', { month: 'short' })
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: '#71717a', fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={v => `$${Math.round(v)}`}
-                      width={48}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#18181b',
-                        border: '1px solid #27272a',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                      labelStyle={{ color: '#a1a1aa' }}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      formatter={(value: any, name: any) => [
-                        typeof value === 'number' ? formatSGD(value) : '',
-                        name ?? '',
-                      ] as [string, string]}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontSize: 11, color: '#a1a1aa' }}
-                      iconType="circle"
-                      iconSize={8}
-                    />
-                    {trendCategories.map(([cat], i) => (
-                      <Bar
+                <div className="space-y-3">
+                  <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2">
+                    <div className="relative h-64 sm:h-72">
+                      {yTicks.map(tick => (
+                        <span
+                          key={tick.position}
+                          className="absolute right-0 translate-y-1/2 font-mono text-[10px] text-zinc-500"
+                          style={{ bottom: `${tick.position * 100}%` }}
+                        >
+                          {tick.label}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="relative h-64 sm:h-72 border-b border-zinc-800">
+                        {yTicks.map(tick => (
+                          <span
+                            key={tick.position}
+                            className="absolute left-0 right-0 border-t border-zinc-800/70"
+                            style={{ bottom: `${tick.position * 100}%` }}
+                          />
+                        ))}
+                        <div className="absolute inset-0 flex items-end justify-between gap-1.5 sm:gap-3 px-1">
+                          {data.trendData.map(row => {
+                            const total = trendCategories.reduce((sum, [cat]) => {
+                              const value = row[cat]
+                              return sum + (typeof value === 'number' ? value : 0)
+                            }, 0)
+                            let cumulative = 0
+                            return (
+                              <div key={String(row.month)} className="flex h-full min-w-0 flex-1 justify-center">
+                                <div className="relative h-full w-full max-w-16" title={`${String(row.month)} total ${formatSGD(total)}`}>
+                                  {trendCategories.map(([cat]) => {
+                                    const value = row[cat]
+                                    if (typeof value !== 'number' || value <= 0 || trendMax <= 0) return null
+                                    const bottom = (cumulative / trendMax) * 100
+                                    const height = (value / trendMax) * 100
+                                    cumulative += value
+                                    return (
+                                      <button
+                                        key={cat}
+                                        type="button"
+                                        aria-label={`${String(row.month)} ${cat} ${formatSGD(value)}`}
+                                        onClick={() => router.push(`/insights/${encodeURIComponent(cat)}`)}
+                                        className="absolute left-0 right-0 min-h-0.5"
+                                        style={{
+                                          bottom: `${bottom}%`,
+                                          height: `${height}%`,
+                                          backgroundColor: CATEGORY_COLORS[cat] ?? '#94A3B8',
+                                        }}
+                                      />
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex justify-between gap-1 px-1 text-center text-[11px] text-zinc-500">
+                        {data.trendData.map(row => (
+                          <span key={String(row.month)} className="min-w-0 flex-1">
+                            {monthShort(String(row.month))}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {trendCategories.map(([cat]) => (
+                      <button
                         key={cat}
-                        dataKey={cat}
-                        stackId="a"
-                        fill={CATEGORY_COLORS[cat] ?? '#94A3B8'}
-                        radius={i === trendCategories.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
-                        cursor="pointer"
+                        type="button"
                         onClick={() => router.push(`/insights/${encodeURIComponent(cat)}`)}
-                      />
+                        className="inline-flex max-w-full items-center gap-1.5 text-left text-[11px] text-zinc-400 hover:text-zinc-100"
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: CATEGORY_COLORS[cat] ?? '#94A3B8' }}
+                        />
+                        <span className="truncate">{cat}</span>
+                      </button>
                     ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -212,7 +263,7 @@ export default function InsightsPage() {
                 <p className="text-center text-zinc-500 text-sm py-6">No data for current month</p>
               ) : (
                 <div className="space-y-0 divide-y divide-zinc-800">
-                  <div className="grid grid-cols-4 pb-2 text-xs text-zinc-500">
+                  <div className="hidden sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(6rem,1fr)_minmax(6rem,1fr)_minmax(7rem,1fr)] pb-2 text-xs text-zinc-500">
                     <span>Category</span>
                     <span className="text-right">This month</span>
                     <span className="text-right">Last month</span>
@@ -225,19 +276,19 @@ export default function InsightsPage() {
                       <Link
                         key={row.category}
                         href={`/insights/${encodeURIComponent(row.category)}`}
-                        className="grid grid-cols-4 py-2.5 text-sm items-center cursor-pointer hover:bg-zinc-800/50 transition-colors duration-200 rounded -mx-1 px-1"
+                        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 py-3 text-sm items-center cursor-pointer hover:bg-zinc-800/50 transition-colors duration-200 rounded -mx-1 px-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(6rem,1fr)_minmax(6rem,1fr)_minmax(7rem,1fr)] sm:gap-y-0 sm:py-2.5"
                       >
                         <div className="flex items-center gap-2">
                           <span
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: color }}
                           />
-                          <span className="text-zinc-200 text-xs truncate">{row.category}</span>
+                          <span className="text-zinc-200 text-xs sm:text-sm truncate">{row.category}</span>
                         </div>
-                        <span className="text-right font-mono text-xs text-zinc-100">
+                        <span className="hidden text-right font-mono text-xs text-zinc-100 sm:block">
                           {formatSGD(row.current)}
                         </span>
-                        <span className="text-right font-mono text-xs text-zinc-500">
+                        <span className="hidden text-right font-mono text-xs text-zinc-500 sm:block">
                           {formatSGD(row.previous)}
                         </span>
                         <div className="flex items-center justify-end gap-1">
@@ -251,6 +302,14 @@ export default function InsightsPage() {
                               ({row.deltaPct > 0 ? '+' : ''}{Math.round(row.deltaPct)}%)
                             </span>
                           )}
+                        </div>
+                        <div className="col-span-2 flex flex-wrap gap-x-3 gap-y-1 pl-4 text-[11px] text-zinc-500 sm:hidden">
+                          <span>
+                            This <span className="font-mono text-zinc-200">{formatSGD(row.current)}</span>
+                          </span>
+                          <span>
+                            Last <span className="font-mono">{formatSGD(row.previous)}</span>
+                          </span>
                         </div>
                       </Link>
                     )

@@ -1,0 +1,19 @@
+{
+  "$type": "breakpoint",
+  "breakpoints": {
+    "primitive": {
+      "xs": { "$type": "dimension", "$value": "0px", "$description": "Extra small breakpoint" },
+      "sm": { "$type": "dimension", "$value": "640px", "$description": "Small breakpoint" },
+      "md": { "$type": "dimension", "$value": "768px", "$description": "Medium breakpoint" },
+      "lg": { "$type": "dimension", "$value": "1024px", "$description": "Large breakpoint" },
+      "xl": { "$type": "dimension", "$value": "1280px", "$description": "Extra large breakpoint" },
+      "2xl": { "$type": "dimension", "$value": "1536px", "$description": "2X large breakpoint" }
+    },
+    "semantic": {
+      "mobile": { "$type": "dimension", "$value": "{breakpoints.primitive.sm}", "$description": "Mobile breakpoint" },
+      "tablet": { "$type": "dimension", "$value": "{breakpoints.primitive.md}", "$description": "Tablet breakpoint" },
+      "desktop": { "$type": "dimension", "$value": "{breakpoints.primitive.lg}", "$description": "Desktop breakpoint" },
+      "wide": { "$type": "dimension", "$value": "{breakpoints.primitive.xl}", "$description": "Wide desktop breakpoint" }
+    }
+  }
+}

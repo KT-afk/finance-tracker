@@ -1,4 +1,4 @@
-import { RawTransaction, parseCSVRows } from './types'
+import { RawTransaction, ParseResult, parseCSVRows } from './types'
 
 /**
  * Parse OCBC CSV export.
@@ -12,10 +12,11 @@ import { RawTransaction, parseCSVRows } from './types'
  *
  * We use headerCandidates to skip the metadata and land on the right header row.
  */
-export function parseOCBC(csv: string): RawTransaction[] {
+export function parseOCBC(csv: string): ParseResult {
   // "Transaction date" is the first cell of the real header row
   const rows = parseCSVRows(csv, ['Transaction date', 'Transaction Date'])
   const results: RawTransaction[] = []
+  let endingBalance: number | undefined
 
   for (const row of rows) {
     // Column name variants (case-insensitive key matching handled below)
@@ -42,6 +43,11 @@ export function parseOCBC(csv: string): RawTransaction[] {
       row['Deposit'] ??
       ''
 
+    const balanceStr =
+      row['Balance'] ??
+      row['Available Balance'] ??
+      ''
+
     if (!dateStr || !description) continue
 
     // Parse DD/MM/YYYY → YYYY-MM-DD
@@ -58,6 +64,7 @@ export function parseOCBC(csv: string): RawTransaction[] {
 
     const withdrawal = parseFloat(withdrawalStr.replace(/,/g, '')) || 0
     const deposit = parseFloat(depositStr.replace(/,/g, '')) || 0
+    const balance = parseFloat(balanceStr.replace(/,/g, '')) || 0
 
     let amount: number
     if (withdrawal > 0) {
@@ -69,7 +76,12 @@ export function parseOCBC(csv: string): RawTransaction[] {
     }
 
     results.push({ date, description, amount, bank: 'ocbc' })
+
+    // Capture the last valid balance as the ending balance
+    if (balance > 0 || balance < 0) {
+      endingBalance = balance
+    }
   }
 
-  return results
+  return { transactions: results, endingBalance }
 }

@@ -1,4 +1,4 @@
-import { RawTransaction, parseCSVRows, parseDDMMMYYYY } from './types'
+import { RawTransaction, ParseResult, parseCSVRows, parseDDMMMYYYY } from './types'
 
 /**
  * Parse DBS/POSB CSV export.
@@ -6,15 +6,17 @@ import { RawTransaction, parseCSVRows, parseDDMMMYYYY } from './types'
  * Date format: DD MMM YYYY (e.g. "01 Jan 2024")
  * Debit = expense (negative), Credit = income (positive)
  */
-export function parseDBS(csv: string): RawTransaction[] {
+export function parseDBS(csv: string): ParseResult {
   const rows = parseCSVRows(csv, ['Date', 'Transaction Date'])
   const results: RawTransaction[] = []
+  let endingBalance: number | undefined
 
   for (const row of rows) {
     const dateStr = row['Date'] ?? ''
     const description = row['Reference'] ?? row['Description'] ?? row['Particulars'] ?? ''
     const debitStr = row['Debit Amount'] ?? row['Withdrawals'] ?? ''
     const creditStr = row['Credit Amount'] ?? row['Deposits'] ?? ''
+    const balanceStr = row['Balance'] ?? ''
 
     if (!dateStr || !description) continue
 
@@ -32,6 +34,7 @@ export function parseDBS(csv: string): RawTransaction[] {
 
     const debit = parseFloat(debitStr.replace(/,/g, '')) || 0
     const credit = parseFloat(creditStr.replace(/,/g, '')) || 0
+    const balance = parseFloat(balanceStr.replace(/,/g, '')) || 0
 
     let amount: number
     if (debit > 0) {
@@ -43,7 +46,12 @@ export function parseDBS(csv: string): RawTransaction[] {
     }
 
     results.push({ date, description: description.trim(), amount, bank: 'dbs' })
+
+    // Capture the last valid balance as the ending balance
+    if (balance > 0) {
+      endingBalance = balance
+    }
   }
 
-  return results
+  return { transactions: results, endingBalance }
 }

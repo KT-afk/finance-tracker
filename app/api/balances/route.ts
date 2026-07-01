@@ -19,10 +19,12 @@ export async function GET() {
         : null
     }))
     const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; recorded_at: string }[]
-
     const total = Math.round(balances.reduce((sum, b) => sum + b.balance, 0) * 100) / 100
+    const lastUpdated = balances.length > 0 
+      ? balances.reduce((latest, b) => b.recorded_at > latest ? b.recorded_at : latest, balances[0].recorded_at)
+      : new Date().toISOString()
 
-    return NextResponse.json({ balances, total })
+    return NextResponse.json({ balances, total, lastUpdated })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg }, { status: 500 })

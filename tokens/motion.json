@@ -1,0 +1,48 @@
+{
+  "$type": "motion",
+  "motion": {
+    "primitive": {
+      "duration": {
+        "fast": { "$type": "duration", "$value": "150ms", "$description": "Fast animation duration" },
+        "normal": { "$type": "duration", "$value": "250ms", "$description": "Normal animation duration" },
+        "slow": { "$type": "duration", "$value": "350ms", "$description": "Slow animation duration" }
+      },
+      "easing": {
+        "ease": { "$type": "cubicBezier", "$value": "0.25, 0.1, 0.25, 1.0", "$description": "Standard easing" },
+        "easeIn": { "$type": "cubicBezier", "$value": "0.42, 0, 1.0, 1.0", "$description": "Ease in" },
+        "easeOut": { "$type": "cubicBezier", "$value": "0, 0, 0.58, 1.0", "$description": "Ease out" },
+        "easeInOut": { "$type": "cubicBezier", "$value": "0.42, 0, 0.58, 1.0", "$description": "Ease in out" }
+      }
+    },
+    "semantic": {
+      "transition": {
+        "fast": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.fast}", "$description": "Fast transition duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeOut}", "$description": "Fast transition easing" }
+        },
+        "normal": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.normal}", "$description": "Normal transition duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeInOut}", "$description": "Normal transition easing" }
+        },
+        "slow": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.slow}", "$description": "Slow transition duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeInOut}", "$description": "Slow transition easing" }
+        }
+      },
+      "animation": {
+        "fade": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.normal}", "$description": "Fade animation duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeInOut}", "$description": "Fade animation easing" }
+        },
+        "slide": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.fast}", "$description": "Slide animation duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeOut}", "$description": "Slide animation easing" }
+        },
+        "scale": {
+          "duration": { "$type": "duration", "$value": "{motion.primitive.duration.fast}", "$description": "Scale animation duration" },
+          "easing": { "$type": "cubicBezier", "$value": "{motion.primitive.easing.easeOut}", "$description": "Scale animation easing" }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { RawTransaction, parseCSVRows } from './types'
+import { RawTransaction, ParseResult, parseCSVRows } from './types'
 
 /**
  * Parse Trust Bank CSV export.
@@ -6,7 +6,7 @@ import { RawTransaction, parseCSVRows } from './types'
  * Amounts are already signed: negative = expense, positive = income.
  * Date format: YYYY-MM-DD
  */
-export function parseTrust(csv: string): RawTransaction[] {
+export function parseTrust(csv: string): ParseResult {
   const rows = parseCSVRows(csv, ['Date', 'Transaction Date'])
   const results: RawTransaction[] = []
 
@@ -33,5 +33,5 @@ export function parseTrust(csv: string): RawTransaction[] {
     results.push({ date, description: description.trim(), amount, bank: 'trust' })
   }
 
-  return results
+  return { transactions: results }
 }

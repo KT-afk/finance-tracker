@@ -3,7 +3,7 @@ import { parseFile } from '@/lib/parsers'
 import { normalize } from '@/lib/parsers/normalizer'
 import { categorize } from '@/lib/categorize'
 import { db } from '@/lib/db'
-import { transactions } from '@/lib/schema'
+import { transactions, balanceHistory } from '@/lib/schema'
 import { Bank, BANKS } from '@/lib/schema'
 import { inArray } from 'drizzle-orm'
 
@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     // Parse file using bank-specific parser (supports CSV and PDF)
-    let raws
+    let parseResult
     try {
-      raws = await parseFile(buffer, file.name, bank as Bank)
+      parseResult = await parseFile(buffer, file.name, bank as Bank)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown parse error'
       return NextResponse.json(
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
         { status: 422 }
       )
     }
+
+    const { transactions: raws, endingBalance } = parseResult
 
     if (raws.length === 0) {
       return NextResponse.json(
@@ -63,6 +65,22 @@ export async function POST(req: NextRequest) {
       }))
     )
 
+    // Save ending balance if extracted from CSV
+    let savedBalance = false
+    if (endingBalance !== undefined) {
+      try {
+        await db.insert(balanceHistory).values({
+          bank: bank as Bank,
+          balance: endingBalance,
+          recorded_at: new Date().toISOString(),
+        })
+        savedBalance = true
+      } catch (balanceError) {
+        console.error('Failed to save balance:', balanceError)
+        // Don't fail the upload if balance saving fails
+      }
+    }
+
     // Build date range
     const dates = normalized.map(t => t.date).sort()
     const dateFrom = dates[0]
@@ -76,6 +94,7 @@ export async function POST(req: NextRequest) {
         dateFrom,
         dateTo,
         bank,
+        endingBalance: savedBalance ? endingBalance : undefined,
       },
       transactions: categorized,
     })

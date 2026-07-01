@@ -1,0 +1,91 @@
+{
+  "$type": "spacing",
+  "spacing": {
+    "primitive": {
+      "0": { "$type": "spacing", "$value": "0px", "$description": "No spacing" },
+      "1": { "$type": "spacing", "$value": "4px", "$description": "1 unit spacing" },
+      "2": { "$type": "spacing", "$value": "8px", "$description": "2 units spacing" },
+      "3": { "$type": "spacing", "$value": "12px", "$description": "3 units spacing" },
+      "4": { "$type": "spacing", "$value": "16px", "$description": "4 units spacing" },
+      "5": { "$type": "spacing", "$value": "20px", "$description": "5 units spacing" },
+      "6": { "$type": "spacing", "$value": "24px", "$description": "6 units spacing" },
+      "8": { "$type": "spacing", "$value": "32px", "$description": "8 units spacing" },
+      "10": { "$type": "spacing", "$value": "40px", "$description": "10 units spacing" },
+      "12": { "$type": "spacing", "$value": "48px", "$description": "12 units spacing" },
+      "16": { "$type": "spacing", "$value": "64px", "$description": "16 units spacing" },
+      "20": { "$type": "spacing", "$value": "80px", "$description": "20 units spacing" },
+      "24": { "$type": "spacing", "$value": "96px", "$description": "24 units spacing" },
+      "32": { "$type": "spacing", "$value": "128px", "$description": "32 units spacing" }
+    },
+    "semantic": {
+      "component": {
+        "padding": {
+          "xs": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Extra small component padding" },
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.3}", "$description": "Small component padding" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Medium component padding" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Large component padding" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.8}", "$description": "Extra large component padding" }
+        },
+        "margin": {
+          "xs": { "$type": "spacing", "$value": "{spacing.primitive.1}", "$description": "Extra small component margin" },
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Small component margin" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Medium component margin" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Large component margin" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.8}", "$description": "Extra large component margin" }
+        },
+        "gap": {
+          "xs": { "$type": "spacing", "$value": "{spacing.primitive.1}", "$description": "Extra small component gap" },
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Small component gap" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.3}", "$description": "Medium component gap" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Large component gap" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Extra large component gap" }
+        }
+      },
+      "layout": {
+        "container": {
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Small container padding" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Medium container padding" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.8}", "$description": "Large container padding" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.12}", "$description": "Extra large container padding" }
+        },
+        "section": {
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.8}", "$description": "Small section spacing" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.12}", "$description": "Medium section spacing" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.16}", "$description": "Large section spacing" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.20}", "$description": "Extra large section spacing" }
+        },
+        "grid": {
+          "xs": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Extra small grid gap" },
+          "sm": { "$type": "spacing", "$value": "{spacing.primitive.3}", "$description": "Small grid gap" },
+          "md": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Medium grid gap" },
+          "lg": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Large grid gap" },
+          "xl": { "$type": "spacing", "$value": "{spacing.primitive.8}", "$description": "Extra large grid gap" }
+        }
+      },
+      "form": {
+        "field": {
+          "padding": { "$type": "spacing", "$value": "{spacing.primitive.3}", "$description": "Form field padding" },
+          "margin": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Form field margin" },
+          "gap": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Form field gap" }
+        },
+        "group": {
+          "padding": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Form group padding" },
+          "margin": { "$type": "spacing", "$value": "{spacing.primitive.6}", "$description": "Form group margin" },
+          "gap": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Form group gap" }
+        }
+      },
+      "navigation": {
+        "item": {
+          "padding": { "$type": "spacing", "$value": "{spacing.primitive.3}", "$description": "Nav item padding" },
+          "margin": { "$type": "spacing", "$value": "{spacing.primitive.1}", "$description": "Nav item margin" },
+          "gap": { "$type": "spacing", "$value": "{spacing.primitive.2}", "$description": "Nav item gap" }
+        },
+        "bar": {
+          "padding": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Nav bar padding" },
+          "margin": { "$type": "spacing", "$value": "{spacing.primitive.0}", "$description": "Nav bar margin" },
+          "gap": { "$type": "spacing", "$value": "{spacing.primitive.4}", "$description": "Nav bar gap" }
+        }
+      }
+    }
+  }
+}

@@ -21,6 +21,7 @@ interface PreviewData {
   dateFrom: string
   dateTo: string
   bank: string
+  endingBalance?: number
 }
 
 export default function UploadPage() {
@@ -244,6 +245,21 @@ export default function UploadPage() {
             <p className="text-xs text-zinc-500">
               {files.length > 1 ? `${files.length} files · ` : ''}Date range: {preview.dateFrom} → {preview.dateTo}
             </p>
+
+            {/* Balance extraction confirmation */}
+            {preview.endingBalance !== undefined && (
+              <div className="rounded-lg bg-green-900/20 border border-green-700/30 p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-green-400 text-sm font-medium">✓ Balance extracted</span>
+                </div>
+                <p className="text-xs text-zinc-300">
+                  Ending balance: <span className="font-mono font-semibold text-white">${preview.endingBalance.toLocaleString()}</span>
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Account balance will be automatically updated after confirmation.
+                </p>
+              </div>
+            )}
 
             {error && (
               <p className="rounded bg-red-900/40 border border-red-700/40 px-3 py-2 text-sm text-red-300">

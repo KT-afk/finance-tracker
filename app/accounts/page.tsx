@@ -22,6 +22,7 @@ interface BankBalance {
 interface BalancesData {
   balances: BankBalance[]
   total: number
+  lastUpdated: string
 }
 
 interface TrendPoint {
@@ -128,7 +129,14 @@ export default function AccountsPage() {
           {/* Net worth header */}
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-zinc-400 font-normal">Net worth</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-zinc-400 font-normal">Net worth</CardTitle>
+                {hasBalances && (
+                  <span className="text-xs text-zinc-500">
+                    Updated {relativeDate(data!.lastUpdated)}
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {hasBalances ? (
@@ -139,6 +147,11 @@ export default function AccountsPage() {
                   <p className="text-xs text-zinc-500 mt-1">
                     across {bankCount} {bankCount === 1 ? 'bank' : 'banks'}
                   </p>
+                  <div className="mt-3 p-2 rounded-lg bg-zinc-800/30">
+                    <p className="text-xs text-zinc-400">
+                      💡 Tip: Update balances regularly for accurate financial tracking
+                    </p>
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-zinc-500">No balances set yet. Add your first balance below.</p>
@@ -149,7 +162,18 @@ export default function AccountsPage() {
           {/* Per-bank list */}
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-zinc-400 font-normal">Bank accounts</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-zinc-400 font-normal">Bank accounts</CardTitle>
+                {hasBalances && (
+                  <button
+                    onClick={fetchData}
+                    disabled={loading}
+                    className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                  >
+                    Refresh
+                  </button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="divide-y divide-zinc-800">
               {BANKS.map(bank => {

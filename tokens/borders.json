@@ -1,0 +1,39 @@
+{
+  "$type": "border",
+  "borders": {
+    "primitive": {
+      "width": {
+        "0": { "$type": "borderWidth", "$value": "0px", "$description": "No border" },
+        "1": { "$type": "borderWidth", "$value": "1px", "$description": "Thin border" },
+        "2": { "$type": "borderWidth", "$value": "2px", "$description": "Medium border" },
+        "4": { "$type": "borderWidth", "$value": "4px", "$description": "Thick border" }
+      },
+      "radius": {
+        "none": { "$type": "borderRadius", "$value": "0px", "$description": "No border radius" },
+        "sm": { "$type": "borderRadius", "$value": "2px", "$description": "Small border radius" },
+        "md": { "$type": "borderRadius", "$value": "6px", "$description": "Medium border radius" },
+        "lg": { "$type": "borderRadius", "$value": "8px", "$description": "Large border radius" },
+        "xl": { "$type": "borderRadius", "$value": "12px", "$description": "Extra large border radius" },
+        "full": { "$type": "borderRadius", "$value": "9999px", "$description": "Full border radius" }
+      }
+    },
+    "semantic": {
+      "button": {
+        "radius": { "$type": "borderRadius", "$value": "{borders.primitive.radius.md}", "$description": "Button border radius" },
+        "width": { "$type": "borderWidth", "$value": "{borders.primitive.width.1}", "$description": "Button border width" }
+      },
+      "card": {
+        "radius": { "$type": "borderRadius", "$value": "{borders.primitive.radius.lg}", "$description": "Card border radius" },
+        "width": { "$type": "borderWidth", "$value": "{borders.primitive.width.1}", "$description": "Card border width" }
+      },
+      "input": {
+        "radius": { "$type": "borderRadius", "$value": "{borders.primitive.radius.md}", "$description": "Input border radius" },
+        "width": { "$type": "borderWidth", "$value": "{borders.primitive.width.1}", "$description": "Input border width" }
+      },
+      "modal": {
+        "radius": { "$type": "borderRadius", "$value": "{borders.primitive.radius.xl}", "$description": "Modal border radius" },
+        "width": { "$type": "borderWidth", "$value": "{borders.primitive.width.0}", "$description": "Modal border width" }
+      }
+    }
+  }
+}

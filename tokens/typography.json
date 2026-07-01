@@ -1,0 +1,122 @@
+{
+  "$type": "typography",
+  "typography": {
+    "fontFamilies": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": ["Inter", "system-ui", "sans-serif"],
+        "$description": "Primary sans-serif font family"
+      },
+      "mono": {
+        "$type": "fontFamily", 
+        "$value": ["JetBrains Mono", "Consolas", "Monaco", "monospace"],
+        "$description": "Monospace font family for code and numbers"
+      },
+      "display": {
+        "$type": "fontFamily",
+        "$value": ["Inter", "system-ui", "sans-serif"],
+        "$description": "Display font family for headings"
+      }
+    },
+    "fontSizes": {
+      "xs": { "$type": "fontSize", "$value": "0.75rem", "$description": "Extra small text" },
+      "sm": { "$type": "fontSize", "$value": "0.875rem", "$description": "Small text" },
+      "base": { "$type": "fontSize", "$value": "1rem", "$description": "Base text size" },
+      "lg": { "$type": "fontSize", "$value": "1.125rem", "$description": "Large text" },
+      "xl": { "$type": "fontSize", "$value": "1.25rem", "$description": "Extra large text" },
+      "2xl": { "$type": "fontSize", "$value": "1.5rem", "$description": "2X large text" },
+      "3xl": { "$type": "fontSize", "$value": "1.875rem", "$description": "3X large text" },
+      "4xl": { "$type": "fontSize", "$value": "2.25rem", "$description": "4X large text" },
+      "5xl": { "$type": "fontSize", "$value": "3rem", "$description": "5X large text" }
+    },
+    "fontWeights": {
+      "thin": { "$type": "fontWeight", "$value": "100", "$description": "Thin font weight" },
+      "extralight": { "$type": "fontWeight", "$value": "200", "$description": "Extra light font weight" },
+      "light": { "$type": "fontWeight", "$value": "300", "$description": "Light font weight" },
+      "normal": { "$type": "fontWeight", "$value": "400", "$description": "Normal font weight" },
+      "medium": { "$type": "fontWeight", "$value": "500", "$description": "Medium font weight" },
+      "semibold": { "$type": "fontWeight", "$value": "600", "$description": "Semibold font weight" },
+      "bold": { "$type": "fontWeight", "$value": "700", "$description": "Bold font weight" },
+      "extrabold": { "$type": "fontWeight", "$value": "800", "$description": "Extra bold font weight" },
+      "black": { "$type": "fontWeight", "$value": "900", "$description": "Black font weight" }
+    },
+    "lineHeights": {
+      "none": { "$type": "lineHeight", "$value": "1", "$description": "No line height" },
+      "tight": { "$type": "lineHeight", "$value": "1.25", "$description": "Tight line height" },
+      "snug": { "$type": "lineHeight", "$value": "1.375", "$description": "Snug line height" },
+      "normal": { "$type": "lineHeight", "$value": "1.5", "$description": "Normal line height" },
+      "relaxed": { "$type": "lineHeight", "$value": "1.625", "$description": "Relaxed line height" },
+      "loose": { "$type": "lineHeight", "$value": "2", "$description": "Loose line height" }
+    },
+    "letterSpacing": {
+      "tighter": { "$type": "letterSpacing", "$value": "-0.05em", "$description": "Tighter letter spacing" },
+      "tight": { "$type": "letterSpacing", "$value": "-0.025em", "$description": "Tight letter spacing" },
+      "normal": { "$type": "letterSpacing", "$value": "0em", "$description": "Normal letter spacing" },
+      "wide": { "$type": "letterSpacing", "$value": "0.025em", "$description": "Wide letter spacing" },
+      "wider": { "$type": "letterSpacing", "$value": "0.05em", "$description": "Wider letter spacing" },
+      "widest": { "$type": "letterSpacing", "$value": "0.1em", "$description": "Widest letter spacing" }
+    },
+    "semantic": {
+      "heading": {
+        "h1": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.3xl}", "$description": "H1 font size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.bold}", "$description": "H1 font weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.tight}", "$description": "H1 line height" },
+          "letterSpacing": { "$type": "letterSpacing", "$value": "{typography.letterSpacing.tight}", "$description": "H1 letter spacing" }
+        },
+        "h2": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.2xl}", "$description": "H2 font size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.semibold}", "$description": "H2 font weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.tight}", "$description": "H2 line height" },
+          "letterSpacing": { "$type": "letterSpacing", "$value": "{typography.letterSpacing.normal}", "$description": "H2 letter spacing" }
+        },
+        "h3": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.xl}", "$description": "H3 font size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.semibold}", "$description": "H3 font weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.snug}", "$description": "H3 line height" },
+          "letterSpacing": { "$type": "letterSpacing", "$value": "{typography.letterSpacing.normal}", "$description": "H3 letter spacing" }
+        },
+        "h4": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.lg}", "$description": "H4 font size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.medium}", "$description": "H4 font weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.snug}", "$description": "H4 line height" },
+          "letterSpacing": { "$type": "letterSpacing", "$value": "{typography.letterSpacing.normal}", "$description": "H4 letter spacing" }
+        }
+      },
+      "body": {
+        "large": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.lg}", "$description": "Large body text" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.normal}", "$description": "Large body weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.relaxed}", "$description": "Large body line height" }
+        },
+        "base": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.base}", "$description": "Base body text" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.normal}", "$description": "Base body weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.normal}", "$description": "Base body line height" }
+        },
+        "small": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.sm}", "$description": "Small body text" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.normal}", "$description": "Small body weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.normal}", "$description": "Small body line height" }
+        }
+      },
+      "ui": {
+        "button": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.sm}", "$description": "Button text size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.medium}", "$description": "Button font weight" },
+          "letterSpacing": { "$type": "letterSpacing", "$value": "{typography.letterSpacing.wide}", "$description": "Button letter spacing" }
+        },
+        "caption": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.xs}", "$description": "Caption text size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.medium}", "$description": "Caption font weight" },
+          "lineHeight": { "$type": "lineHeight", "$value": "{typography.lineHeights.normal}", "$description": "Caption line height" }
+        },
+        "code": {
+          "fontSize": { "$type": "fontSize", "$value": "{typography.fontSizes.sm}", "$description": "Code text size" },
+          "fontWeight": { "$type": "fontWeight", "$value": "{typography.fontWeights.medium}", "$description": "Code font weight" },
+          "fontFamily": { "$type": "fontFamily", "$value": "{typography.fontFamilies.mono}", "$description": "Code font family" }
+        }
+      }
+    }
+  }
+}

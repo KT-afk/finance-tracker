@@ -9,7 +9,7 @@ test.describe('accounts page', () => {
   test('shows Net worth card', async ({ authedPage: page }) => {
     await page.goto('/accounts')
     await page.waitForSelector('.animate-pulse', { state: 'detached', timeout: 10000 }).catch(() => {})
-    await expect(page.getByText('Net worth')).toBeVisible()
+    await expect(page.getByText('Net worth', { exact: true })).toBeVisible()
   })
 
   test('shows Bank accounts list with all four banks', async ({ authedPage: page }) => {

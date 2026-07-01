@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
-import { and, eq, gte, lte, desc } from 'drizzle-orm'
+import { and, asc, eq, gte, lte } from 'drizzle-orm'
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * 10) / 10
+}
 
 function getMonthRange(monthsBack: number): { start: string; end: string; label: string } {
   const now = new Date()
@@ -63,10 +71,10 @@ export async function GET(req: NextRequest) {
 
     const momComparison = Array.from(allCategories)
       .map(cat => {
-        const current = currentData[cat] ?? 0
-        const previous = prevData[cat] ?? 0
-        const delta = current - previous
-        const deltaPct = previous > 0 ? (delta / previous) * 100 : null
+        const current = roundMoney(currentData[cat] ?? 0)
+        const previous = roundMoney(prevData[cat] ?? 0)
+        const delta = roundMoney(current - previous)
+        const deltaPct = previous > 0 ? roundPercent((delta / previous) * 100) : null
         return { category: cat, current, previous, delta, deltaPct }
       })
       .filter(r => r.current > 0 || r.previous > 0)
@@ -77,7 +85,7 @@ export async function GET(req: NextRequest) {
       const row: Record<string, string | number> = { month: m }
       const cats = monthlyData[m] ?? {}
       for (const [cat, amt] of Object.entries(cats)) {
-        row[cat] = Math.round(amt * 100) / 100
+        row[cat] = roundMoney(amt)
       }
       return row
     })
@@ -93,10 +101,9 @@ export async function GET(req: NextRequest) {
           ...bankCondition
         )
       )
-      .orderBy(desc(transactions.amount))
+      .orderBy(asc(transactions.amount))
     )
       .filter(t => t.amount < 0) // expenses only
-      .sort((a, b) => a.amount - b.amount) // most negative first
       .slice(0, 5)
 
     return NextResponse.json({
