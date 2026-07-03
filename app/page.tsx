@@ -89,6 +89,8 @@ export default function HomePage() {
     ])
       .then(([d, b]) => {
         if (d.error) { setError(d.error); return }
+        // Always set balance data regardless of fallback
+        setBalanceData(b)
         // Auto-fallback: if current month has no data, silently switch to last month
         if (d.isEmpty && d.isCurrentMonth) {
           const now = new Date()
@@ -100,7 +102,6 @@ export default function HomePage() {
           return
         }
         setData(d)
-        setBalanceData(b)
       })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
