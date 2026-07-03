@@ -36,16 +36,22 @@ export function createPersistentLoginAttemptStore(
   let tableReady: Promise<void> | null = null
 
   async function ensureTable() {
-    tableReady ??= client.execute(`
-      create table if not exists login_attempts (
-        client_key text primary key not null,
-        count integer not null,
-        reset_at integer not null,
-        locked_until integer,
-        created_at integer not null,
-        last_attempt integer not null
-      )
-    `).then(() => undefined)
+    tableReady ??= (async () => {
+      // Create table with original schema if it doesn't exist
+      await client.execute(`
+        create table if not exists login_attempts (
+          client_key text primary key not null,
+          count integer not null,
+          reset_at integer not null
+        )
+      `)
+      // Add locked_until column if not present (safe migration)
+      try {
+        await client.execute(`alter table login_attempts add column locked_until integer`)
+      } catch {
+        // Column already exists — ignore
+      }
+    })()
 
     return tableReady
   }
@@ -126,21 +132,14 @@ export function createPersistentLoginAttemptStore(
     // Update or insert record
     await client.execute({
       sql: `
-        insert or replace into login_attempts 
-        (client_key, count, reset_at, locked_until, created_at, last_attempt) 
-        values (?, ?, ?, ?, ?, ?)
+        insert into login_attempts (client_key, count, reset_at, locked_until)
+        values (?, ?, ?, ?)
+        on conflict(client_key) do update set
+          count = excluded.count,
+          reset_at = excluded.reset_at,
+          locked_until = excluded.locked_until
       `,
-      args: [
-        key,
-        newCount,
-        resetAt,
-        lockedUntil || null,
-        current ? (await client.execute({
-          sql: 'select created_at from login_attempts where client_key = ?',
-          args: [key],
-        })).rows[0]?.created_at || currentTime : currentTime,
-        currentTime
-      ],
+      args: [key, newCount, resetAt, lockedUntil ?? null],
     })
 
     return { count: newCount, resetAt, lockedUntil }
