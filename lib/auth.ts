@@ -235,3 +235,15 @@ export function shouldRefreshToken(payload: any): boolean {
   
   return timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_SECONDS
 }
+
+/**
+ * Backward-compatible wrapper used by proxy.ts middleware
+ */
+export async function verifySessionToken(
+  token: string | undefined,
+  secret: string
+): Promise<boolean> {
+  if (!token) return false
+  const result = await validateSessionToken(token, secret)
+  return result.valid
+}

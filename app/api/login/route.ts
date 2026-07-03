@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true })
   res.cookies.set({
     name: AUTH_COOKIE_NAME,
-    value: await createSessionToken(configuredPassword),
+    value: await createSessionToken('user', configuredPassword),
     httpOnly: true,
     secure: useSecureCookies(),
     sameSite: 'lax',
