@@ -2,8 +2,24 @@ import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { categorize } from '@/lib/categorize'
+import { requireAuth, createRateLimit } from '@/lib/auth-middleware'
 
-export async function POST() {
+// Rate limiting: 10 requests per minute per client
+const rateLimit = createRateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 10,
+  keyGenerator: (req) => `recategorize:${req.headers.get('x-forwarded-for') || 'unknown'}`
+})
+
+export async function POST(req: Request) {
+  // Check authentication
+  const authError = await requireAuth(req as any)
+  if (authError) return authError
+
+  // Check rate limiting
+  const rateLimitError = await rateLimit(req as any)
+  if (rateLimitError) return rateLimitError
+
   try {
     const uncategorized = await db
       .select()

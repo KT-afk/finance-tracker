@@ -7,10 +7,21 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const bank = searchParams.get('bank')
+    const monthParam = searchParams.get('month') // YYYY-MM or 'last'
 
     const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
+
+    // Resolve target month
+    let targetDate: Date
+    if (monthParam === 'last' || !monthParam) {
+      targetDate = new Date(now.getFullYear(), now.getMonth() - (monthParam === 'last' ? 1 : 0), 1)
+    } else {
+      const [y, m] = monthParam.split('-').map(Number)
+      targetDate = new Date(y, m - 1, 1)
+    }
+
+    const year = targetDate.getFullYear()
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0')
     const monthStart = `${year}-${month}-01`
     const monthEnd = `${year}-${month}-31`
 
@@ -27,6 +38,9 @@ export async function GET(req: NextRequest) {
       .select()
       .from(transactions)
       .where(and(...whereConditions))
+
+    // If current month has no data, caller can retry with last month
+    const isEmpty = monthTxns.length === 0
 
     // Total spend (sum of negative amounts, show as positive)
     const totalSpend = monthTxns
@@ -59,11 +73,11 @@ export async function GET(req: NextRequest) {
       .limit(5)
 
     // Prior month spend (same bank filter) for MoM delta
-    const priorDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const priorDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1)
     const priorYear = priorDate.getFullYear()
     const priorMonth = String(priorDate.getMonth() + 1).padStart(2, '0')
     const priorStart = `${priorYear}-${priorMonth}-01`
-    const priorEnd = `${year}-${month}-01` // exclusive upper bound = current month start
+    const priorEnd = `${year}-${month}-01`
 
     const priorWhereConditions = [
       gte(transactions.date, priorStart),
@@ -87,12 +101,15 @@ export async function GET(req: NextRequest) {
     const momDeltaPct = hasPrior && priorSpend > 0 ? ((totalSpend - priorSpend) / priorSpend) * 100 : null
     const priorMonthLabel = priorDate.toLocaleString('en-SG', { month: 'long' })
 
-    const daysElapsed = now.getDate()
+    const isCurrentMonth = year === now.getFullYear() && Number(month) === now.getMonth() + 1
+    const daysElapsed = isCurrentMonth ? now.getDate() : new Date(year, Number(month), 0).getDate()
 
     return NextResponse.json({
       totalSpend,
       daysElapsed,
       month: `${year}-${month}`,
+      isEmpty,
+      isCurrentMonth,
       topCategories,
       recentTransactions: recentTxns,
       momDelta,

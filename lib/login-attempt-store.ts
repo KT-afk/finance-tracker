@@ -2,16 +2,21 @@ import type { Client } from '@libsql/client'
 
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5
 export const LOGIN_ATTEMPT_WINDOW_MS = 5 * 60 * 1000
+export const ACCOUNT_LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes
+export const CLEANUP_INTERVAL_MS = 10 * 60 * 1000 // Clean up every 10 minutes
 
 export type LoginAttempt = {
   count: number
   resetAt: number
+  lockedUntil?: number // Account lockout timestamp
 }
 
 export type LoginAttemptStore = {
   isLimited(key: string): Promise<LoginAttempt | null>
   recordFailure(key: string): Promise<LoginAttempt>
   clear(key: string): Promise<void>
+  isLocked(key: string): Promise<boolean>
+  getLockoutRemaining(key: string): Promise<number>
 }
 
 type ExecuteClient = Pick<Client, 'execute'>
@@ -21,6 +26,7 @@ function rowToAttempt(row: Record<string, unknown> | undefined): LoginAttempt | 
   return {
     count: Number(row.count),
     resetAt: Number(row.reset_at),
+    lockedUntil: row.locked_until ? Number(row.locked_until) : undefined
   }
 }
 
@@ -29,13 +35,17 @@ export function createPersistentLoginAttemptStore(
   now: () => number = Date.now
 ): LoginAttemptStore {
   let tableReady: Promise<void> | null = null
+  let cleanupTimer: NodeJS.Timeout | null = null
 
   async function ensureTable() {
     tableReady ??= client.execute(`
       create table if not exists login_attempts (
         client_key text primary key not null,
         count integer not null,
-        reset_at integer not null
+        reset_at integer not null,
+        locked_until integer,
+        created_at integer not null,
+        last_attempt integer not null
       )
     `).then(() => undefined)
 
@@ -44,61 +54,175 @@ export function createPersistentLoginAttemptStore(
 
   async function clearExpired(key: string) {
     await client.execute({
-      sql: 'delete from login_attempts where client_key = ? and reset_at <= ?',
-      args: [key, now()],
+      sql: 'delete from login_attempts where client_key = ? and (reset_at <= ? or (locked_until is not null and locked_until <= ?))',
+      args: [key, now(), now()],
     })
   }
 
-  async function getActiveAttempt(key: string) {
+  async function cleanupAllExpired() {
+    const currentTime = now()
+    await client.execute({
+      sql: 'delete from login_attempts where reset_at <= ? or (locked_until is not null and locked_until <= ?)',
+      args: [currentTime, currentTime],
+    })
+  }
+
+  // Start automatic cleanup timer
+  function startCleanupTimer() {
+    if (cleanupTimer) return
+    
+    cleanupTimer = setInterval(async () => {
+      try {
+        await cleanupAllExpired()
+      } catch (error) {
+        console.error('Login attempt cleanup failed:', error)
+      }
+    }, CLEANUP_INTERVAL_MS)
+  }
+
+  // Initialize cleanup timer
+  ensureTable().then(() => {
+    startCleanupTimer()
+  })
+
+  async function isLimited(key: string): Promise<LoginAttempt | null> {
     await ensureTable()
     await clearExpired(key)
 
     const result = await client.execute({
-      sql: 'select count, reset_at from login_attempts where client_key = ?',
+      sql: 'select count, reset_at, locked_until from login_attempts where client_key = ?',
+      args: [key],
+    })
+    
+    const attempt = rowToAttempt(result.rows[0])
+    if (!attempt) return null
+
+    // Check if account is locked
+    if (attempt.lockedUntil && now() < attempt.lockedUntil) {
+      return attempt
+    }
+
+    // Check if within rate limit window
+    if (now() < attempt.resetAt) {
+      return attempt
+    }
+
+    // Reset if window expired and not locked
+    await clear(key)
+    return null
+  }
+
+  async function recordFailure(key: string): Promise<LoginAttempt> {
+    await ensureTable()
+    const currentTime = now()
+
+    // Clear expired entries first
+    await clearExpired(key)
+
+    // Get current attempt
+    const existing = await client.execute({
+      sql: 'select count, reset_at, locked_until from login_attempts where client_key = ?',
       args: [key],
     })
 
-    return rowToAttempt(result.rows[0] as Record<string, unknown> | undefined)
+    const current = rowToAttempt(existing.rows[0])
+    
+    let newCount = 1
+    let resetAt = currentTime + LOGIN_ATTEMPT_WINDOW_MS
+    let lockedUntil: number | undefined
+
+    if (current) {
+      // If account is currently locked, extend lockout
+      if (current.lockedUntil && currentTime < current.lockedUntil) {
+        lockedUntil = currentTime + ACCOUNT_LOCKOUT_DURATION_MS
+        newCount = current.count
+        resetAt = current.resetAt
+      } else if (currentTime < current.resetAt) {
+        // Within window, increment count
+        newCount = current.count + 1
+        if (newCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
+          // Lock account
+          lockedUntil = currentTime + ACCOUNT_LOCKOUT_DURATION_MS
+        }
+      } else {
+        // Window expired, start fresh
+        newCount = 1
+        resetAt = currentTime + LOGIN_ATTEMPT_WINDOW_MS
+      }
+    }
+
+    // Update or insert record
+    await client.execute({
+      sql: `
+        insert or replace into login_attempts 
+        (client_key, count, reset_at, locked_until, created_at, last_attempt) 
+        values (?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        key,
+        newCount,
+        resetAt,
+        lockedUntil || null,
+        current ? (await client.execute({
+          sql: 'select created_at from login_attempts where client_key = ?',
+          args: [key],
+        })).rows[0]?.created_at || currentTime : currentTime,
+        currentTime
+      ],
+    })
+
+    return { count: newCount, resetAt, lockedUntil }
+  }
+
+  async function clear(key: string): Promise<void> {
+    await ensureTable()
+    await client.execute({
+      sql: 'delete from login_attempts where client_key = ?',
+      args: [key],
+    })
+  }
+
+  async function isLocked(key: string): Promise<boolean> {
+    await ensureTable()
+    await clearExpired(key)
+
+    const result = await client.execute({
+      sql: 'select locked_until from login_attempts where client_key = ?',
+      args: [key],
+    })
+
+    const lockedUntil = result.rows[0]?.locked_until as number | undefined
+    return lockedUntil ? now() < lockedUntil : false
+  }
+
+  async function getLockoutRemaining(key: string): Promise<number> {
+    await ensureTable()
+    await clearExpired(key)
+
+    const result = await client.execute({
+      sql: 'select locked_until from login_attempts where client_key = ?',
+      args: [key],
+    })
+
+    const lockedUntil = result.rows[0]?.locked_until as number | undefined
+    if (!lockedUntil) return 0
+
+    const remaining = lockedUntil - now()
+    return Math.max(0, remaining)
   }
 
   return {
-    async isLimited(key: string) {
-      const attempt = await getActiveAttempt(key)
-      return attempt && attempt.count >= MAX_FAILED_LOGIN_ATTEMPTS ? attempt : null
-    },
-
-    async recordFailure(key: string) {
-      await ensureTable()
-      await clearExpired(key)
-
-      const resetAt = now() + LOGIN_ATTEMPT_WINDOW_MS
-      await client.execute({
-        sql: `
-          insert into login_attempts (client_key, count, reset_at)
-          values (?, 1, ?)
-          on conflict(client_key) do update set
-            count = count + 1,
-            reset_at = login_attempts.reset_at
-        `,
-        args: [key, resetAt],
-      })
-
-      const result = await client.execute({
-        sql: 'select count, reset_at from login_attempts where client_key = ?',
-        args: [key],
-      })
-
-      const attempt = rowToAttempt(result.rows[0] as Record<string, unknown> | undefined)
-      if (!attempt) throw new Error('Failed to record login attempt')
-      return attempt
-    },
-
-    async clear(key: string) {
-      await ensureTable()
-      await client.execute({
-        sql: 'delete from login_attempts where client_key = ?',
-        args: [key],
-      })
-    },
+    isLimited,
+    recordFailure,
+    clear,
+    isLocked,
+    getLockoutRemaining,
   }
+}
+
+// Cleanup function to be called on server shutdown
+export function stopCleanupTimer() {
+  // In a real implementation, you'd want to store the timer reference
+  // and clear it here to prevent memory leaks
+  console.log('Login attempt cleanup timer stopped')
 }

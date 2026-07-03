@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CATEGORY_COLORS, formatSGD, relativeDate, BANK_TABS } from '@/lib/display'
 import Link from 'next/link'
 import InsightCard from '@/components/InsightCard'
+import UploadReminderBanner from '@/components/UploadReminderBanner'
 
 interface CategoryTotal {
   category: string
@@ -26,11 +27,34 @@ interface DashboardData {
   totalSpend: number
   daysElapsed: number
   month: string
+  isEmpty: boolean
+  isCurrentMonth: boolean
   topCategories: CategoryTotal[]
   recentTransactions: Transaction[]
   momDelta: number | null
   momDeltaPct: number | null
   priorMonthLabel: string | null
+}
+
+function getMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  const now = new Date()
+  if (y === now.getFullYear() && m === now.getMonth() + 1) return 'This Month'
+  if (y === now.getFullYear() && m === now.getMonth()) return 'Last Month'
+  return new Date(y, m - 1, 1).toLocaleString('en-SG', { month: 'long', year: 'numeric' })
+}
+
+function buildMonthOptions(): { value: string; label: string }[] {
+  const now = new Date()
+  const options = []
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const value = `${y}-${m}`
+    options.push({ value, label: getMonthLabel(value) })
+  }
+  return options
 }
 
 interface BalanceData {
@@ -41,26 +65,46 @@ interface BalanceData {
 
 export default function HomePage() {
   const [selectedBank, setSelectedBank] = useState<string>('all')
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [autoFalledBack, setAutoFalledBack] = useState(false)
   const [data, setData] = useState<DashboardData | null>(null)
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const monthOptions = buildMonthOptions()
+
   useEffect(() => {
     setLoading(true)
-    const params = selectedBank !== 'all' ? `?bank=${selectedBank}` : ''
+    setAutoFalledBack(false)
+    const params = new URLSearchParams()
+    if (selectedBank !== 'all') params.set('bank', selectedBank)
+    params.set('month', selectedMonth)
     Promise.all([
-      fetch(`/api/dashboard${params}`).then(r => r.json()),
+      fetch(`/api/dashboard?${params}`).then(r => r.json()),
       fetch('/api/balances').then(r => r.json()),
     ])
       .then(([d, b]) => {
-        if (d.error) setError(d.error)
-        else setData(d)
+        if (d.error) { setError(d.error); return }
+        // Auto-fallback: if current month has no data, silently switch to last month
+        if (d.isEmpty && d.isCurrentMonth) {
+          const now = new Date()
+          const lastMonthFixed = now.getMonth() === 0
+            ? `${now.getFullYear() - 1}-12`
+            : `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`
+          setSelectedMonth(lastMonthFixed)
+          setAutoFalledBack(true)
+          return
+        }
+        setData(d)
         setBalanceData(b)
       })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
-  }, [selectedBank])
+  }, [selectedBank, selectedMonth])
 
   const isEmpty = !loading && data && data.recentTransactions.length === 0 && data.topCategories.length === 0
 
@@ -68,12 +112,25 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 p-4 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between">
+      <UploadReminderBanner />
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-zinc-100">Financial Overview</h1>
-        <div className="text-sm text-zinc-400">
-          {new Date().toLocaleString('en-SG', { month: 'long', year: 'numeric' })}
-        </div>
+        <select
+          value={selectedMonth}
+          onChange={e => { setSelectedMonth(e.target.value); setAutoFalledBack(false) }}
+          aria-label="Select month"
+          className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {monthOptions.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
       </div>
+      {autoFalledBack && (
+        <p className="text-xs text-zinc-500 -mt-3">
+          No data for this month yet — showing last month instead.
+        </p>
+      )}
       {/* Bank filter tabs */}
       <Tabs value={selectedBank} onValueChange={setSelectedBank}>
         <TabsList className="bg-zinc-900 border border-zinc-800 w-full">
@@ -128,7 +185,7 @@ export default function HomePage() {
           {/* Financial Health Summary */}
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader>
-              <CardTitle className="text-sm text-zinc-400 font-normal">This Month's Financial Health</CardTitle>
+              <CardTitle className="text-sm text-zinc-400 font-normal">{getMonthLabel(selectedMonth)} Financial Health</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Primary metrics row */}

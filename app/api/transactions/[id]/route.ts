@@ -4,11 +4,16 @@ import { transactions } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 import { saveRule } from '@/lib/rules'
 import { CATEGORIES } from '@/lib/schema'
+import { requireAuth } from '@/lib/auth-middleware'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Check authentication
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   try {
     const { id } = await params
     const body = await req.json()
@@ -55,9 +60,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Check authentication
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   try {
     const { id } = await params
     const [existing] = await db
