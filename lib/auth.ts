@@ -40,6 +40,13 @@ function base64UrlEncode(bytes: Uint8Array): string {
     .replace(/=+$/g, '')
 }
 
+function base64UrlDecode(str: string): string {
+  // Convert base64url to standard base64 then decode
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4)
+  return atob(padded)
+}
+
 async function sign(payload: string, secret: string): Promise<string> {
   const encoder = new TextEncoder()
   const key = await crypto.subtle.importKey(
@@ -145,7 +152,7 @@ export async function validateSessionToken(
     }
 
     // Decode payload
-    const payload = JSON.parse(atob(encodedPayload))
+    const payload = JSON.parse(base64UrlDecode(encodedPayload))
     
     // Check expiration
     const now = Math.floor(Date.now() / 1000)
