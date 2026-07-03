@@ -3,7 +3,6 @@ import type { Client } from '@libsql/client'
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5
 export const LOGIN_ATTEMPT_WINDOW_MS = 5 * 60 * 1000
 export const ACCOUNT_LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes
-export const CLEANUP_INTERVAL_MS = 10 * 60 * 1000 // Clean up every 10 minutes
 
 export type LoginAttempt = {
   count: number
@@ -35,7 +34,6 @@ export function createPersistentLoginAttemptStore(
   now: () => number = Date.now
 ): LoginAttemptStore {
   let tableReady: Promise<void> | null = null
-  let cleanupTimer: NodeJS.Timeout | null = null
 
   async function ensureTable() {
     tableReady ??= client.execute(`
@@ -58,32 +56,6 @@ export function createPersistentLoginAttemptStore(
       args: [key, now(), now()],
     })
   }
-
-  async function cleanupAllExpired() {
-    const currentTime = now()
-    await client.execute({
-      sql: 'delete from login_attempts where reset_at <= ? or (locked_until is not null and locked_until <= ?)',
-      args: [currentTime, currentTime],
-    })
-  }
-
-  // Start automatic cleanup timer
-  function startCleanupTimer() {
-    if (cleanupTimer) return
-    
-    cleanupTimer = setInterval(async () => {
-      try {
-        await cleanupAllExpired()
-      } catch (error) {
-        console.error('Login attempt cleanup failed:', error)
-      }
-    }, CLEANUP_INTERVAL_MS)
-  }
-
-  // Initialize cleanup timer
-  ensureTable().then(() => {
-    startCleanupTimer()
-  })
 
   async function isLimited(key: string): Promise<LoginAttempt | null> {
     await ensureTable()
@@ -220,9 +192,3 @@ export function createPersistentLoginAttemptStore(
   }
 }
 
-// Cleanup function to be called on server shutdown
-export function stopCleanupTimer() {
-  // In a real implementation, you'd want to store the timer reference
-  // and clear it here to prevent memory leaks
-  console.log('Login attempt cleanup timer stopped')
-}

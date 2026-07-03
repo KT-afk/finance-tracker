@@ -2,14 +2,6 @@ export const AUTH_COOKIE_NAME = 'finance_tracker_session'
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 export const TOKEN_REFRESH_THRESHOLD_SECONDS = 60 * 60 * 24 * 7 // Refresh if expiring within 7 days
 
-// Session store for tracking active sessions
-const sessionStore = new Map<string, { 
-  createdAt: number; 
-  lastAccessed: number; 
-  userAgent?: string;
-  ip?: string;
-}>()
-
 export function getAppPassword(): string | null {
   const password = process.env.APP_PASSWORD?.trim()
   return password ? password : null
@@ -117,14 +109,6 @@ export async function createSessionToken(
     aud: 'finance-tracker'
   }
 
-  // Store session metadata
-  sessionStore.set(sessionId, {
-    createdAt: now * 1000,
-    lastAccessed: now * 1000,
-    userAgent: options?.userAgent,
-    ip: options?.ip
-  })
-
   const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)))
   const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)))
   const signaturePayload = `${encodedHeader}.${encodedPayload}`
@@ -166,62 +150,13 @@ export async function validateSessionToken(
     // Check expiration
     const now = Math.floor(Date.now() / 1000)
     if (payload.exp && now > payload.exp) {
-      // Clean up expired session
-      if (payload.sid) {
-        sessionStore.delete(payload.sid)
-      }
       return { valid: false, error: 'Token expired' }
-    }
-
-    // Check session exists and update last accessed
-    if (payload.sid) {
-      const session = sessionStore.get(payload.sid)
-      if (!session) {
-        return { valid: false, error: 'Session not found' }
-      }
-
-      // Optional: Check user agent and IP for session hijacking
-      if (options?.userAgent && session.userAgent && options.userAgent !== session.userAgent) {
-        return { valid: false, error: 'Session security violation' }
-      }
-
-      // Update last accessed time
-      session.lastAccessed = now * 1000
     }
 
     return { valid: true, payload }
   } catch (error) {
     return { valid: false, error: 'Token validation failed' }
   }
-}
-
-/**
- * Revokes a session token
- */
-export function revokeSession(sessionId: string): void {
-  sessionStore.delete(sessionId)
-}
-
-/**
- * Cleans up expired sessions
- */
-export function cleanupExpiredSessions(): void {
-  const now = Date.now()
-  const expiryTime = SESSION_MAX_AGE_SECONDS * 1000
-
-  for (const [sessionId, session] of sessionStore.entries()) {
-    if (now - session.createdAt > expiryTime) {
-      sessionStore.delete(sessionId)
-    }
-  }
-}
-
-/**
- * Gets active session count
- */
-export function getActiveSessionCount(): number {
-  cleanupExpiredSessions()
-  return sessionStore.size
 }
 
 /**
