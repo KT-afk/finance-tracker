@@ -1,38 +1,37 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { transactions, BANKS } from '@/lib/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
 
-export interface BankUploadBatch {
-  uploadedAt: string       // when the CSV was uploaded
-  dateFrom: string         // earliest transaction date in that batch
-  dateTo: string           // latest transaction date in that batch
-  count: number            // number of transactions
+export interface MonthCoverage {
+  month: string            // YYYY-MM
+  label: string            // e.g. "June 2026"
+  count: number            // number of transactions that month
+  uploadedAt: string       // when it was last uploaded
 }
 
 export interface BankUploadHistory {
   bank: string
-  batches: BankUploadBatch[]
+  months: MonthCoverage[]
   totalTransactions: number
   lastUploadedAt: string | null
 }
 
 export async function GET() {
   try {
-    // Group by bank + uploaded_at to identify distinct upload batches
+    // Group by bank + month (YYYY-MM) to get one row per month per bank
     const rows = await db
       .select({
         bank: transactions.bank,
-        uploadedAt: transactions.uploaded_at,
-        dateFrom: sql<string>`min(${transactions.date})`,
-        dateTo: sql<string>`max(${transactions.date})`,
+        month: sql<string>`substr(${transactions.date}, 1, 7)`,
         count: sql<number>`count(*)`,
+        uploadedAt: sql<string>`max(${transactions.uploaded_at})`,
       })
       .from(transactions)
-      .groupBy(transactions.bank, transactions.uploaded_at)
-      .orderBy(desc(transactions.uploaded_at))
+      .groupBy(transactions.bank, sql`substr(${transactions.date}, 1, 7)`)
+      .orderBy(desc(sql`substr(${transactions.date}, 1, 7)`))
 
-    const historyByBank = new Map<string, BankUploadBatch[]>()
+    const historyByBank = new Map<string, MonthCoverage[]>()
     const totalByBank = new Map<string, number>()
     const lastUploadByBank = new Map<string, string>()
 
@@ -41,11 +40,13 @@ export async function GET() {
         historyByBank.set(row.bank, [])
         totalByBank.set(row.bank, 0)
       }
+      const [y, m] = row.month.split('-').map(Number)
+      const label = new Date(y, m - 1, 1).toLocaleString('en-SG', { month: 'long', year: 'numeric' })
       historyByBank.get(row.bank)!.push({
-        uploadedAt: row.uploadedAt,
-        dateFrom: row.dateFrom,
-        dateTo: row.dateTo,
+        month: row.month,
+        label,
         count: Number(row.count),
+        uploadedAt: row.uploadedAt,
       })
       totalByBank.set(row.bank, (totalByBank.get(row.bank) ?? 0) + Number(row.count))
       if (!lastUploadByBank.has(row.bank)) {
@@ -55,7 +56,7 @@ export async function GET() {
 
     const history: BankUploadHistory[] = BANKS.map(bank => ({
       bank,
-      batches: historyByBank.get(bank) ?? [],
+      months: historyByBank.get(bank) ?? [],
       totalTransactions: totalByBank.get(bank) ?? 0,
       lastUploadedAt: lastUploadByBank.get(bank) ?? null,
     }))

@@ -23,10 +23,6 @@ const BANK_LABELS: Record<string, string> = {
   trust: 'Trust',
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
 function formatUploadedAt(iso: string) {
   const d = new Date(iso)
   const now = new Date()
@@ -35,7 +31,7 @@ function formatUploadedAt(iso: string) {
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return `${diffDays} days ago`
-  return formatDate(iso)
+  return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 interface PreviewData {
@@ -339,7 +335,7 @@ export default function UploadPage() {
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-zinc-400">Upload history</h2>
           {uploadHistory.map(h => {
-            const hasData = h.batches.length > 0
+            const hasData = h.months.length > 0
             const isExpanded = expandedBank === h.bank
             return (
               <div key={h.bank} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
@@ -372,18 +368,16 @@ export default function UploadPage() {
 
                 {isExpanded && (
                   <div id={`history-${h.bank}`} className="border-t border-zinc-800 px-4 py-3 space-y-2">
-                    {h.batches.length === 0 ? (
+                    {h.months.length === 0 ? (
                       <p className="text-xs text-zinc-500 py-1">No statements uploaded yet.</p>
                     ) : (
-                      h.batches.map((batch, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/60 last:border-0">
-                          <div className="text-zinc-300">
-                            {formatDate(batch.dateFrom)}
-                            {batch.dateFrom !== batch.dateTo && <> → {formatDate(batch.dateTo)}</>}
-                          </div>
+                      h.months.map(m => (
+                        <div key={m.month} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/60 last:border-0">
+                          <div className="font-medium text-zinc-200">{m.label}</div>
                           <div className="flex items-center gap-3 text-zinc-500">
-                            <span>{batch.count} txns</span>
-                            <span className="text-zinc-600">uploaded {formatUploadedAt(batch.uploadedAt)}</span>
+                            <span>{m.count} txns</span>
+                            <span className="text-zinc-600">·</span>
+                            <span>uploaded {formatUploadedAt(m.uploadedAt)}</span>
                           </div>
                         </div>
                       ))
