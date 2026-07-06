@@ -6,6 +6,8 @@ import Link from 'next/link'
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -34,9 +36,16 @@ interface Transaction {
   category: string
 }
 
+interface MonthlySpend {
+  month: string
+  label: string
+  amount: number
+}
+
 interface CategoryData {
   category: string
   trend: TrendPoint[]
+  monthlySpend: MonthlySpend[]
   topMerchants: Merchant[]
   count: number
   average: number
@@ -107,25 +116,48 @@ export default function CategoryDetailPage() {
             </div>
           ) : (
             <>
-              {/* Stat cards */}
-              <div className="grid grid-cols-2 gap-3">
-                <Card className="bg-zinc-900 border-zinc-800">
-                  <CardHeader className="pb-1 pt-4 px-4">
-                    <CardTitle className="text-xs text-zinc-500 font-normal">Transactions</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <p className="text-2xl font-mono font-semibold text-white">{data.count}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-zinc-900 border-zinc-800">
-                  <CardHeader className="pb-1 pt-4 px-4">
-                    <CardTitle className="text-xs text-zinc-500 font-normal">Avg spend</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <p className="text-2xl font-mono font-semibold text-white">{formatSGD(data.average)}</p>
-                  </CardContent>
-                </Card>
-              </div>
+              {/* Stat card + monthly bar chart */}
+              <Card className="bg-zinc-900 border-zinc-800">
+                <CardHeader className="pb-1 pt-4 px-4">
+                  <div className="flex items-baseline justify-between">
+                    <CardTitle className="text-xs text-zinc-500 font-normal">Monthly spend</CardTitle>
+                    {(() => {
+                      const monthsWithSpend = (data.monthlySpend ?? []).filter(m => m.amount > 0)
+                      const avg = monthsWithSpend.length > 0
+                        ? monthsWithSpend.reduce((s, m) => s + m.amount, 0) / monthsWithSpend.length
+                        : 0
+                      return avg > 0 ? (
+                        <span className="text-xs text-zinc-500 font-mono">avg {formatSGD(avg)}/mo</span>
+                      ) : null
+                    })()}
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  {(data.monthlySpend ?? []).every(m => m.amount === 0) ? (
+                    <p className="text-center text-zinc-500 text-sm py-6">No data in the last 6 months</p>
+                  ) : (
+                    <div className="h-36 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={(data.monthlySpend ?? []).map(m => ({ label: m.label, value: m.amount }))}
+                          margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+                        >
+                          <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={44} tickFormatter={v => `$${v}`} />
+                          <Tooltip
+                            contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 6 }}
+                            labelStyle={{ color: '#a1a1aa', fontSize: 11 }}
+                            itemStyle={{ color: '#e4e4e7', fontSize: 11 }}
+                            formatter={(v: number | undefined) => v !== undefined ? [formatSGD(v), ''] : ['', '']}
+                          />
+                          <Bar dataKey="value" fill={color} radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  <p className="text-xs text-zinc-600 mt-2">{data.count} transactions total</p>
+                </CardContent>
+              </Card>
 
               {/* 6-month trend line chart */}
               <Card className="bg-zinc-900 border-zinc-800">

@@ -66,6 +66,17 @@ export async function GET(
       total: Math.round(monthTotals[month] * 100) / 100,
     }))
 
+    // Monthly spend breakdown (same data as trend, shaped for the chart)
+    const monthlySpend = monthLabels.map(month => {
+      const [y, m] = month.split('-').map(Number)
+      const label = new Date(y, m - 1, 1).toLocaleString('en-SG', { month: 'short' })
+      return {
+        month,
+        label,
+        amount: Math.round(monthTotals[month] * 100) / 100,
+      }
+    })
+
     // --- 2. All-time expense txns for this category ---
     const allTxns = await db
       .select()
@@ -106,6 +117,7 @@ export async function GET(
     return NextResponse.json({
       category,
       trend,
+      monthlySpend,
       topMerchants,
       count,
       average,
