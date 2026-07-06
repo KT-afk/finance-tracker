@@ -113,7 +113,6 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 p-4 max-w-2xl mx-auto">
-      <StatementCoverage />
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-zinc-100">Financial Overview</h1>
         <select
@@ -146,6 +145,7 @@ export default function HomePage() {
           ))}
         </TabsList>
       </Tabs>
+      <StatementCoverage />
 
       {loading && (
         <div className="space-y-5">
