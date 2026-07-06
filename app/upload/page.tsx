@@ -12,7 +12,31 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { CheckCircle2, Clock } from 'lucide-react'
 import { BANKS } from '@/lib/schema'
+import type { BankUploadHistory } from '@/app/api/upload-history/route'
+
+const BANK_LABELS: Record<string, string> = {
+  dbs: 'DBS/POSB',
+  ocbc: 'OCBC',
+  uob: 'UOB',
+  trust: 'Trust',
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatUploadedAt(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  return formatDate(iso)
+}
 
 interface PreviewData {
   total: number
@@ -36,14 +60,24 @@ export default function UploadPage() {
   const [confirmed, setConfirmed] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const [hasAnthropicKey, setHasAnthropicKey] = useState<boolean | null>(null)
+  const [uploadHistory, setUploadHistory] = useState<BankUploadHistory[]>([])
+  const [expandedBank, setExpandedBank] = useState<string | null>(null)
 
   const missingApiKey = hasAnthropicKey === false
+
+  function refreshHistory() {
+    fetch('/api/upload-history')
+      .then(r => r.json())
+      .then(data => { if (data.history) setUploadHistory(data.history) })
+      .catch(() => {})
+  }
 
   useEffect(() => {
     fetch('/api/config')
       .then(r => r.json())
       .then(data => setHasAnthropicKey(Boolean(data.hasAnthropicKey)))
       .catch(() => setHasAnthropicKey(null))
+    refreshHistory()
   }, [])
 
   async function handleUpload() {
@@ -132,6 +166,7 @@ export default function UploadPage() {
       }
 
       setConfirmed(true)
+      refreshHistory()
       setTimeout(() => router.push('/'), 1500)
     } catch {
       setError('Network error — please try again')
@@ -297,6 +332,68 @@ export default function UploadPage() {
             <p className="text-sm text-zinc-400">Redirecting to home…</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Upload history per bank */}
+      {!preview && !confirmed && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium text-zinc-400">Upload history</h2>
+          {uploadHistory.map(h => {
+            const hasData = h.batches.length > 0
+            const isExpanded = expandedBank === h.bank
+            return (
+              <div key={h.bank} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  onClick={() => setExpandedBank(isExpanded ? null : h.bank)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`history-${h.bank}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {hasData
+                      ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" aria-hidden="true" />
+                      : <Clock className="h-4 w-4 text-zinc-600 shrink-0" aria-hidden="true" />
+                    }
+                    <span className="font-medium text-sm">{BANK_LABELS[h.bank] ?? h.bank.toUpperCase()}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                    {hasData ? (
+                      <>
+                        <span>{h.totalTransactions} txns</span>
+                        <span className="text-zinc-600">·</span>
+                        <span>Last: {formatUploadedAt(h.lastUploadedAt!)}</span>
+                      </>
+                    ) : (
+                      <span>No uploads yet</span>
+                    )}
+                    <span className="text-zinc-600">{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div id={`history-${h.bank}`} className="border-t border-zinc-800 px-4 py-3 space-y-2">
+                    {h.batches.length === 0 ? (
+                      <p className="text-xs text-zinc-500 py-1">No statements uploaded yet.</p>
+                    ) : (
+                      h.batches.map((batch, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/60 last:border-0">
+                          <div className="text-zinc-300">
+                            {formatDate(batch.dateFrom)}
+                            {batch.dateFrom !== batch.dateTo && <> → {formatDate(batch.dateTo)}</>}
+                          </div>
+                          <div className="flex items-center gap-3 text-zinc-500">
+                            <span>{batch.count} txns</span>
+                            <span className="text-zinc-600">uploaded {formatUploadedAt(batch.uploadedAt)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
