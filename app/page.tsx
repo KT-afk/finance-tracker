@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CATEGORY_COLORS, formatSGD, relativeDate, BANK_TABS } from '@/lib/display'
 import Link from 'next/link'
 import InsightCard from '@/components/InsightCard'
-import UploadReminderBanner from '@/components/UploadReminderBanner'
+import StatementCoverage from '@/components/StatementCoverage'
 
 interface CategoryTotal {
   category: string
@@ -113,7 +113,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 p-4 max-w-2xl mx-auto">
-      <UploadReminderBanner />
+      <StatementCoverage />
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-zinc-100">Financial Overview</h1>
         <select
