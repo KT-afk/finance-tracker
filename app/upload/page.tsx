@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle2, Clock } from 'lucide-react'
 import { BANKS } from '@/lib/schema'
 import type { BankUploadHistory } from '@/app/api/upload-history/route'
 
@@ -57,7 +56,6 @@ export default function UploadPage() {
   const [progress, setProgress] = useState<string | null>(null)
   const [hasAnthropicKey, setHasAnthropicKey] = useState<boolean | null>(null)
   const [uploadHistory, setUploadHistory] = useState<BankUploadHistory[]>([])
-  const [expandedBank, setExpandedBank] = useState<string | null>(null)
 
   const missingApiKey = hasAnthropicKey === false
 
@@ -331,62 +329,32 @@ export default function UploadPage() {
       )}
 
       {/* Upload history per bank */}
-      {!preview && !confirmed && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-zinc-400">Upload history</h2>
-          {uploadHistory.map(h => {
-            const hasData = h.months.length > 0
-            const isExpanded = expandedBank === h.bank
-            return (
-              <div key={h.bank} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  onClick={() => setExpandedBank(isExpanded ? null : h.bank)}
-                  aria-expanded={isExpanded}
-                  aria-controls={`history-${h.bank}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {hasData
-                      ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" aria-hidden="true" />
-                      : <Clock className="h-4 w-4 text-zinc-600 shrink-0" aria-hidden="true" />
-                    }
-                    <span className="font-medium text-sm">{BANK_LABELS[h.bank] ?? h.bank.toUpperCase()}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
-                    {hasData ? (
-                      <>
-                        <span>{h.totalTransactions} txns</span>
-                        <span className="text-zinc-600">·</span>
-                        <span>Last: {formatUploadedAt(h.lastUploadedAt!)}</span>
-                      </>
-                    ) : (
-                      <span>No uploads yet</span>
-                    )}
-                    <span className="text-zinc-600">{isExpanded ? '▲' : '▼'}</span>
-                  </div>
-                </button>
-
-                {isExpanded && (
-                  <div id={`history-${h.bank}`} className="border-t border-zinc-800 px-4 py-3 space-y-2">
-                    {h.months.length === 0 ? (
-                      <p className="text-xs text-zinc-500 py-1">No statements uploaded yet.</p>
-                    ) : (
-                      h.months.map(m => (
-                        <div key={m.month} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/60 last:border-0">
-                          <div className="font-medium text-zinc-200">{m.label}</div>
-                          <div className="flex items-center gap-3 text-zinc-500">
-                            <span>{m.count} txns</span>
-                            <span className="text-zinc-600">·</span>
-                            <span>uploaded {formatUploadedAt(m.uploadedAt)}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+      {!preview && !confirmed && uploadHistory.length > 0 && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800">
+          <p className="px-3 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">Upload history</p>
+          {uploadHistory.map(h => (
+            <div key={h.bank} className="flex items-start gap-3 px-3 py-2.5">
+              <div className="w-16 shrink-0 pt-0.5">
+                <span className="text-xs font-semibold text-zinc-300">{BANK_LABELS[h.bank] ?? h.bank.toUpperCase()}</span>
               </div>
-            )
-          })}
+              {h.months.length === 0 ? (
+                <span className="text-xs text-zinc-600 italic">No uploads</span>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {h.months.map(m => (
+                    <span
+                      key={m.month}
+                      title={`${m.count} transactions · uploaded ${formatUploadedAt(m.uploadedAt)}`}
+                      className="inline-flex items-center rounded-full bg-zinc-800 border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 tabular-nums"
+                    >
+                      {m.label.replace(' 2026', '').replace(' 2025', '')}
+                      <span className="ml-1 text-zinc-500">{m.count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
