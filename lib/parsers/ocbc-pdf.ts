@@ -111,7 +111,7 @@ function detectDepositColumn(text: string): number {
  * - Amounts with commas (e.g., "3,000.00")
  * - Pages repeat headers and have boilerplate between them
  */
-export function parseOCBCPDF(text: string): RawTransaction[] {
+function parseOCBCPDFColumnar(text: string): RawTransaction[] {
   const year = extractStatementYear(text)
   const depositColStart = detectDepositColumn(text)
   const lines = text.split('\n')
@@ -122,7 +122,7 @@ export function parseOCBCPDF(text: string): RawTransaction[] {
 
   for (const line of lines) {
     // Detect start of transaction section (header row with column names)
-    if (/Date\s+Date\s+Description/i.test(line)) {
+    if (/Date\s+Date\s+Description/i.test(line) || /Transaction\s+Date/i.test(line)) {
       inTransactionSection = true
       continue
     }
@@ -228,4 +228,93 @@ export function parseOCBCPDF(text: string): RawTransaction[] {
   }
 
   return results
+}
+
+/**
+ * Keywords that strongly indicate a credit/deposit transaction in OCBC statements.
+ * Used by the plain-text fallback when column positions are unavailable.
+ */
+const DEPOSIT_KEYWORDS = [
+  /FAST\s+(CREDIT|INWARD)/i,
+  /SALARY/i,
+  /INTEREST\s+CREDIT/i,
+  /CREDIT\s+INTEREST/i,
+  /GIRO\s+CREDIT/i,
+  /INWARD\s+REMITTANCE/i,
+  /PAYNOW\s+CREDIT/i,
+  /FUNDS\s+TRANSFER\s+CREDIT/i,
+  /STANDING\s+INSTRUCTION\s+CREDIT/i,
+  /REFUND/i,
+  /CASHBACK/i,
+  /DIVIDEND/i,
+  /BONUS\s+INTEREST/i,
+]
+
+/**
+ * Plain-text fallback parser for OCBC PDFs extracted without -layout flag.
+ * Works on the unaligned text that pdf-parse returns.
+ *
+ * Strategy:
+ * - Match lines starting with "DD MMM DD MMM" (transaction date + value date)
+ * - Extract the description text between the dates and the first amount
+ * - Classify debit/credit using keyword matching on the description
+ * - If no keywords match, treat as debit (most OCBC transactions are withdrawals)
+ */
+function parseOCBCPDFPlainText(text: string): RawTransaction[] {
+  const year = extractStatementYear(text)
+  const results: RawTransaction[] = []
+
+  // Match lines of the form: "DD MMM DD MMM description ... amount amount"
+  // Both columnar and plain-text have this basic structure per transaction line
+  const TX_LINE = new RegExp(
+    String.raw`\b(\d{1,2}\s+[A-Z]{3})\s+\d{1,2}\s+[A-Z]{3}\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$`,
+    'gim'
+  )
+
+  for (const m of text.matchAll(TX_LINE)) {
+    const dateStr = m[1]
+    const description = m[2].replace(/\s{2,}/g, ' ').trim()
+    const secondToLast = parseFloat(m[3].replace(/,/g, ''))
+
+    // Skip balance/summary lines
+    if (SKIP_PATTERNS.some(p => p.test(description))) continue
+    if (/BALANCE/i.test(description)) continue
+
+    let date: string
+    try {
+      date = resolveDate(dateStr, year)
+    } catch {
+      continue
+    }
+
+    // Determine debit vs credit via keyword matching
+    const isCredit = DEPOSIT_KEYWORDS.some(kw => kw.test(description))
+    const amount = isCredit ? secondToLast : -secondToLast
+
+    results.push({ date, description, amount, bank: 'ocbc' })
+  }
+
+  return results
+}
+
+/**
+ * Parse OCBC 360 Account PDF text into RawTransactions.
+ * Tries the columnar parser first (requires pdftotext -layout output).
+ * Falls back to a plain-text regex parser if the columnar one yields 0 results
+ * (which happens when pdf-parse is used as the extraction fallback on Vercel).
+ */
+export function parseOCBCPDF(text: string): RawTransaction[] {
+  const columnar = parseOCBCPDFColumnar(text)
+  if (columnar.length > 0) return columnar
+
+  // Columnar parse yielded nothing — likely plain-text extraction (no column alignment).
+  // Log the first 40 lines to help diagnose future format changes.
+  const preview = text.split('\n').slice(0, 40).join('\n')
+  console.warn('[parseOCBCPDF] Columnar parse yielded 0 results, trying plain-text fallback.\nText preview:\n' + preview)
+
+  const plainText = parseOCBCPDFPlainText(text)
+  if (plainText.length === 0) {
+    console.warn('[parseOCBCPDF] Plain-text fallback also yielded 0 results. Full text length:', text.length)
+  }
+  return plainText
 }
