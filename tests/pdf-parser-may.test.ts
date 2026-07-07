@@ -8,7 +8,21 @@ import { parseUOBCreditCardPDF } from '../lib/parsers/uob-pdf'
 const exactOcbcPath = process.env.OCBC_MAY_PDF
 const exactUobPath = process.env.UOB_MAY_PDF
 
+// Real 2026 format: amounts on the line AFTER date+description
 const ocbcText = `
+01 MAY 2026 TO 31 MAY 2026
+Transaction      Value
+Date             Date             Description
+Cheque                               Withdrawal                         Deposit                          Balance
+          01 MAY           01 MAY           PAYNOW TRANSFER TO SHOP
+                                                      12.30                                                            987.70
+          12 MAY           12 MAY           BONUS INTEREST
+                                                                                    1,000.00                         1,987.70
+BALANCE C/F
+`
+
+// Old format (pre-2026): amounts on the same line as date+description — ensure backward compat
+const ocbcTextOldFormat = `
 01 MAY 2026 TO 31 MAY 2026
 Transaction Date Date Description Cheque Withdrawal       Deposit Balance
   1 May  1 May    PAYNOW TRANSFER TO SHOP       12.30                 987.70
@@ -70,10 +84,22 @@ Total 1,667.29 1,662.70 4.15OD
 End of Transaction Details
 `
 
+// New 2026 format
 const ocbcTransactions = parseOCBCPDF(ocbcText)
-assert.equal(ocbcTransactions.length, 2)
+assert.equal(ocbcTransactions.length, 2, `Expected 2 transactions from new format, got ${ocbcTransactions.length}`)
 assert.deepEqual(
   ocbcTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  [
+    ['2026-05-01', 'PAYNOW TRANSFER TO SHOP', -12.3, 'ocbc'],
+    ['2026-05-12', 'BONUS INTEREST', 1000, 'ocbc'],
+  ]
+)
+
+// Old pre-2026 format (amounts on same line) — backward compat
+const ocbcOldTransactions = parseOCBCPDF(ocbcTextOldFormat)
+assert.equal(ocbcOldTransactions.length, 2, `Expected 2 transactions from old format, got ${ocbcOldTransactions.length}`)
+assert.deepEqual(
+  ocbcOldTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
   [
     ['2026-05-01', 'PAYNOW TRANSFER TO SHOP', -12.3, 'ocbc'],
     ['2026-05-12', 'SALARY CREDIT', 1000, 'ocbc'],

@@ -111,34 +111,39 @@ function detectDepositColumn(text: string): number {
  * - Amounts with commas (e.g., "3,000.00")
  * - Pages repeat headers and have boilerplate between them
  */
+function flushTx(
+  tx: { date: string; description: string; amount: number } | null,
+  results: RawTransaction[]
+) {
+  if (tx) {
+    results.push({ date: tx.date, description: tx.description.trim(), amount: tx.amount, bank: 'ocbc' })
+  }
+}
+
 function parseOCBCPDFColumnar(text: string): RawTransaction[] {
   const year = extractStatementYear(text)
   const depositColStart = detectDepositColumn(text)
   const lines = text.split('\n')
   const results: RawTransaction[] = []
 
+  // currentTx: a fully resolved transaction (date + description + amount)
   let currentTx: { date: string; description: string; amount: number } | null = null
+  // pendingTx: date + description parsed, waiting for the amounts line
+  let pendingTx: { date: string; description: string } | null = null
   let inTransactionSection = false
 
   for (const line of lines) {
-    // Detect start of transaction section (header row with column names)
+    // Detect start of transaction section
     if (/Date\s+Date\s+Description/i.test(line) || /Transaction\s+Date/i.test(line)) {
       inTransactionSection = true
       continue
     }
 
-    // Page boundary — flush current transaction, exit section (next page re-enters)
-    // Only match "Deposit Insurance Scheme" at line start (not indented watermarks)
+    // Page boundary — flush and exit section
     if (/^Deposit Insurance Scheme/i.test(line)) {
-      if (currentTx) {
-        results.push({
-          date: currentTx.date,
-          description: currentTx.description.trim(),
-          amount: currentTx.amount,
-          bank: 'ocbc',
-        })
-        currentTx = null
-      }
+      flushTx(currentTx, results)
+      currentTx = null
+      pendingTx = null
       inTransactionSection = false
       continue
     }
@@ -146,15 +151,9 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
     // Skip known non-transaction lines
     if (SKIP_PATTERNS.some(p => p.test(line))) {
       if (/BALANCE C\/F/i.test(line)) {
-        if (currentTx) {
-          results.push({
-            date: currentTx.date,
-            description: currentTx.description.trim(),
-            amount: currentTx.amount,
-            bank: 'ocbc',
-          })
-          currentTx = null
-        }
+        flushTx(currentTx, results)
+        currentTx = null
+        pendingTx = null
         inTransactionSection = false
       }
       continue
@@ -162,54 +161,65 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
 
     if (!inTransactionSection) continue
 
-    // Try to match a transaction line: DD MMM  DD MMM  Description ... amounts
+    // Try to match a transaction header line: DD MMM  DD MMM  Description
     const txMatch = line.match(
       new RegExp(String.raw`^\s+(${DATE_TOKEN})\s+${DATE_TOKEN}\s{2,}(.+)`, 'i')
     )
 
     if (txMatch) {
-      // Flush previous transaction
-      if (currentTx) {
-        results.push({
-          date: currentTx.date,
-          description: currentTx.description.trim(),
-          amount: currentTx.amount,
-          bank: 'ocbc',
-        })
-      }
+      // Flush any previously completed transaction
+      flushTx(currentTx, results)
+      currentTx = null
 
       const dateStr = txMatch[1]
       const fullLine = line
-
-      // Find all amounts in the line
       const amounts = [...fullLine.matchAll(/([\d,]+\.\d{2})/g)]
 
       if (amounts.length >= 2) {
-        // The transaction amount is the second-to-last; the last is balance
+        // Old format: amounts on the same line as the date
         const txAmountMatch = amounts[amounts.length - 2]
         const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ''))
-
-        // Check if the amount is in the Deposit column (position >= depositColStart)
-        const amountPosition = txAmountMatch.index!
-        const isDeposit = amountPosition >= depositColStart
-
-        // Description: everything in the description area (between value date and first amount)
+        const isDeposit = txAmountMatch.index! >= depositColStart
         const descStart = fullLine.indexOf(txMatch[2])
         const descEnd = txAmountMatch.index!
         const description = fullLine.substring(descStart, descEnd).replace(/\s{2,}/g, ' ').trim()
+        currentTx = { date: resolveDate(dateStr, year), description, amount: isDeposit ? txAmount : -txAmount }
+        pendingTx = null
+      } else {
+        // New format (2026): amounts on the next line — park date+description in pendingTx
+        const descStart = fullLine.indexOf(txMatch[2])
+        const description = fullLine.substring(descStart).replace(/\s{2,}/g, ' ').trim()
+        pendingTx = { date: resolveDate(dateStr, year), description }
+      }
+      continue
+    }
 
-        const date = resolveDate(dateStr, year)
-
+    // Check if this line is an amounts-only line that resolves a pending transaction
+    if (pendingTx) {
+      const amounts = [...line.matchAll(/([\d,]+\.\d{2})/g)]
+      if (amounts.length >= 2) {
+        // second-to-last = tx amount, last = running balance
+        const txAmountMatch = amounts[amounts.length - 2]
+        const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ''))
+        const isDeposit = txAmountMatch.index! >= depositColStart
         currentTx = {
-          date,
-          description,
+          date: pendingTx.date,
+          description: pendingTx.description,
           amount: isDeposit ? txAmount : -txAmount,
         }
-      } else {
-        currentTx = null
+        pendingTx = null
+        continue
       }
-    } else if (currentTx) {
-      // Continuation line for current transaction description
+      // amounts line not yet seen — append non-boilerplate text to pending description
+      const trimmed = line.trim()
+      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed))) {
+        pendingTx.description += ' ' + trimmed
+      }
+      continue
+    }
+
+    // Continuation line appended to a completed currentTx description
+    if (currentTx) {
       const trimmed = line.trim()
       if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed))) {
         currentTx.description += ' ' + trimmed
@@ -217,16 +227,7 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
     }
   }
 
-  // Flush last transaction
-  if (currentTx) {
-    results.push({
-      date: currentTx.date,
-      description: currentTx.description.trim(),
-      amount: currentTx.amount,
-      bank: 'ocbc',
-    })
-  }
-
+  flushTx(currentTx, results)
   return results
 }
 
