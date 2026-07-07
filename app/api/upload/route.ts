@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
       parseResult = await parseFile(buffer, file.name, bank as Bank)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown parse error'
+      console.error(`[upload] Parse failed for ${bank} / ${file.name}:`, msg)
       return NextResponse.json(
-        { error: `Failed to parse file for ${bank}: ${msg}` },
+        { error: `Failed to parse ${file.name} for ${bank}: ${msg}` },
         { status: 422 }
       )
     }
@@ -37,8 +38,9 @@ export async function POST(req: NextRequest) {
     const { transactions: raws, endingBalance } = parseResult
 
     if (raws.length === 0) {
+      console.warn(`[upload] 0 transactions extracted from ${file.name} for ${bank}`)
       return NextResponse.json(
-        { error: 'No transactions found. Check that you selected the correct bank and file format.' },
+        { error: `No transactions found in ${file.name}. Is this the correct bank (${bank.toUpperCase()})? The file format may not be supported.` },
         { status: 422 }
       )
     }

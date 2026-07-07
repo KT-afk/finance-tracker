@@ -102,8 +102,8 @@ export default function UploadPage() {
         const data = await res.json()
 
         if (!res.ok) {
-          // Skip files that fail (e.g., no transactions, wrong format) instead of aborting
-          skippedFiles.push(files[i].name)
+          const apiError = data?.error ?? 'Unknown error'
+          skippedFiles.push(`${files[i].name} (${apiError})`)
           continue
         }
 
