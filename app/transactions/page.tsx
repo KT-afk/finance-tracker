@@ -76,6 +76,7 @@ export default function TransactionsPage() {
   const [addingManual, setAddingManual] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [manualError, setManualError] = useState<string | null>(null)
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null)
 
   const months = getAvailableMonths()
 
@@ -111,6 +112,7 @@ export default function TransactionsPage() {
 
   async function handleCategoryChange(id: string, newCategory: string) {
     setUpdatingId(id)
+    setUpdateMessage(null)
     try {
       const res = await fetch(`/api/transactions/${id}`, {
         method: 'PATCH',
@@ -118,16 +120,25 @@ export default function TransactionsPage() {
         body: JSON.stringify({ category: newCategory }),
       })
       if (res.ok) {
-        // Optimistic update
-        setData(prev => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            transactions: prev.transactions.map(t =>
-              t.id === id ? { ...t, category: newCategory, is_corrected: true } : t
-            ),
-          }
-        })
+        const result = await res.json()
+        const siblings = result.siblingsUpdated ?? 0
+        if (siblings > 0) {
+          setUpdateMessage(`Updated ${siblings} similar transaction${siblings > 1 ? 's' : ''} too`)
+          setTimeout(() => setUpdateMessage(null), 4000)
+          // Refresh to show sibling changes
+          fetchTransactions()
+        } else {
+          // Optimistic update only for the single transaction
+          setData(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              transactions: prev.transactions.map(t =>
+                t.id === id ? { ...t, category: newCategory, is_corrected: true } : t
+              ),
+            }
+          })
+        }
       }
     } finally {
       setUpdatingId(null)
@@ -392,6 +403,12 @@ export default function TransactionsPage() {
       {recategorizeResult && (
         <div className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300">
           {recategorizeResult}
+        </div>
+      )}
+
+      {updateMessage && (
+        <div className="rounded-lg bg-emerald-950 border border-emerald-800 px-4 py-2.5 text-sm text-emerald-300">
+          {updateMessage}
         </div>
       )}
 

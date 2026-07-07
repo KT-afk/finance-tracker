@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { saveRule } from '@/lib/rules'
 import { CATEGORIES } from '@/lib/schema'
 import { requireAuth } from '@/lib/auth-middleware'
@@ -39,7 +39,7 @@ export async function PATCH(
       .set({ category, is_corrected: true })
       .where(eq(transactions.id, id))
 
-    // Save a keyword rule from the description
+    // Save a keyword rule so future uploads get the right category automatically
     const keyword = existing.description
       .toLowerCase()
       .replace(/^[a-z0-9]{6,}\s+/g, '')
@@ -52,7 +52,31 @@ export async function PATCH(
       await saveRule(keyword, category)
     }
 
-    return NextResponse.json({ success: true })
+    // Bulk-update all other non-corrected transactions with the same description
+    const siblings = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.description, existing.description),
+          ne(transactions.id, id),
+          eq(transactions.is_corrected, false)
+        )
+      )
+
+    if (siblings.length > 0) {
+      await db.update(transactions)
+        .set({ category, is_corrected: true })
+        .where(
+          and(
+            eq(transactions.description, existing.description),
+            ne(transactions.id, id),
+            eq(transactions.is_corrected, false)
+          )
+        )
+    }
+
+    return NextResponse.json({ success: true, siblingsUpdated: siblings.length })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg }, { status: 500 })
