@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { transactions } from '@/lib/schema'
-import { and, gte, lt, eq, ne } from 'drizzle-orm'
+import { transactions, EXCLUDED_FROM_SPEND } from '@/lib/schema'
+import { and, gte, lt, eq, ne, notInArray } from 'drizzle-orm'
 
 type Period = 'this_month' | 'last_month' | '2_months_ago' | '3_months_ago' | 'all_time'
 
@@ -76,11 +76,8 @@ export async function GET(request: Request) {
     // Expenses only (amount < 0) — using raw SQL via lt
     conditions.push(lt(transactions.amount, 0))
 
-    // Exclude Transfer category
-    conditions.push(ne(transactions.category, 'Transfer'))
-
-    // Exclude Income category
-    conditions.push(ne(transactions.category, 'Income'))
+    // Exclude non-spend categories (Transfer, Credit Card Payment, Income)
+    conditions.push(notInArray(transactions.category, [...EXCLUDED_FROM_SPEND]))
 
     // Date range
     if (start) conditions.push(gte(transactions.date, start))

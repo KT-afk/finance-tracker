@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { transactions } from '@/lib/schema'
+import { transactions, EXCLUDED_FROM_SPEND } from '@/lib/schema'
 import { and, asc, eq, gte, lte } from 'drizzle-orm'
 
 function roundMoney(value: number): number {
@@ -58,7 +58,8 @@ export async function GET(req: NextRequest) {
         monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
         continue
       }
-      // expense
+      // expense — skip non-spend categories
+      if (EXCLUDED_FROM_SPEND.includes(t.category)) continue
       if (!monthlyData[month]) monthlyData[month] = {}
       monthlyData[month][t.category] =
         (monthlyData[month][t.category] ?? 0) + Math.abs(t.amount)

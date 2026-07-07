@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { transactions } from '@/lib/schema'
+import { transactions, EXCLUDED_FROM_SPEND } from '@/lib/schema'
 import { and, eq, gte, lte, lt, desc } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
@@ -42,15 +42,15 @@ export async function GET(req: NextRequest) {
     // If current month has no data, caller can retry with last month
     const isEmpty = monthTxns.length === 0
 
-    // Total spend (sum of negative amounts, show as positive)
+    // Total spend (sum of negative amounts, excluding transfers and CC payments)
     const totalSpend = monthTxns
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_SPEND.includes(t.category))
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
     // Top 5 categories by total spend
     const categoryTotals: Record<string, number> = {}
     for (const t of monthTxns) {
-      if (t.amount < 0) {
+      if (t.amount < 0 && !EXCLUDED_FROM_SPEND.includes(t.category)) {
         categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + Math.abs(t.amount)
       }
     }
@@ -88,12 +88,12 @@ export async function GET(req: NextRequest) {
     }
 
     const priorTxns = await db
-      .select({ amount: transactions.amount })
+      .select({ amount: transactions.amount, category: transactions.category })
       .from(transactions)
       .where(and(...priorWhereConditions))
 
     const priorSpend = priorTxns
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_SPEND.includes(t.category))
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
     const hasPrior = priorTxns.length > 0

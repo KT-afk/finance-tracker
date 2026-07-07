@@ -20,6 +20,8 @@ export const CATEGORIES = [
 ] as const
 export type Category = (typeof CATEGORIES)[number]
 
+export const EXCLUDED_FROM_SPEND: readonly string[] = ['Transfer', 'Credit Card Payment', 'Income']
+
 export const transactions = sqliteTable('transactions', {
   id: text('id').primaryKey(),
   date: text('date').notNull(), // ISO date string YYYY-MM-DD
