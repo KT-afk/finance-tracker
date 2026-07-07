@@ -12,6 +12,7 @@ export const CATEGORIES = [
   'Health',
   'Entertainment',
   'Bills & Utilities',
+  'Housing',
   'Transfer',
   'Credit Card Payment',
   'Personal',
