@@ -114,15 +114,38 @@ Reply with only the category name, nothing else.`
 }
 
 /**
+ * Patterns that deterministically identify credit card bill payments.
+ * These appear in OCBC, UOB, DBS, and Trust bank transaction descriptions.
+ */
+const CC_PAYMENT_PATTERNS = [
+  /PAYMT\s+THRU\s+E-BANK/i,          // UOB: "PAYMT THRU E-BANK/HOMEB/CYBERB"
+  /mBK-UOB\s+Cards?/i,               // UOB credit card via mobile banking
+  /mBK-DBS\s+Cards?/i,               // DBS credit card via mobile banking
+  /mBK-OCBC\s+Cards?/i,              // OCBC credit card via mobile banking
+  /COLLECTION\/TRANSFER.*Interactive/i, // OCBC credit card: "COLLECTION/TRANSFER OTHR Interactive Br"
+  /BILL\s+PAYMENT.*CARD/i,           // generic bill payment to card
+  /CREDIT\s+CARD\s+(PAYMENT|BILL)/i, // explicit label
+  /CC\s+BILL\s+PAYMENT/i,
+  /GIRO.*CREDIT\s+CARD/i,
+  /AUTO\s*PAY.*CREDIT\s*CARD/i,
+]
+
+/**
  * Categorize a transaction description using:
- * 1. Keyword rules (fast, DB lookup) — checked against memo, then recipient, then raw description
- * 2. Claude Haiku fallback (AI, only if no rule match) with structured PayNow fields
- * 3. "Others" fallback (if Claude fails or key is missing)
+ * 1. Deterministic CC payment pattern match (no DB/AI needed)
+ * 2. Keyword rules (fast, DB lookup) — checked against memo, then recipient, then raw description
+ * 3. Claude Haiku fallback (AI, only if no rule match) with structured PayNow fields
+ * 4. "Others" fallback (if Claude fails or key is missing)
  */
 export async function categorize(
   description: string,
   options: CategorizeOptions = {}
 ): Promise<Category> {
+  // Step 0: Deterministic credit card payment detection — no AI needed
+  if (CC_PAYMENT_PATTERNS.some(p => p.test(description))) {
+    return 'Credit Card Payment'
+  }
+
   // Parse PayNow/FAST/NETS/IBG description into structured fields
   const { memo, recipient, method } = parsePayNowDescription(description)
 

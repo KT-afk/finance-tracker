@@ -8,6 +8,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'Entertainment': '#F472B6',
   'Bills & Utilities': '#60A5FA',
   'Transfer': '#64748B',
+  'Credit Card Payment': '#A78BFA',
   'Personal': '#818CF8',
   'Income': '#22C55E',
   'Others': '#FBBF24',
