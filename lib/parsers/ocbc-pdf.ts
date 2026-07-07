@@ -240,7 +240,9 @@ const DEPOSIT_KEYWORDS = [
   /SALARY/i,
   /INTEREST\s+CREDIT/i,
   /CREDIT\s+INTEREST/i,
-  /GIRO\s+CREDIT/i,
+  /INTEREST\s+CREDIT/i,
+  /^INTEREST\s+CREDIT$/i,
+  /GIRO\s+(CREDIT|SALARY)/i,
   /INWARD\s+REMITTANCE/i,
   /PAYNOW\s+CREDIT/i,
   /FUNDS\s+TRANSFER\s+CREDIT/i,
@@ -252,47 +254,70 @@ const DEPOSIT_KEYWORDS = [
 ]
 
 /**
- * Plain-text fallback parser for OCBC PDFs extracted without -layout flag.
- * Works on the unaligned text that pdf-parse returns.
+ * Plain-text fallback parser for OCBC PDFs extracted via pdf-parse (no -layout).
+ *
+ * pdf-parse reorders columns so each transaction line looks like:
+ *   "DD MMM  amount  balance\tDD MMM  description"
+ *   e.g. "01 MAY 3,000.00 12,546.01\t02 MAY FAST PAYMENT"
  *
  * Strategy:
- * - Match lines starting with "DD MMM DD MMM" (transaction date + value date)
- * - Extract the description text between the dates and the first amount
- * - Classify debit/credit using keyword matching on the description
- * - If no keywords match, treat as debit (most OCBC transactions are withdrawals)
+ * - Match lines of the form: DATE amount balance TAB DATE description
+ * - Accumulate continuation lines (via PayNow, to NAME, etc.) into description
+ * - Classify debit/credit by column position: amount is before balance,
+ *   and we detect deposits via DEPOSIT_KEYWORDS on the description
  */
 function parseOCBCPDFPlainText(text: string): RawTransaction[] {
   const year = extractStatementYear(text)
   const results: RawTransaction[] = []
 
-  // Match lines of the form: "DD MMM DD MMM description ... amount amount"
-  // Both columnar and plain-text have this basic structure per transaction line
-  const TX_LINE = new RegExp(
-    String.raw`\b(\d{1,2}\s+[A-Z]{3})\s+\d{1,2}\s+[A-Z]{3}\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$`,
-    'gim'
-  )
+  // Matches: "DD MMM  amount  balance TAB DD MMM  description"
+  // The tab character separates the two column groups that pdf-parse interleaves
+  const TX_LINE = /^(\d{1,2}\s+[A-Z]{3})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\t\d{1,2}\s+[A-Z]{3}\s+(.+)$/im
 
-  for (const m of text.matchAll(TX_LINE)) {
-    const dateStr = m[1]
-    const description = m[2].replace(/\s{2,}/g, ' ').trim()
-    const secondToLast = parseFloat(m[3].replace(/,/g, ''))
+  const lines = text.split('\n')
+  let pending: { date: string; amount: number; description: string } | null = null
 
-    // Skip balance/summary lines
-    if (SKIP_PATTERNS.some(p => p.test(description))) continue
-    if (/BALANCE/i.test(description)) continue
+  for (const line of lines) {
+    const m = line.match(TX_LINE)
+    if (m) {
+      // Flush previous
+      if (pending) {
+        results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
+      }
 
-    let date: string
-    try {
-      date = resolveDate(dateStr, year)
-    } catch {
+      const dateStr = m[1]
+      const firstAmt = parseFloat(m[2].replace(/,/g, ''))
+      // m[3] is the running balance — not needed
+      const description = m[4].trim()
+
+      // Skip balance carry-forward lines
+      if (/BALANCE/i.test(description)) { pending = null; continue }
+
+      let date: string
+      try { date = resolveDate(dateStr, year) } catch { pending = null; continue }
+
+      // Determine credit vs debit by keyword — fallback to debit
+      const isCredit = DEPOSIT_KEYWORDS.some(kw => kw.test(description))
+      pending = { date, amount: isCredit ? firstAmt : -firstAmt, description }
       continue
     }
 
-    // Determine debit vs credit via keyword matching
-    const isCredit = DEPOSIT_KEYWORDS.some(kw => kw.test(description))
-    const amount = isCredit ? secondToLast : -secondToLast
+    // Continuation line — append to pending description if not boilerplate
+    if (pending) {
+      const trimmed = line.trim()
+      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed)) && !/^Deposit Insurance/i.test(trimmed)) {
+        pending.description += ' ' + trimmed
+      }
+      // Page boundary resets pending
+      if (/^Deposit Insurance/i.test(trimmed)) {
+        results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
+        pending = null
+      }
+    }
+  }
 
-    results.push({ date, description, amount, bank: 'ocbc' })
+  if (pending) {
+    results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
   }
 
   return results
