@@ -54,7 +54,8 @@ export async function GET(req: NextRequest) {
     for (const t of allTxns) {
       const month = t.date.slice(0, 7) // YYYY-MM
       if (t.amount >= 0) {
-        // income
+        // Skip CC payment credits (card statement inbound) — not real income
+        if (t.category === 'Credit Card Payment') continue
         monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
         continue
       }
