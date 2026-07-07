@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CATEGORY_COLORS, formatSGD, BANK_TABS } from '@/lib/display'
+import { ChevronDown } from 'lucide-react'
 import CategoriesView from '@/components/CategoriesView'
 
 interface MomRow {
@@ -26,10 +26,20 @@ interface BigTransaction {
   category: string
 }
 
+interface PnLMonth {
+  month: string
+  label: string
+  income: number
+  spend: number
+  net: number | null
+  categories: { category: string; amount: number }[]
+}
+
 interface InsightsData {
   momComparison: MomRow[]
   trendData: Record<string, string | number>[]
   monthLabels: string[]
+  monthlyPnL: PnLMonth[]
   biggestTransactions: BigTransaction[]
   currentMonth: string
 }
@@ -37,53 +47,12 @@ interface InsightsData {
 type ActiveView = 'overview' | 'categories'
 
 export default function InsightsPage() {
-  const router = useRouter()
   const [activeView, setActiveView] = useState<ActiveView>('overview')
   const [selectedBank, setSelectedBank] = useState('all')
   const [data, setData] = useState<InsightsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Derive trend categories dynamically from API data, sorted ascending by total
-  const trendCategories = useMemo(() => {
-    if (!data?.trendData) return []
-    const totals: Record<string, number> = {}
-    for (const row of data.trendData) {
-      for (const [key, value] of Object.entries(row)) {
-        if (key === 'month') continue
-        totals[key] = (totals[key] ?? 0) + (typeof value === 'number' ? value : 0)
-      }
-    }
-    return Object.entries(totals)
-      .sort(([, a], [, b]) => b - a) // descending by total (bottom of stack = highest)
-  }, [data?.trendData])
-
-  const trendMax = useMemo(() => {
-    if (!data?.trendData) return 0
-    return Math.max(
-      0,
-      ...data.trendData.map(row =>
-        trendCategories.reduce((sum, [cat]) => {
-          const value = row[cat]
-          return sum + (typeof value === 'number' ? value : 0)
-        }, 0)
-      )
-    )
-  }, [data?.trendData, trendCategories])
-
-  const yTicks = useMemo(() => {
-    const roundedMax = Math.max(100, Math.ceil(trendMax / 100) * 100)
-    return [1, 0.75, 0.5, 0.25, 0].map(position => ({
-      position,
-      label: `$${Math.round(roundedMax * position)}`,
-    }))
-  }, [trendMax])
-
-  function monthShort(month: string): string {
-    const [y, mo] = month.split('-')
-    const date = new Date(parseInt(y), parseInt(mo) - 1, 1)
-    return date.toLocaleString('en-SG', { month: 'short' })
-  }
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -155,99 +124,93 @@ export default function InsightsPage() {
 
       {data && !loading && (
         <>
-          {/* 6-month trend chart */}
+          {/* Monthly P&L summary — 6 months, accordion */}
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-zinc-400 font-normal">6-month spend trend</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-zinc-400 font-normal">6-month summary</CardTitle>
+                <div className="hidden sm:grid grid-cols-[5rem_5rem_5.5rem_1rem] gap-x-4 text-[11px] text-zinc-600 pr-1">
+                  <span className="text-right">Income</span>
+                  <span className="text-right">Spend</span>
+                  <span className="text-right">Net</span>
+                  <span />
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              {trendCategories.length === 0 ? (
-                <p className="text-center text-zinc-500 text-sm py-8">Not enough data yet</p>
+            <CardContent className="px-0 pb-0">
+              {(data.monthlyPnL ?? []).length === 0 ? (
+                <p className="text-center text-zinc-500 text-sm py-8 px-4">Not enough data yet</p>
               ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2">
-                    <div className="relative h-64 sm:h-72">
-                      {yTicks.map(tick => (
-                        <span
-                          key={tick.position}
-                          className="absolute right-0 translate-y-1/2 font-mono text-[10px] text-zinc-500"
-                          style={{ bottom: `${tick.position * 100}%` }}
+                <div className="divide-y divide-zinc-800">
+                  {(data.monthlyPnL ?? []).map(row => {
+                    const isExpanded = expandedMonth === row.month
+                    const netPositive = row.net !== null && row.net >= 0
+                    return (
+                      <div key={row.month}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedMonth(isExpanded ? null : row.month)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+                          aria-expanded={isExpanded}
                         >
-                          {tick.label}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="space-y-2">
-                      <div className="relative h-64 sm:h-72 border-b border-zinc-800">
-                        {yTicks.map(tick => (
-                          <span
-                            key={tick.position}
-                            className="absolute left-0 right-0 border-t border-zinc-800/70"
-                            style={{ bottom: `${tick.position * 100}%` }}
+                          <span className="w-14 shrink-0 text-sm font-medium text-zinc-200">{row.label}</span>
+                          {/* Mobile: compact */}
+                          <div className="flex-1 flex items-center gap-2 sm:hidden">
+                            <span className="font-mono text-xs text-red-400">{formatSGD(row.spend)}</span>
+                            {row.net !== null && (
+                              <span className={`font-mono text-xs ${netPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                {row.net >= 0 ? '+' : ''}{formatSGD(row.net)}
+                              </span>
+                            )}
+                          </div>
+                          {/* Desktop: all columns */}
+                          <div className="hidden sm:grid grid-cols-[5rem_5rem_5.5rem] gap-x-4 ml-auto">
+                            <span className="font-mono text-xs text-zinc-400 text-right">
+                              {row.income > 0 ? formatSGD(row.income) : '—'}
+                            </span>
+                            <span className="font-mono text-xs text-zinc-200 text-right">{formatSGD(row.spend)}</span>
+                            <span className={`font-mono text-xs text-right ${
+                              row.net === null ? 'text-zinc-600' : netPositive ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {row.net === null ? '—' : `${row.net >= 0 ? '+' : ''}${formatSGD(row.net)}`}
+                            </span>
+                          </div>
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 shrink-0 text-zinc-600 transition-transform duration-200 ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
                           />
-                        ))}
-                        <div className="absolute inset-0 flex items-end justify-between gap-1.5 sm:gap-3 px-1">
-                          {data.trendData.map(row => {
-                            const total = trendCategories.reduce((sum, [cat]) => {
-                              const value = row[cat]
-                              return sum + (typeof value === 'number' ? value : 0)
-                            }, 0)
-                            let cumulative = 0
-                            return (
-                              <div key={String(row.month)} className="flex h-full min-w-0 flex-1 justify-center">
-                                <div className="relative h-full w-full max-w-16" title={`${String(row.month)} total ${formatSGD(total)}`}>
-                                  {trendCategories.map(([cat]) => {
-                                    const value = row[cat]
-                                    if (typeof value !== 'number' || value <= 0 || trendMax <= 0) return null
-                                    const bottom = (cumulative / trendMax) * 100
-                                    const height = (value / trendMax) * 100
-                                    cumulative += value
-                                    return (
-                                      <button
-                                        key={cat}
-                                        type="button"
-                                        aria-label={`${String(row.month)} ${cat} ${formatSGD(value)}`}
-                                        onClick={() => router.push(`/insights/${encodeURIComponent(cat)}`)}
-                                        className="absolute left-0 right-0 min-h-0.5"
-                                        style={{
-                                          bottom: `${bottom}%`,
-                                          height: `${height}%`,
-                                          backgroundColor: CATEGORY_COLORS[cat] ?? '#94A3B8',
-                                        }}
-                                      />
-                                    )
-                                  })}
-                                </div>
+                        </button>
+
+                        {/* Expanded: category breakdown */}
+                        {isExpanded && (
+                          <div className="px-4 pb-3 pt-0">
+                            {row.categories.length === 0 ? (
+                              <p className="text-xs text-zinc-600 pl-14">No expense data</p>
+                            ) : (
+                              <div className="pl-14 flex flex-wrap gap-1.5">
+                                {row.categories.map(c => (
+                                  <Link
+                                    key={c.category}
+                                    href={`/insights/${encodeURIComponent(c.category)}`}
+                                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity hover:opacity-80"
+                                    style={{
+                                      backgroundColor: `${CATEGORY_COLORS[c.category] ?? '#94A3B8'}20`,
+                                      color: CATEGORY_COLORS[c.category] ?? '#94A3B8',
+                                      border: `1px solid ${CATEGORY_COLORS[c.category] ?? '#94A3B8'}40`,
+                                    }}
+                                  >
+                                    {c.category}
+                                    <span className="font-mono opacity-80">{formatSGD(c.amount)}</span>
+                                  </Link>
+                                ))}
                               </div>
-                            )
-                          })}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex justify-between gap-1 px-1 text-center text-[11px] text-zinc-500">
-                        {data.trendData.map(row => (
-                          <span key={String(row.month)} className="min-w-0 flex-1">
-                            {monthShort(String(row.month))}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {trendCategories.map(([cat]) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => router.push(`/insights/${encodeURIComponent(cat)}`)}
-                        className="inline-flex max-w-full items-center gap-1.5 text-left text-[11px] text-zinc-400 hover:text-zinc-100"
-                      >
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: CATEGORY_COLORS[cat] ?? '#94A3B8' }}
-                        />
-                        <span className="truncate">{cat}</span>
-                      </button>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

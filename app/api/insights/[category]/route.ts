@@ -102,12 +102,16 @@ export async function GET(
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
 
-    // --- 4. Count & average ---
+    // --- 4. Count, average & current month spend ---
     const count = allTxns.length
     const average =
       count > 0
         ? Math.round((allTxns.reduce((s, t) => s + Math.abs(t.amount), 0) / count) * 100) / 100
         : 0
+
+    // Current month = most recent month in monthlySpend that has data
+    const currentCalMonth = getMonthRange(0).label
+    const currentMonthSpend = Math.round((monthTotals[currentCalMonth] ?? 0) * 100) / 100
 
     // --- 5. Recent transactions (50 most recent, newest first) ---
     const recentTransactions = [...allTxns]
@@ -121,6 +125,7 @@ export async function GET(
       topMerchants,
       count,
       average,
+      currentMonthSpend,
       recentTransactions,
     })
   } catch (e: unknown) {

@@ -45,14 +45,24 @@ export async function GET(req: NextRequest) {
         )
       )
 
-    // Group by month and category
+    // Group by month and category (expenses only for trend/mom)
     const monthlyData: Record<string, Record<string, number>> = {}
+    // Also track income and spend per month for P&L
+    const monthlyIncome: Record<string, number> = {}
+    const monthlySpend: Record<string, number> = {}
+
     for (const t of allTxns) {
-      if (t.amount >= 0) continue // skip income
       const month = t.date.slice(0, 7) // YYYY-MM
+      if (t.amount >= 0) {
+        // income
+        monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
+        continue
+      }
+      // expense
       if (!monthlyData[month]) monthlyData[month] = {}
       monthlyData[month][t.category] =
         (monthlyData[month][t.category] ?? 0) + Math.abs(t.amount)
+      monthlySpend[month] = (monthlySpend[month] ?? 0) + Math.abs(t.amount)
     }
 
     // Build last 6 months labels
@@ -90,6 +100,22 @@ export async function GET(req: NextRequest) {
       return row
     })
 
+    // Monthly P&L — newest first (index 5 = current month)
+    const monthlyPnL = [...monthLabels].reverse().map(month => {
+      const [y, m] = month.split('-').map(Number)
+      const label = new Date(y, m - 1, 1).toLocaleString('en-SG', { month: 'short', year: '2-digit' })
+      const income = roundMoney(monthlyIncome[month] ?? 0)
+      const spend = roundMoney(monthlySpend[month] ?? 0)
+      const hasIncome = income > 0
+      const net = hasIncome ? roundMoney(income - spend) : null
+      // Category breakdown for this month sorted desc
+      const cats = monthlyData[month] ?? {}
+      const categories = Object.entries(cats)
+        .map(([category, amount]) => ({ category, amount: roundMoney(amount) }))
+        .sort((a, b) => b.amount - a.amount)
+      return { month, label, income, spend, net, categories }
+    })
+
     // Top 5 biggest transactions this month
     const biggestTxns = (await db
       .select()
@@ -110,6 +136,7 @@ export async function GET(req: NextRequest) {
       momComparison,
       trendData,
       monthLabels,
+      monthlyPnL,
       biggestTransactions: biggestTxns,
       currentMonth,
     })
