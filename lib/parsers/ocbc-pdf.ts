@@ -1,4 +1,4 @@
-import { RawTransaction } from './types'
+import { RawTransaction, ParseResult } from './types'
 
 const MONTHS: Record<string, string> = {
   JAN: '01', FEB: '02', MAR: '03', APR: '04',
@@ -324,14 +324,35 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
 }
 
 /**
- * Parse OCBC 360 Account PDF text into RawTransactions.
+ * Extract the closing balance from the BALANCE C/F line.
+ * Works for both pdftotext columnar and pdf-parse plain-text output.
+ */
+function extractClosingBalance(text: string): number | undefined {
+  const patterns = [
+    /BALANCE\s+C\/F[^\n]*?([\d,]+\.\d{2})/i,
+    /([\d,]+\.\d{2})[^\n]*BALANCE\s+C\/F/i,
+  ]
+  for (const pat of patterns) {
+    const m = text.match(pat)
+    if (m) {
+      const val = parseFloat(m[1].replace(/,/g, ''))
+      if (!isNaN(val) && val > 0) return val
+    }
+  }
+  return undefined
+}
+
+/**
+ * Parse OCBC 360 Account PDF text into a ParseResult.
  * Tries the columnar parser first (requires pdftotext -layout output).
  * Falls back to a plain-text regex parser if the columnar one yields 0 results
  * (which happens when pdf-parse is used as the extraction fallback on Vercel).
  */
-export function parseOCBCPDF(text: string): RawTransaction[] {
+export function parseOCBCPDF(text: string): ParseResult {
+  const endingBalance = extractClosingBalance(text)
+
   const columnar = parseOCBCPDFColumnar(text)
-  if (columnar.length > 0) return columnar
+  if (columnar.length > 0) return { transactions: columnar, endingBalance }
 
   // Columnar parse yielded nothing — likely plain-text extraction (no column alignment).
   // Log the first 40 lines to help diagnose future format changes.
@@ -342,5 +363,5 @@ export function parseOCBCPDF(text: string): RawTransaction[] {
   if (plainText.length === 0) {
     console.warn('[parseOCBCPDF] Plain-text fallback also yielded 0 results. Full text length:', text.length)
   }
-  return plainText
+  return { transactions: plainText, endingBalance }
 }

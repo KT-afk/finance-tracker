@@ -48,7 +48,7 @@ export async function parseFile(
       return { transactions: parseUOBCreditCardPDF(text) }
     }
     if (bank === 'ocbc') {
-      return { transactions: parseOCBCPDF(text) }
+      return parseOCBCPDF(text)
     }
     if (bank === 'trust') {
       return { transactions: parseTrustPDF(text) }
