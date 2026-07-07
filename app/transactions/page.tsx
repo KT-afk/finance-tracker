@@ -406,11 +406,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {updateMessage && (
-        <div className="rounded-lg bg-emerald-950 border border-emerald-800 px-4 py-2.5 text-sm text-emerald-300">
-          {updateMessage}
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -584,6 +579,11 @@ export default function TransactionsPage() {
             </div>
           )}
         </>
+      )}
+      {updateMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-lg bg-emerald-950 border border-emerald-700 px-5 py-3 text-sm text-emerald-300 shadow-lg whitespace-nowrap">
+          ✓ {updateMessage}
+        </div>
       )}
     </div>
   )
