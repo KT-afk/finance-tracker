@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { transactions: raws, endingBalance } = parseResult
+    const { transactions: raws, endingBalance, accountType = 'savings' } = parseResult
 
     if (raws.length === 0) {
       console.warn(`[upload] 0 transactions extracted from ${file.name} for ${bank}`)
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
         await db.insert(balanceHistory).values({
           bank: bank as Bank,
           balance: endingBalance,
+          account_type: accountType,
           recorded_at: new Date().toISOString(),
         })
         savedBalance = true

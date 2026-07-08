@@ -5,26 +5,25 @@ import { eq, desc } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    const balanceRows = await Promise.all(BANKS.map(async bank => {
-      const [latest] = await db
-        .select()
-        .from(balanceHistory)
+    // For each bank, get the latest savings entry AND the latest credit_card entry separately
+    const balanceRows = await Promise.all(BANKS.flatMap(bank => [
+      db.select().from(balanceHistory)
         .where(eq(balanceHistory.bank, bank))
         .orderBy(desc(balanceHistory.recorded_at))
         .limit(1)
-      
+        .then(([r]) => r ? { bank, balance: r.balance, account_type: r.account_type, recorded_at: r.recorded_at } : null),
+    ]))
 
-      return latest
-        ? { bank, balance: latest.balance, recorded_at: latest.recorded_at }
-        : null
-    }))
-    const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; recorded_at: string }[]
-    const total = Math.round(balances.reduce((sum, b) => sum + b.balance, 0) * 100) / 100
-    const lastUpdated = balances.length > 0 
+    const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; account_type: string; recorded_at: string }[]
+    const savingsBalances = balances.filter(b => b.account_type !== 'credit_card')
+    const ccBalances = balances.filter(b => b.account_type === 'credit_card')
+    const total = Math.round(savingsBalances.reduce((sum, b) => sum + b.balance, 0) * 100) / 100
+    const totalCC = Math.round(ccBalances.reduce((sum, b) => sum + b.balance, 0) * 100) / 100
+    const lastUpdated = balances.length > 0
       ? balances.reduce((latest, b) => b.recorded_at > latest ? b.recorded_at : latest, balances[0].recorded_at)
       : new Date().toISOString()
 
-    return NextResponse.json({ balances, total, lastUpdated })
+    return NextResponse.json({ balances, total, totalCC, lastUpdated })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg }, { status: 500 })

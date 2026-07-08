@@ -16,12 +16,14 @@ import { BANKS } from '@/lib/schema'
 interface BankBalance {
   bank: string
   balance: number
+  account_type: string
   recorded_at: string
 }
 
 interface BalancesData {
   balances: BankBalance[]
   total: number
+  totalCC: number
   lastUpdated: string
 }
 
@@ -102,12 +104,11 @@ export default function AccountsPage() {
     }
   }
 
-  const balanceMap = new Map(
-    (data?.balances ?? []).map(b => [b.bank, b])
-  )
+  const savingsBalances = (data?.balances ?? []).filter(b => b.account_type !== 'credit_card')
+  const balanceMap = new Map((data?.balances ?? []).map(b => [b.bank, b]))
 
-  const bankCount = data?.balances.length ?? 0
-  const hasBalances = bankCount > 0
+  const bankCount = savingsBalances.length
+  const hasBalances = (data?.balances.length ?? 0) > 0
 
   const trendFiltered = trend.filter(p => p.total !== null)
 
@@ -145,13 +146,13 @@ export default function AccountsPage() {
                     {formatSGD(data!.total)}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
-                    across {bankCount} {bankCount === 1 ? 'bank' : 'banks'}
+                    across {bankCount} savings {bankCount === 1 ? 'account' : 'accounts'}
                   </p>
-                  <div className="mt-3 p-2 rounded-lg bg-zinc-800/30">
-                    <p className="text-xs text-zinc-400">
-                      💡 Tip: Update balances regularly for accurate financial tracking
+                  {(data!.totalCC ?? 0) > 0 && (
+                    <p className="text-xs text-amber-500 mt-1">
+                      Credit card outstanding: {formatSGD(data!.totalCC)}
                     </p>
-                  </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-zinc-500">No balances set yet. Add your first balance below.</p>
@@ -163,7 +164,7 @@ export default function AccountsPage() {
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Bank accounts</CardTitle>
+                <CardTitle className="text-sm text-zinc-400 font-normal">Accounts</CardTitle>
                 {hasBalances && (
                   <button
                     onClick={fetchData}
@@ -220,7 +221,12 @@ export default function AccountsPage() {
                 return (
                   <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                        {entry?.account_type === 'credit_card' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-900">Credit card</span>
+                        )}
+                      </div>
                       {entry ? (
                         <p className="text-xs text-zinc-500 mt-0.5">
                           Updated {relativeDate(entry.recorded_at)}
@@ -231,7 +237,7 @@ export default function AccountsPage() {
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       {entry ? (
-                        <span className="font-mono text-sm text-white text-right">
+                        <span className={`font-mono text-sm text-right ${entry.account_type === 'credit_card' ? 'text-amber-400' : 'text-white'}`}>
                           {formatSGD(entry.balance)}
                         </span>
                       ) : null}

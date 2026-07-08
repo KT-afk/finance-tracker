@@ -149,5 +149,5 @@ export function parseTrustPDF(text: string): ParseResult {
     })
   }
 
-  return { transactions: results, endingBalance }
+  return { transactions: results, endingBalance, accountType: 'credit_card' }
 }

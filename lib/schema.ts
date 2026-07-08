@@ -58,9 +58,13 @@ export const aiMemory = sqliteTable('ai_memory', {
   created_at: text('created_at').notNull(),
 })
 
+export const ACCOUNT_TYPES = ['savings', 'credit_card'] as const
+export type AccountType = (typeof ACCOUNT_TYPES)[number]
+
 export const balanceHistory = sqliteTable('balance_history', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   bank: text('bank', { enum: BANKS }).notNull(),
   balance: real('balance').notNull(),
+  account_type: text('account_type', { enum: ACCOUNT_TYPES }).notNull().default('savings'),
   recorded_at: text('recorded_at').notNull(),
 })

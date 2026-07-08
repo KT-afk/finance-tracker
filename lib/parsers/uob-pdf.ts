@@ -89,13 +89,13 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
   const endingBalance = extractUOBClosingBalance(text)
 
   const layoutTransactions = parseLayoutCreditCardText(text, statementYear, statementMonth)
-  if (layoutTransactions.length > 0) return { transactions: layoutTransactions, endingBalance }
+  if (layoutTransactions.length > 0) return { transactions: layoutTransactions, endingBalance, accountType: 'credit_card' }
 
   const stackedTransactions = parseStackedCreditCardText(text, statementYear, statementMonth)
-  if (stackedTransactions.length > 0) return { transactions: stackedTransactions, endingBalance }
+  if (stackedTransactions.length > 0) return { transactions: stackedTransactions, endingBalance, accountType: 'credit_card' }
 
   const accountTransactions = parseAccountStatementText(text)
-  return { transactions: accountTransactions, endingBalance }
+  return { transactions: accountTransactions, endingBalance, accountType: 'credit_card' }
 }
 
 function parseLayoutCreditCardText(

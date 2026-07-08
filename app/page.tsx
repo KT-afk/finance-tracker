@@ -58,8 +58,9 @@ function buildMonthOptions(): { value: string; label: string }[] {
 }
 
 interface BalanceData {
-  balances: { bank: string; balance: number; recorded_at: string }[]
+  balances: { bank: string; balance: number; account_type: string; recorded_at: string }[]
   total: number
+  totalCC: number
   lastUpdated: string
 }
 
@@ -262,7 +263,7 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {balanceData.balances.map(({ bank, balance }) => (
+                    {balanceData.balances.filter(b => b.account_type !== 'credit_card').map(({ bank, balance }) => (
                       <div key={bank} className="flex items-center justify-between">
                         <span className="text-sm text-zinc-200">{bank.toUpperCase()}</span>
                         <span className="text-sm font-mono text-white">{formatSGD(balance)}</span>

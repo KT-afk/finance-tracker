@@ -9,7 +9,8 @@ export interface RawTransaction {
 
 export interface ParseResult {
   transactions: RawTransaction[]
-  endingBalance?: number  // Extracted from CSV if available
+  endingBalance?: number        // Extracted from file if available
+  accountType?: 'savings' | 'credit_card'  // Defaults to savings if not set
 }
 
 /**
