@@ -1,23 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { parseFile } from '@/lib/parsers'
-import { normalize } from '@/lib/parsers/normalizer'
-import { categorize } from '@/lib/categorize'
-import { db } from '@/lib/db'
-import { transactions, balanceHistory } from '@/lib/schema'
-import { Bank, BANKS } from '@/lib/schema'
-import { inArray } from 'drizzle-orm'
+import { NextRequest, NextResponse } from "next/server"
+import { parseFile } from "@/lib/parsers"
+import { normalize } from "@/lib/parsers/normalizer"
+import { categorize } from "@/lib/categorize"
+import { db } from "@/lib/db"
+import { transactions, balanceHistory } from "@/lib/schema"
+import { Bank, BANKS } from "@/lib/schema"
+import { inArray } from "drizzle-orm"
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const bank = formData.get('bank') as string | null
+    const file = formData.get("file") as File | null
+    const bank = formData.get("bank") as string | null
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
     if (!bank || !(BANKS as readonly string[]).includes(bank)) {
-      return NextResponse.json({ error: 'Invalid or missing bank' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid or missing bank" },
+        { status: 400 }
+      )
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
     try {
       parseResult = await parseFile(buffer, file.name, bank as Bank)
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Unknown parse error'
+      const msg = e instanceof Error ? e.message : "Unknown parse error"
       console.error(`[upload] Parse failed for ${bank} / ${file.name}:`, msg)
       return NextResponse.json(
         { error: `Failed to parse ${file.name} for ${bank}: ${msg}` },
@@ -35,12 +38,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { transactions: raws, endingBalance, accountType = 'savings' } = parseResult
+    const {
+      transactions: raws,
+      endingBalance,
+      accountType = "savings",
+    } = parseResult
 
     if (raws.length === 0) {
-      console.warn(`[upload] 0 transactions extracted from ${file.name} for ${bank}`)
+      console.warn(
+        `[upload] 0 transactions extracted from ${file.name} for ${bank}`
+      )
       return NextResponse.json(
-        { error: `No transactions found in ${file.name}. Is this the correct bank (${bank.toUpperCase()})? The file format may not be supported.` },
+        {
+          error: `No transactions found in ${file.name}. Is this the correct bank (${bank.toUpperCase()})? The file format may not be supported.`,
+        },
         { status: 422 }
       )
     }
@@ -49,19 +60,21 @@ export async function POST(req: NextRequest) {
     const normalized = normalize(raws)
 
     // Check which hashes already exist in DB
-    const hashes = normalized.map(t => t.hash)
+    const hashes = normalized.map((t) => t.hash)
     const existing = await db
       .select({ hash: transactions.hash })
       .from(transactions)
       .where(inArray(transactions.hash, hashes))
-    const existingHashes = new Set(existing.map(e => e.hash))
+    const existingHashes = new Set(existing.map((e) => e.hash))
 
-    const newTransactions = normalized.filter(t => !existingHashes.has(t.hash))
+    const newTransactions = normalized.filter(
+      (t) => !existingHashes.has(t.hash)
+    )
     const skippedCount = normalized.length - newTransactions.length
 
     // Categorize new transactions
     const categorized = await Promise.all(
-      newTransactions.map(async t => ({
+      newTransactions.map(async (t) => ({
         ...t,
         category: await categorize(t.description, { requireAi: true }),
       }))
@@ -79,13 +92,13 @@ export async function POST(req: NextRequest) {
         })
         savedBalance = true
       } catch (balanceError) {
-        console.error('Failed to save balance:', balanceError)
+        console.error("Failed to save balance:", balanceError)
         // Don't fail the upload if balance saving fails
       }
     }
 
     // Build date range
-    const dates = normalized.map(t => t.date).sort()
+    const dates = normalized.map((t) => t.date).sort()
     const dateFrom = dates[0]
     const dateTo = dates[dates.length - 1]
 
@@ -97,12 +110,12 @@ export async function POST(req: NextRequest) {
         dateFrom,
         dateTo,
         bank,
-        endingBalance: savedBalance ? endingBalance : undefined,
+        endingBalance,
       },
       transactions: categorized,
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
+    const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

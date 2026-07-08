@@ -1,25 +1,25 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { BANKS } from '@/lib/schema'
-import type { BankUploadHistory } from '@/app/api/upload-history/route'
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { BANKS } from "@/lib/schema"
+import type { BankUploadHistory } from "@/app/api/upload-history/route"
 
 const BANK_LABELS: Record<string, string> = {
-  dbs: 'DBS/POSB',
-  ocbc: 'OCBC',
-  uob: 'UOB',
-  trust: 'Trust',
+  dbs: "DBS/POSB",
+  ocbc: "OCBC",
+  uob: "UOB",
+  trust: "Trust",
 }
 
 function formatUploadedAt(iso: string) {
@@ -27,10 +27,14 @@ function formatUploadedAt(iso: string) {
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
+  if (diffDays === 0) return "Today"
+  if (diffDays === 1) return "Yesterday"
   if (diffDays < 7) return `${diffDays} days ago`
-  return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString("en-SG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
 }
 
 interface PreviewData {
@@ -45,7 +49,7 @@ interface PreviewData {
 
 export default function UploadPage() {
   const router = useRouter()
-  const [bank, setBank] = useState<string>('')
+  const [bank, setBank] = useState<string>("")
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,16 +64,18 @@ export default function UploadPage() {
   const missingApiKey = hasAnthropicKey === false
 
   function refreshHistory() {
-    fetch('/api/upload-history')
-      .then(r => r.json())
-      .then(data => { if (data.history) setUploadHistory(data.history) })
+    fetch("/api/upload-history")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.history) setUploadHistory(data.history)
+      })
       .catch(() => {})
   }
 
   useEffect(() => {
-    fetch('/api/config')
-      .then(r => r.json())
-      .then(data => setHasAnthropicKey(Boolean(data.hasAnthropicKey)))
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data) => setHasAnthropicKey(Boolean(data.hasAnthropicKey)))
       .catch(() => setHasAnthropicKey(null))
     refreshHistory()
   }, [])
@@ -86,8 +92,9 @@ export default function UploadPage() {
       let totalParsed = 0
       let totalNew = 0
       let totalSkipped = 0
-      let dateFrom = ''
-      let dateTo = ''
+      let dateFrom = ""
+      let dateTo = ""
+      let latestEndingBalance: number | undefined
 
       const skippedFiles: string[] = []
 
@@ -95,14 +102,17 @@ export default function UploadPage() {
         setProgress(`Processing file ${i + 1} of ${files.length}…`)
 
         const formData = new FormData()
-        formData.append('file', files[i])
-        formData.append('bank', bank)
+        formData.append("file", files[i])
+        formData.append("bank", bank)
 
-        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        })
         const data = await res.json()
 
         if (!res.ok) {
-          const apiError = data?.error ?? 'Unknown error'
+          const apiError = data?.error ?? "Unknown error"
           skippedFiles.push(`${files[i].name} (${apiError})`)
           continue
         }
@@ -112,17 +122,25 @@ export default function UploadPage() {
         totalSkipped += data.preview.skippedCount
         allTransactions = [...allTransactions, ...data.transactions]
 
-        if (!dateFrom || data.preview.dateFrom < dateFrom) dateFrom = data.preview.dateFrom
-        if (!dateTo || data.preview.dateTo > dateTo) dateTo = data.preview.dateTo
+        if (!dateFrom || data.preview.dateFrom < dateFrom)
+          dateFrom = data.preview.dateFrom
+        if (!dateTo || data.preview.dateTo > dateTo)
+          dateTo = data.preview.dateTo
+        if (data.preview.endingBalance !== undefined)
+          latestEndingBalance = data.preview.endingBalance
       }
 
       if (allTransactions.length === 0 && skippedFiles.length > 0) {
-        setError(`No transactions found in any file. Skipped: ${skippedFiles.join(', ')}`)
+        setError(
+          `No transactions found in any file. Skipped: ${skippedFiles.join(", ")}`
+        )
         return
       }
 
       if (skippedFiles.length > 0) {
-        setError(`Skipped ${skippedFiles.length} file${skippedFiles.length > 1 ? 's' : ''} with no transactions: ${skippedFiles.join(', ')}`)
+        setError(
+          `Skipped ${skippedFiles.length} file${skippedFiles.length > 1 ? "s" : ""} with no transactions: ${skippedFiles.join(", ")}`
+        )
       }
 
       setPreview({
@@ -132,10 +150,11 @@ export default function UploadPage() {
         dateFrom,
         dateTo,
         bank,
+        endingBalance: latestEndingBalance,
       })
       setPendingTransactions(allTransactions)
     } catch {
-      setError('Network error — please try again')
+      setError("Network error — please try again")
     } finally {
       setLoading(false)
       setProgress(null)
@@ -147,23 +166,23 @@ export default function UploadPage() {
     setError(null)
 
     try {
-      const res = await fetch('/api/upload/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/upload/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transactions: pendingTransactions }),
       })
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error ?? 'Confirm failed')
+        setError(data.error ?? "Confirm failed")
         return
       }
 
       setConfirmed(true)
       refreshHistory()
-      setTimeout(() => router.push('/'), 1500)
+      setTimeout(() => router.push("/"), 1500)
     } catch {
-      setError('Network error — please try again')
+      setError("Network error — please try again")
     } finally {
       setConfirming(false)
     }
@@ -184,9 +203,11 @@ export default function UploadPage() {
       {/* Missing API key warning */}
       {missingApiKey && (
         <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
-          <strong>Note:</strong> Set <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> in{' '}
-          <code className="font-mono text-xs">.env.local</code> to enable AI categorization. Without
-          it, all transactions will be labelled &quot;Others&quot;.
+          <strong>Note:</strong> Set{" "}
+          <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> in{" "}
+          <code className="font-mono text-xs">.env.local</code> to enable AI
+          categorization. Without it, all transactions will be labelled
+          &quot;Others&quot;.
         </div>
       )}
 
@@ -203,8 +224,12 @@ export default function UploadPage() {
                   <SelectValue placeholder="Select bank…" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
-                  {BANKS.map(b => (
-                    <SelectItem key={b} value={b} className="uppercase text-xs font-semibold tracking-wide">
+                  {BANKS.map((b) => (
+                    <SelectItem
+                      key={b}
+                      value={b}
+                      className="uppercase text-xs font-semibold tracking-wide"
+                    >
                       {b.toUpperCase()}
                     </SelectItem>
                   ))}
@@ -219,10 +244,14 @@ export default function UploadPage() {
                 accept=".csv,.pdf,text/csv,application/pdf"
                 multiple
                 className="block w-full text-sm text-zinc-400 file:mr-3 file:rounded file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:text-zinc-100 hover:file:bg-zinc-600"
-                onChange={e => setFiles(e.target.files ? Array.from(e.target.files) : [])}
+                onChange={(e) =>
+                  setFiles(e.target.files ? Array.from(e.target.files) : [])
+                }
               />
               {files.length > 1 && (
-                <p className="text-xs text-zinc-500">{files.length} files selected</p>
+                <p className="text-xs text-zinc-500">
+                  {files.length} files selected
+                </p>
               )}
             </div>
 
@@ -237,7 +266,7 @@ export default function UploadPage() {
               disabled={!bank || files.length === 0 || loading}
               onClick={handleUpload}
             >
-              {loading ? (progress ?? 'Processing…') : 'Preview'}
+              {loading ? (progress ?? "Processing…") : "Preview"}
             </Button>
           </CardContent>
         </Card>
@@ -253,15 +282,21 @@ export default function UploadPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg bg-zinc-800 p-3">
                 <p className="text-zinc-400 text-xs mb-1">Total parsed</p>
-                <p className="text-xl font-mono font-semibold">{preview.total}</p>
+                <p className="text-xl font-mono font-semibold">
+                  {preview.total}
+                </p>
               </div>
               <div className="rounded-lg bg-zinc-800 p-3">
                 <p className="text-zinc-400 text-xs mb-1">New</p>
-                <p className="text-xl font-mono font-semibold text-green-400">{preview.newCount}</p>
+                <p className="text-xl font-mono font-semibold text-green-400">
+                  {preview.newCount}
+                </p>
               </div>
               <div className="rounded-lg bg-zinc-800 p-3">
                 <p className="text-zinc-400 text-xs mb-1">Duplicates skipped</p>
-                <p className="text-xl font-mono font-semibold text-zinc-500">{preview.skippedCount}</p>
+                <p className="text-xl font-mono font-semibold text-zinc-500">
+                  {preview.skippedCount}
+                </p>
               </div>
               <div className="rounded-lg bg-zinc-800 p-3">
                 <p className="text-zinc-400 text-xs mb-1">Bank</p>
@@ -272,20 +307,27 @@ export default function UploadPage() {
             </div>
 
             <p className="text-xs text-zinc-500">
-              {files.length > 1 ? `${files.length} files · ` : ''}Date range: {preview.dateFrom} → {preview.dateTo}
+              {files.length > 1 ? `${files.length} files · ` : ""}Date range:{" "}
+              {preview.dateFrom} → {preview.dateTo}
             </p>
 
             {/* Balance extraction confirmation */}
             {preview.endingBalance !== undefined && (
               <div className="rounded-lg bg-green-900/20 border border-green-700/30 p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-green-400 text-sm font-medium">✓ Balance extracted</span>
+                  <span className="text-green-400 text-sm font-medium">
+                    ✓ Balance extracted
+                  </span>
                 </div>
                 <p className="text-xs text-zinc-300">
-                  Ending balance: <span className="font-mono font-semibold text-white">${preview.endingBalance.toLocaleString()}</span>
+                  Ending balance:{" "}
+                  <span className="font-mono font-semibold text-white">
+                    ${preview.endingBalance.toLocaleString()}
+                  </span>
                 </p>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Account balance will be automatically updated after confirmation.
+                  Account balance will be automatically updated after
+                  confirmation.
                 </p>
               </div>
             )}
@@ -297,7 +339,11 @@ export default function UploadPage() {
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1 border-zinc-700" onClick={handleReset}>
+              <Button
+                variant="outline"
+                className="flex-1 border-zinc-700"
+                onClick={handleReset}
+              >
                 Cancel
               </Button>
               <Button
@@ -305,7 +351,9 @@ export default function UploadPage() {
                 disabled={confirming || preview.newCount === 0}
                 onClick={handleConfirm}
               >
-                {confirming ? 'Saving…' : `Import ${preview.newCount} transactions`}
+                {confirming
+                  ? "Saving…"
+                  : `Import ${preview.newCount} transactions`}
               </Button>
             </div>
 
@@ -331,23 +379,27 @@ export default function UploadPage() {
       {/* Upload history per bank */}
       {!preview && !confirmed && uploadHistory.length > 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800">
-          <p className="px-3 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">Upload history</p>
-          {uploadHistory.map(h => (
+          <p className="px-3 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+            Upload history
+          </p>
+          {uploadHistory.map((h) => (
             <div key={h.bank} className="flex items-start gap-3 px-3 py-2.5">
               <div className="w-16 shrink-0 pt-0.5">
-                <span className="text-xs font-semibold text-zinc-300">{BANK_LABELS[h.bank] ?? h.bank.toUpperCase()}</span>
+                <span className="text-xs font-semibold text-zinc-300">
+                  {BANK_LABELS[h.bank] ?? h.bank.toUpperCase()}
+                </span>
               </div>
               {h.months.length === 0 ? (
                 <span className="text-xs text-zinc-600 italic">No uploads</span>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {h.months.map(m => (
+                  {h.months.map((m) => (
                     <span
                       key={m.month}
                       title={`${m.count} transactions · uploaded ${formatUploadedAt(m.uploadedAt)}`}
                       className="inline-flex items-center rounded-full bg-zinc-800 border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 tabular-nums"
                     >
-                      {m.label.replace(' 2026', '').replace(' 2025', '')}
+                      {m.label.replace(" 2026", "").replace(" 2025", "")}
                       <span className="ml-1 text-zinc-500">{m.count}</span>
                     </span>
                   ))}
