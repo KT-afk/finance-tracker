@@ -346,18 +346,27 @@ export default function UploadPage() {
               >
                 Cancel
               </Button>
-              <Button
-                className="flex-1 bg-blue-600 text-white hover:bg-blue-500"
-                disabled={confirming || preview.newCount === 0}
-                onClick={handleConfirm}
-              >
-                {confirming
-                  ? "Saving…"
-                  : `Import ${preview.newCount} transactions`}
-              </Button>
+              {preview.newCount === 0 && preview.endingBalance !== undefined ? (
+                <Button
+                  className="flex-1 bg-green-700 text-white hover:bg-green-600"
+                  onClick={() => router.push("/")}
+                >
+                  Done — balance saved
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 bg-blue-600 text-white hover:bg-blue-500"
+                  disabled={confirming || preview.newCount === 0}
+                  onClick={handleConfirm}
+                >
+                  {confirming
+                    ? "Saving…"
+                    : `Import ${preview.newCount} transactions`}
+                </Button>
+              )}
             </div>
 
-            {preview.newCount === 0 && (
+            {preview.newCount === 0 && preview.endingBalance === undefined && (
               <p className="text-xs text-center text-zinc-500">
                 All transactions already imported — nothing new to add.
               </p>
