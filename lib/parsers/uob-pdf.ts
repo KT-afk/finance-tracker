@@ -1,4 +1,4 @@
-import { RawTransaction } from './types'
+import { RawTransaction, ParseResult } from './types'
 
 const MONTHS: Record<string, string> = {
   JAN: '01', FEB: '02', MAR: '03', APR: '04',
@@ -61,20 +61,41 @@ function resolveDate(ddMmm: string, statementYear: number, statementMonth: numbe
 }
 
 /**
- * Parse UOB credit card PDF text (from pdftotext -layout) into RawTransactions.
+ * Extract ending balance from UOB PDF.
+ * Credit card: TOTAL BALANCE / OUTSTANDING BALANCE line.
+ * Account statement: the last running balance (returned separately).
  */
-export function parseUOBCreditCardPDF(text: string): RawTransaction[] {
+function extractUOBClosingBalance(text: string): number | undefined {
+  const patterns = [
+    /TOTAL\s+BALANCE[^\n]*?([\d,]+\.\d{2})/i,
+    /OUTSTANDING\s+BALANCE[^\n]*?([\d,]+\.\d{2})/i,
+    /Closing\s+Balance[^\n]*?([\d,]+\.\d{2})/i,
+    /BALANCE\s+C\/F[^\n]*?([\d,]+\.\d{2})/i,
+  ]
+  for (const pat of patterns) {
+    const m = text.match(pat)
+    if (m) {
+      const val = parseFloat(m[1].replace(/,/g, ''))
+      if (!isNaN(val) && val >= 0) return val
+    }
+  }
+  return undefined
+}
+
+export function parseUOBCreditCardPDF(text: string): ParseResult {
   const statementYear = extractStatementYear(text)
   const stmtMatch = text.match(/Statement Date\s+\d{1,2}\s+([A-Z]{3})\s+\d{4}/i)
   const statementMonth = stmtMatch ? parseInt(MONTHS[stmtMatch[1].toUpperCase()] ?? '1') : 1
+  const endingBalance = extractUOBClosingBalance(text)
 
   const layoutTransactions = parseLayoutCreditCardText(text, statementYear, statementMonth)
-  if (layoutTransactions.length > 0) return layoutTransactions
+  if (layoutTransactions.length > 0) return { transactions: layoutTransactions, endingBalance }
 
   const stackedTransactions = parseStackedCreditCardText(text, statementYear, statementMonth)
-  if (stackedTransactions.length > 0) return stackedTransactions
+  if (stackedTransactions.length > 0) return { transactions: stackedTransactions, endingBalance }
 
-  return parseAccountStatementText(text)
+  const accountTransactions = parseAccountStatementText(text)
+  return { transactions: accountTransactions, endingBalance }
 }
 
 function parseLayoutCreditCardText(

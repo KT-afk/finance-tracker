@@ -1,4 +1,4 @@
-import { RawTransaction } from './types'
+import { RawTransaction, ParseResult } from './types'
 
 const MONTHS: Record<string, string> = {
   Jan: '01', Feb: '02', Mar: '03', Apr: '04',
@@ -8,7 +8,6 @@ const MONTHS: Record<string, string> = {
 
 const SKIP_LINES = [
   /Previous balance/i,
-  /Closing balance/i,
   /Interest$/i,
   /^\s*$/,
 ]
@@ -42,10 +41,11 @@ function extractStatementInfo(text: string): { year: number; month: string } {
  * - Continuation lines (e.g., FX rate info) are indented
  * - "Main Account" and "Savings" are section headers
  */
-export function parseTrustPDF(text: string): RawTransaction[] {
+export function parseTrustPDF(text: string): ParseResult {
   const { year, month } = extractStatementInfo(text)
   const lines = text.split('\n')
   const results: RawTransaction[] = []
+  let endingBalance: number | undefined
 
   let inTransactionSection = false
   let currentTx: { date: string; description: string; amount: number } | null = null
@@ -87,6 +87,13 @@ export function parseTrustPDF(text: string): RawTransaction[] {
     }
 
     if (!inTransactionSection) continue
+
+    // Capture closing balance before skipping
+    const closingMatch = line.match(/Closing balance\s+([\d,]+\.\d{2})/i)
+    if (closingMatch) {
+      endingBalance = parseFloat(closingMatch[1].replace(/,/g, ''))
+      continue
+    }
 
     // Skip known non-transaction lines
     if (SKIP_LINES.some(p => p.test(line))) continue
@@ -142,5 +149,5 @@ export function parseTrustPDF(text: string): RawTransaction[] {
     })
   }
 
-  return results
+  return { transactions: results, endingBalance }
 }

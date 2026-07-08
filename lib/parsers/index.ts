@@ -45,13 +45,13 @@ export async function parseFile(
     const text = await extractTextFromPDF(buffer)
 
     if (bank === 'uob') {
-      return { transactions: parseUOBCreditCardPDF(text) }
+      return parseUOBCreditCardPDF(text)
     }
     if (bank === 'ocbc') {
       return parseOCBCPDF(text)
     }
     if (bank === 'trust') {
-      return { transactions: parseTrustPDF(text) }
+      return parseTrustPDF(text)
     }
     throw new Error(`PDF upload is not supported for ${bank}. Please upload a CSV file.`)
   }
