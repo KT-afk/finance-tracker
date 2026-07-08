@@ -160,11 +160,11 @@ export default function AccountsPage() {
             </CardContent>
           </Card>
 
-          {/* Per-bank list */}
+          {/* Bank Accounts section */}
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Accounts</CardTitle>
+                <CardTitle className="text-sm text-zinc-400 font-normal">Bank Accounts</CardTitle>
                 {hasBalances && (
                   <button
                     onClick={fetchData}
@@ -179,6 +179,7 @@ export default function AccountsPage() {
             <CardContent className="divide-y divide-zinc-800">
               {BANKS.map(bank => {
                 const entry = balanceMap.get(bank)
+                if (entry?.account_type === 'credit_card') return null
                 const isEditing = editingBank === bank
 
                 if (isEditing) {
@@ -221,26 +222,17 @@ export default function AccountsPage() {
                 return (
                   <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
-                        {entry?.account_type === 'credit_card' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-900">Credit card</span>
-                        )}
-                      </div>
+                      <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
                       {entry ? (
-                        <p className="text-xs text-zinc-500 mt-0.5">
-                          Updated {relativeDate(entry.recorded_at)}
-                        </p>
+                        <p className="text-xs text-zinc-500 mt-0.5">Updated {relativeDate(entry.recorded_at)}</p>
                       ) : (
                         <p className="text-xs text-zinc-600 mt-0.5">No balance set</p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                      {entry ? (
-                        <span className={`font-mono text-sm text-right ${entry.account_type === 'credit_card' ? 'text-amber-400' : 'text-white'}`}>
-                          {formatSGD(entry.balance)}
-                        </span>
-                      ) : null}
+                      {entry && (
+                        <span className="font-mono text-sm text-white text-right">{formatSGD(entry.balance)}</span>
+                      )}
                       <button
                         onClick={() => startEdit(bank, entry?.balance ?? null)}
                         className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-blue-400 hover:border-zinc-700 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100"
@@ -251,8 +243,80 @@ export default function AccountsPage() {
                   </div>
                 )
               })}
+              {savingsBalances.length > 1 && (
+                <div className="flex items-center justify-between py-3">
+                  <span className="text-sm font-medium text-zinc-300">Total</span>
+                  <span className="font-mono text-sm font-semibold text-white">{formatSGD(data!.total)}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* Credit Cards section — only shown if any CC balances exist */}
+          {(data?.totalCC ?? 0) > 0 && (
+            <Card className="bg-zinc-900 border-amber-900/40">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-amber-500/80 font-normal">Credit Cards</CardTitle>
+              </CardHeader>
+              <CardContent className="divide-y divide-zinc-800">
+                {BANKS.map(bank => {
+                  const entry = balanceMap.get(bank)
+                  if (entry?.account_type !== 'credit_card') return null
+                  const isEditing = editingBank === `cc-${bank}`
+
+                  if (isEditing) {
+                    return (
+                      <div key={bank} className="py-3 space-y-2">
+                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                        <div className="grid grid-cols-[auto_1fr] sm:flex gap-2 items-center">
+                          <span className="text-sm text-zinc-400 self-center">$</span>
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            inputMode="decimal"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveBalance(bank)
+                              if (e.key === 'Escape') cancelEdit()
+                            }}
+                            className="flex-1 bg-zinc-800 border border-zinc-600 rounded-md px-3 py-1.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                            disabled={saving}
+                          />
+                          <button onClick={() => saveBalance(bank)} disabled={saving} className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-md transition-colors cursor-pointer">Save</button>
+                          <button onClick={cancelEdit} className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-md transition-colors cursor-pointer">Cancel</button>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]} Card</p>
+                        {entry && (
+                          <p className="text-xs text-zinc-500 mt-0.5">Updated {relativeDate(entry.recorded_at)}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <span className="font-mono text-sm text-amber-400 text-right">{formatSGD(entry!.balance)}</span>
+                        <button
+                          onClick={() => startEdit(`cc-${bank}`, entry?.balance ?? null)}
+                          className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-blue-400 hover:border-zinc-700 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="flex items-center justify-between py-3">
+                  <span className="text-sm text-zinc-400">Outstanding</span>
+                  <span className="font-mono text-sm font-semibold text-amber-400">{formatSGD(data!.totalCC)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Net worth trend chart */}
           {trendFiltered.length > 1 && (
