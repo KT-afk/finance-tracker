@@ -90,8 +90,8 @@ export default function HomePage() {
     ])
       .then(([d, b]) => {
         if (d.error) { setError(d.error); return }
-        // Always set balance data regardless of fallback
-        setBalanceData(b)
+        // Only set balance data if the response is valid (not an error)
+        if (b && !b.error && Array.isArray(b.balances)) setBalanceData(b)
         // Auto-fallback: if current month has no data, silently switch to last month
         if (d.isEmpty && d.isCurrentMonth) {
           const now = new Date()

@@ -54,7 +54,7 @@ export default function AccountsPage() {
       fetch('/api/balances/history').then(r => r.json()),
     ])
       .then(([balData, trendData]) => {
-        setData(balData)
+        if (balData && !balData.error && Array.isArray(balData.balances)) setData(balData)
         setTrend(trendData.trend ?? [])
       })
       .catch(() => {})

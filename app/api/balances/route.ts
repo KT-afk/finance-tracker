@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { balanceHistory, BANKS } from '@/lib/schema'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, sql } from 'drizzle-orm'
 
 export async function GET() {
   try {
-    // For each bank, get the latest savings entry AND the latest credit_card entry separately
-    const balanceRows = await Promise.all(BANKS.flatMap(bank => [
-      db.select().from(balanceHistory)
+    // For each bank, get the latest entry. Use COALESCE so missing account_type column
+    // (before migration runs) defaults to 'savings' and doesn't cause a 500.
+    const balanceRows = await Promise.all(BANKS.map(bank =>
+      db.select({
+        balance: balanceHistory.balance,
+        account_type: sql<string>`COALESCE(${balanceHistory.account_type}, 'savings')`,
+        recorded_at: balanceHistory.recorded_at,
+      })
+        .from(balanceHistory)
         .where(eq(balanceHistory.bank, bank))
         .orderBy(desc(balanceHistory.recorded_at))
         .limit(1)
-        .then(([r]) => r ? { bank, balance: r.balance, account_type: r.account_type, recorded_at: r.recorded_at } : null),
-    ]))
+        .then(([r]) => r ? { bank, balance: r.balance, account_type: r.account_type, recorded_at: r.recorded_at } : null)
+    ))
 
     const balances = balanceRows.filter(Boolean) as { bank: string; balance: number; account_type: string; recorded_at: string }[]
     const savingsBalances = balances.filter(b => b.account_type !== 'credit_card')
