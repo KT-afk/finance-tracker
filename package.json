@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "bash scripts/run-tests.sh",
+    "typecheck": "tsc --noEmit",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -28,7 +29,8 @@
     "hosted:verify-edit": "bash scripts/verify-hosted-edit.sh",
     "hosted:verify-import": "bash scripts/verify-import-persistence.sh",
     "auth:verify-rate-limit": "bash scripts/verify-login-rate-limit.sh",
-    "test:e2e": "bash scripts/run-e2e.sh"
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -53,6 +55,9 @@
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.9",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.4",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",

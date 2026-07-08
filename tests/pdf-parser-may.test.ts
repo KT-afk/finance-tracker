@@ -1,9 +1,9 @@
-import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { existsSync } from 'node:fs'
-import { extractTextFromPDF } from '../lib/parsers/pdf'
-import { parseOCBCPDF } from '../lib/parsers/ocbc-pdf'
-import { parseUOBCreditCardPDF } from '../lib/parsers/uob-pdf'
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
+import { extractTextFromPDF } from "../lib/parsers/pdf"
+import { parseOCBCPDF } from "../lib/parsers/ocbc-pdf"
+import { parseUOBCreditCardPDF } from "../lib/parsers/uob-pdf"
 
 const exactOcbcPath = process.env.OCBC_MAY_PDF
 const exactUobPath = process.env.UOB_MAY_PDF
@@ -85,80 +85,91 @@ End of Transaction Details
 `
 
 // New 2026 format
-const ocbcTransactions = parseOCBCPDF(ocbcText)
-assert.equal(ocbcTransactions.length, 2, `Expected 2 transactions from new format, got ${ocbcTransactions.length}`)
+const { transactions: ocbcTransactions } = parseOCBCPDF(ocbcText)
+assert.equal(
+  ocbcTransactions.length,
+  2,
+  `Expected 2 transactions from new format, got ${ocbcTransactions.length}`
+)
 assert.deepEqual(
-  ocbcTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  ocbcTransactions.map((t) => [t.date, t.description, t.amount, t.bank]),
   [
-    ['2026-05-01', 'PAYNOW TRANSFER TO SHOP', -12.3, 'ocbc'],
-    ['2026-05-12', 'BONUS INTEREST', 1000, 'ocbc'],
+    ["2026-05-01", "PAYNOW TRANSFER TO SHOP", -12.3, "ocbc"],
+    ["2026-05-12", "BONUS INTEREST", 1000, "ocbc"],
   ]
 )
 
 // Old pre-2026 format (amounts on same line) — backward compat
-const ocbcOldTransactions = parseOCBCPDF(ocbcTextOldFormat)
-assert.equal(ocbcOldTransactions.length, 2, `Expected 2 transactions from old format, got ${ocbcOldTransactions.length}`)
+const { transactions: ocbcOldTransactions } = parseOCBCPDF(ocbcTextOldFormat)
+assert.equal(
+  ocbcOldTransactions.length,
+  2,
+  `Expected 2 transactions from old format, got ${ocbcOldTransactions.length}`
+)
 assert.deepEqual(
-  ocbcOldTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  ocbcOldTransactions.map((t) => [t.date, t.description, t.amount, t.bank]),
   [
-    ['2026-05-01', 'PAYNOW TRANSFER TO SHOP', -12.3, 'ocbc'],
-    ['2026-05-12', 'SALARY CREDIT', 1000, 'ocbc'],
+    ["2026-05-01", "PAYNOW TRANSFER TO SHOP", -12.3, "ocbc"],
+    ["2026-05-12", "SALARY CREDIT", 1000, "ocbc"],
   ]
 )
 
-const uobTransactions = parseUOBCreditCardPDF(uobText)
+const { transactions: uobTransactions } = parseUOBCreditCardPDF(uobText)
 assert.equal(uobTransactions.length, 2)
 assert.deepEqual(
-  uobTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  uobTransactions.map((t) => [t.date, t.description, t.amount, t.bank]),
   [
-    ['2026-05-01', 'COFFEE SHOP', -4.5, 'uob'],
-    ['2026-05-10', 'CASHBACK', 2, 'uob'],
+    ["2026-05-01", "COFFEE SHOP", -4.5, "uob"],
+    ["2026-05-10", "CASHBACK", 2, "uob"],
   ]
 )
 
-const uobPdfParseTransactions = parseUOBCreditCardPDF(uobPdfParseCreditCardText)
+const { transactions: uobPdfParseTransactions } = parseUOBCreditCardPDF(
+  uobPdfParseCreditCardText
+)
 assert.equal(uobPdfParseTransactions.length, 3)
 assert.deepEqual(
-  uobPdfParseTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  uobPdfParseTransactions.map((t) => [t.date, t.description, t.amount, t.bank]),
   [
-    ['2026-01-26', 'YA KUN KAYA TOAST SINGAPORE', -7.5, 'uob'],
-    ['2026-01-27', 'GITHUB, INC. GITHUB.COM', -39.66, 'uob'],
-    ['2026-02-04', 'PAYMT THRU E-BANK/HOMEB/CYBERB (EP34)', 1662.29, 'uob'],
+    ["2026-01-26", "YA KUN KAYA TOAST SINGAPORE", -7.5, "uob"],
+    ["2026-01-27", "GITHUB, INC. GITHUB.COM", -39.66, "uob"],
+    ["2026-02-04", "PAYMT THRU E-BANK/HOMEB/CYBERB (EP34)", 1662.29, "uob"],
   ]
 )
 
-const uobAccountTransactions = parseUOBCreditCardPDF(uobAccountPdfText)
+const { transactions: uobAccountTransactions } =
+  parseUOBCreditCardPDF(uobAccountPdfText)
 assert.equal(uobAccountTransactions.length, 3)
 assert.deepEqual(
-  uobAccountTransactions.map(t => [t.date, t.description, t.amount, t.bank]),
+  uobAccountTransactions.map((t) => [t.date, t.description, t.amount, t.bank]),
   [
-    ['2026-02-04', 'PAYNOW-FAST PAYNOW OTHR ONG KONG TAT', 1662.7, 'uob'],
-    ['2026-02-04', 'Bill Payment mBK-UOB Cards', -1662.29, 'uob'],
-    ['2026-02-28', 'Service Charge', -5, 'uob'],
+    ["2026-02-04", "PAYNOW-FAST PAYNOW OTHR ONG KONG TAT", 1662.7, "uob"],
+    ["2026-02-04", "Bill Payment mBK-UOB Cards", -1662.29, "uob"],
+    ["2026-02-28", "Service Charge", -5, "uob"],
   ]
 )
 
 async function main() {
   if (exactOcbcPath && existsSync(exactOcbcPath)) {
     const exactText = await extractTextFromPDF(readFileSync(exactOcbcPath))
-    const exactTransactions = parseOCBCPDF(exactText)
+    const { transactions: exactTransactions } = parseOCBCPDF(exactText)
     assert.equal(exactTransactions.length, 20)
-    assert.equal(exactTransactions[0].date, '2026-05-01')
-    assert.equal(exactTransactions.at(-1)?.date, '2026-05-31')
+    assert.equal(exactTransactions[0].date, "2026-05-01")
+    assert.equal(exactTransactions.at(-1)?.date, "2026-05-31")
   }
 
   if (exactUobPath && existsSync(exactUobPath)) {
     const exactText = await extractTextFromPDF(readFileSync(exactUobPath))
-    const exactTransactions = parseUOBCreditCardPDF(exactText)
+    const { transactions: exactTransactions } = parseUOBCreditCardPDF(exactText)
     assert.equal(exactTransactions.length, 45)
-    assert.equal(exactTransactions[0].date, '2026-04-26')
-    assert.equal(exactTransactions.at(-1)?.date, '2026-05-23')
+    assert.equal(exactTransactions[0].date, "2026-04-26")
+    assert.equal(exactTransactions.at(-1)?.date, "2026-05-23")
   }
 
-  console.log('May PDF parser test passed')
+  console.log("May PDF parser test passed")
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error)
   process.exit(1)
 })
