@@ -159,6 +159,7 @@ const CC_PAYMENT_PATTERNS = [
 
 const INCOMING_TRANSFER_PATTERN = /\b(?:PAYMENT\/)?TRANSFER\b.*\bfrom\b/i
 const RENT_PAYMENT_PATTERN = /\b(?:rent|rental|lease)\b/i
+const SALARY_INCOME_PATTERN = /\b(?:salary|payroll|wages)\b/i
 const SELF_TRANSFER_NAMES = (
   process.env.FINANCE_SELF_TRANSFER_NAMES ?? "ONG KONG TAT"
 )
@@ -191,6 +192,8 @@ export function getKnownCategory(
     return "Transfer"
   }
 
+  if (amount > 0 && SALARY_INCOME_PATTERN.test(description)) return "Income"
+
   if (INCOMING_TRANSFER_PATTERN.test(description)) {
     return amount > 0 ? "Income" : "Transfer"
   }
@@ -211,6 +214,11 @@ export async function categorize(
   description: string,
   options: CategorizeOptions = {}
 ): Promise<Category> {
+  if (options.amount !== undefined) {
+    const knownCategory = getKnownCategory(description, options.amount)
+    if (knownCategory) return knownCategory
+  }
+
   // Parse PayNow/FAST/NETS/IBG description into structured fields
   const { memo, recipient, method } = parsePayNowDescription(description)
 
@@ -226,11 +234,6 @@ export async function categorize(
     ) {
       return ruleCategory as Category
     }
-  }
-
-  if (options.amount !== undefined) {
-    const knownCategory = getKnownCategory(description, options.amount)
-    if (knownCategory) return knownCategory
   }
 
   // Step 2: Claude Haiku fallback with structured prompt

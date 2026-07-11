@@ -22,6 +22,15 @@ async function main() {
     )
 
     assert.equal(
+      getKnownCategory(
+        "IBG GIRO SALA Wise Asia-Pacific P Wise SG Salary",
+        6733.55
+      ),
+      "Income",
+      "salary credits must override generic merchant rules"
+    )
+
+    assert.equal(
       await categorize(
         "PAYMENT/TRANSFER via PayNow-TRBU from ONG KONG TAT OTHR 20260607TRBUSGSGBRT318506",
         { amount: 3000 }

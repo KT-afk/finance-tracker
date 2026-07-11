@@ -58,10 +58,10 @@ export async function GET(req: NextRequest) {
         transaction.description,
         transaction.amount
       )
+      const effectiveCategory = knownCategory ?? transaction.category
       return (
         transaction.amount < 0 &&
-        !EXCLUDED_FROM_SPEND.includes(transaction.category) &&
-        !EXCLUDED_FROM_SPEND.includes(knownCategory ?? "")
+        !EXCLUDED_FROM_SPEND.includes(effectiveCategory)
       )
     }
     const isIncomeTransaction = (transaction: {
@@ -73,10 +73,10 @@ export async function GET(req: NextRequest) {
         transaction.description,
         transaction.amount
       )
+      const effectiveCategory = knownCategory ?? transaction.category
       return (
         transaction.amount > 0 &&
-        !["Transfer", "Credit Card Payment"].includes(transaction.category) &&
-        !["Transfer", "Credit Card Payment"].includes(knownCategory ?? "")
+        !["Transfer", "Credit Card Payment"].includes(effectiveCategory)
       )
     }
 
@@ -93,8 +93,9 @@ export async function GET(req: NextRequest) {
     const categoryTotals: Record<string, number> = {}
     for (const t of monthTxns) {
       if (isSpendTransaction(t)) {
-        categoryTotals[t.category] =
-          (categoryTotals[t.category] ?? 0) + Math.abs(t.amount)
+        const category = getKnownCategory(t.description, t.amount) ?? t.category
+        categoryTotals[category] =
+          (categoryTotals[category] ?? 0) + Math.abs(t.amount)
       }
     }
 

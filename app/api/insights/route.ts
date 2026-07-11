@@ -54,27 +54,22 @@ export async function GET(req: NextRequest) {
     for (const t of allTxns) {
       const month = t.date.slice(0, 7) // YYYY-MM
       const knownCategory = getKnownCategory(t.description, t.amount)
+      const effectiveCategory = knownCategory ?? t.category
       if (t.amount >= 0) {
         // Transfers and card statement credits are not earned income.
-        if (
-          ["Transfer", "Credit Card Payment"].includes(t.category) ||
-          ["Transfer", "Credit Card Payment"].includes(knownCategory ?? "")
-        ) {
+        if (["Transfer", "Credit Card Payment"].includes(effectiveCategory)) {
           continue
         }
         monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
         continue
       }
       // expense — skip non-spend categories
-      if (
-        EXCLUDED_FROM_SPEND.includes(t.category) ||
-        EXCLUDED_FROM_SPEND.includes(knownCategory ?? "")
-      ) {
+      if (EXCLUDED_FROM_SPEND.includes(effectiveCategory)) {
         continue
       }
       if (!monthlyData[month]) monthlyData[month] = {}
-      monthlyData[month][t.category] =
-        (monthlyData[month][t.category] ?? 0) + Math.abs(t.amount)
+      monthlyData[month][effectiveCategory] =
+        (monthlyData[month][effectiveCategory] ?? 0) + Math.abs(t.amount)
       monthlySpend[month] = (monthlySpend[month] ?? 0) + Math.abs(t.amount)
     }
 
@@ -153,9 +148,8 @@ export async function GET(req: NextRequest) {
       .filter(
         (t) =>
           t.amount < 0 &&
-          !EXCLUDED_FROM_SPEND.includes(t.category) &&
           !EXCLUDED_FROM_SPEND.includes(
-            getKnownCategory(t.description, t.amount) ?? ""
+            getKnownCategory(t.description, t.amount) ?? t.category
           )
       )
       .slice(0, 5)
