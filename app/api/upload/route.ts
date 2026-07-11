@@ -3,8 +3,9 @@ import { parseFile } from "@/lib/parsers"
 import { normalize } from "@/lib/parsers/normalizer"
 import { categorize } from "@/lib/categorize"
 import { db } from "@/lib/db"
-import { transactions, balanceHistory } from "@/lib/schema"
+import { transactions } from "@/lib/schema"
 import { Bank, BANKS } from "@/lib/schema"
+import { saveBalanceHistory } from "@/lib/balance-history"
 import { inArray } from "drizzle-orm"
 
 export async function POST(req: NextRequest) {
@@ -87,11 +88,11 @@ export async function POST(req: NextRequest) {
     let savedBalance = false
     if (endingBalance !== undefined) {
       try {
-        await db.insert(balanceHistory).values({
+        await saveBalanceHistory({
           bank: bank as Bank,
           balance: endingBalance,
-          account_type: accountType,
-          recorded_at: new Date().toISOString(),
+          accountType,
+          recordedAt: new Date().toISOString(),
         })
         savedBalance = true
       } catch (balanceError) {

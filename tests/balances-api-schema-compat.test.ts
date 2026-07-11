@@ -42,7 +42,7 @@ async function main() {
       delete process.env.DATABASE_AUTH_TOKEN
 
       // Force fresh module imports so db picks up the env var
-      const { GET } = await import("../app/api/balances/route")
+      const { GET, POST } = await import("../app/api/balances/route")
 
       const res = await GET()
       const body = await res.json()
@@ -67,6 +67,19 @@ async function main() {
       assert.equal(body.balances.length, 1)
       assert.equal(body.balances[0].bank, "ocbc")
       assert.equal(body.balances[0].account_type, "savings")
+
+      const saveRes = await POST(
+        new Request("http://localhost/api/balances", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bank: "dbs", balance: 500 }),
+        }) as never
+      )
+      assert.equal(saveRes.status, 200, "POST must support the old schema")
+
+      const savedBody = await (await GET()).json()
+      assert.equal(savedBody.total, 12845.67)
+      assert.equal(savedBody.balances.length, 2)
     })
 
     console.log("balances-api-schema-compat test passed")

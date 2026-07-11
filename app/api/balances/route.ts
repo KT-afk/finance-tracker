@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { balanceHistory, BANKS } from "@/lib/schema"
+import { saveBalanceHistory } from "@/lib/balance-history"
 import { eq, desc, sql } from "drizzle-orm"
 
 export async function GET() {
@@ -97,10 +98,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid balance" }, { status: 400 })
     }
 
-    await db.insert(balanceHistory).values({
+    await saveBalanceHistory({
       bank: bank as (typeof BANKS)[number],
       balance,
-      recorded_at: new Date().toISOString(),
+      accountType: "savings",
+      recordedAt: new Date().toISOString(),
     })
 
     return NextResponse.json({ success: true })
