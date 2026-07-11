@@ -171,6 +171,11 @@ function isSelfTransfer(description: string): boolean {
   return SELF_TRANSFER_NAMES.some((name) => lower.includes(`from ${name}`))
 }
 
+function isAccountHolderLabel(description: string): boolean {
+  const normalized = description.trim().toLowerCase()
+  return SELF_TRANSFER_NAMES.includes(normalized)
+}
+
 export function getKnownCategory(
   description: string,
   amount: number
@@ -182,7 +187,9 @@ export function getKnownCategory(
     return "Credit Card Payment"
   }
 
-  if (isSelfTransfer(description)) return "Transfer"
+  if (isSelfTransfer(description) || isAccountHolderLabel(description)) {
+    return "Transfer"
+  }
 
   if (INCOMING_TRANSFER_PATTERN.test(description)) {
     return amount > 0 ? "Income" : "Transfer"

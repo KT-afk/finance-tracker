@@ -16,6 +16,12 @@ async function main() {
     )
 
     assert.equal(
+      getKnownCategory("Ong KONG TAT", -4605),
+      "Transfer",
+      "account-holder metadata must not be counted as spending"
+    )
+
+    assert.equal(
       await categorize(
         "PAYMENT/TRANSFER via PayNow-TRBU from ONG KONG TAT OTHR 20260607TRBUSGSGBRT318506",
         { amount: 3000 }
