@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { transactions, EXCLUDED_FROM_SPEND } from '@/lib/schema'
-import { and, asc, eq, gte, lte } from 'drizzle-orm'
+import { NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/db"
+import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
+import { and, asc, eq, gte, lte } from "drizzle-orm"
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
@@ -11,11 +11,15 @@ function roundPercent(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-function getMonthRange(monthsBack: number): { start: string; end: string; label: string } {
+function getMonthRange(monthsBack: number): {
+  start: string
+  end: string
+  label: string
+} {
   const now = new Date()
   const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1)
   const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, "0")
   return {
     start: `${year}-${month}-01`,
     end: `${year}-${month}-31`,
@@ -26,11 +30,11 @@ function getMonthRange(monthsBack: number): { start: string; end: string; label:
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const bank = searchParams.get('bank')
+    const bank = searchParams.get("bank")
 
     const bankCondition =
-      bank && bank !== 'all'
-        ? [eq(transactions.bank, bank as 'ocbc' | 'dbs' | 'uob' | 'trust')]
+      bank && bank !== "all"
+        ? [eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")]
         : []
 
     // Fetch last 6 months of data
@@ -38,12 +42,7 @@ export async function GET(req: NextRequest) {
     const allTxns = await db
       .select()
       .from(transactions)
-      .where(
-        and(
-          gte(transactions.date, sixMonthsAgo.start),
-          ...bankCondition
-        )
-      )
+      .where(and(gte(transactions.date, sixMonthsAgo.start), ...bankCondition))
 
     // Group by month and category (expenses only for trend/mom)
     const monthlyData: Record<string, Record<string, number>> = {}
@@ -55,7 +54,7 @@ export async function GET(req: NextRequest) {
       const month = t.date.slice(0, 7) // YYYY-MM
       if (t.amount >= 0) {
         // Skip CC payment credits (card statement inbound) — not real income
-        if (t.category === 'Credit Card Payment') continue
+        if (t.category === "Credit Card Payment") continue
         monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
         continue
       }
@@ -68,7 +67,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Build last 6 months labels
-    const monthLabels = Array.from({ length: 6 }, (_, i) => getMonthRange(5 - i).label)
+    const monthLabels = Array.from(
+      { length: 6 },
+      (_, i) => getMonthRange(5 - i).label
+    )
 
     // Month-over-month (current vs previous)
     const currentMonth = monthLabels[5]
@@ -82,18 +84,19 @@ export async function GET(req: NextRequest) {
     ])
 
     const momComparison = Array.from(allCategories)
-      .map(cat => {
+      .map((cat) => {
         const current = roundMoney(currentData[cat] ?? 0)
         const previous = roundMoney(prevData[cat] ?? 0)
         const delta = roundMoney(current - previous)
-        const deltaPct = previous > 0 ? roundPercent((delta / previous) * 100) : null
+        const deltaPct =
+          previous > 0 ? roundPercent((delta / previous) * 100) : null
         return { category: cat, current, previous, delta, deltaPct }
       })
-      .filter(r => r.current > 0 || r.previous > 0)
+      .filter((r) => r.current > 0 || r.previous > 0)
       .sort((a, b) => b.current - a.current)
 
     // 6-month trend — array of { month, [category]: amount }
-    const trendData = monthLabels.map(m => {
+    const trendData = monthLabels.map((m) => {
       const row: Record<string, string | number> = { month: m }
       const cats = monthlyData[m] ?? {}
       for (const [cat, amt] of Object.entries(cats)) {
@@ -103,9 +106,12 @@ export async function GET(req: NextRequest) {
     })
 
     // Monthly P&L — newest first (index 5 = current month)
-    const monthlyPnL = [...monthLabels].reverse().map(month => {
-      const [y, m] = month.split('-').map(Number)
-      const label = new Date(y, m - 1, 1).toLocaleString('en-SG', { month: 'short', year: '2-digit' })
+    const monthlyPnL = [...monthLabels].reverse().map((month) => {
+      const [y, m] = month.split("-").map(Number)
+      const label = new Date(y, m - 1, 1).toLocaleString("en-SG", {
+        month: "short",
+        year: "2-digit",
+      })
       const income = roundMoney(monthlyIncome[month] ?? 0)
       const spend = roundMoney(monthlySpend[month] ?? 0)
       const hasIncome = income > 0
@@ -119,19 +125,20 @@ export async function GET(req: NextRequest) {
     })
 
     // Top 5 biggest transactions this month
-    const biggestTxns = (await db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          gte(transactions.date, getMonthRange(0).start),
-          lte(transactions.date, getMonthRange(0).end),
-          ...bankCondition
+    const biggestTxns = (
+      await db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            gte(transactions.date, getMonthRange(0).start),
+            lte(transactions.date, getMonthRange(0).end),
+            ...bankCondition
+          )
         )
-      )
-      .orderBy(asc(transactions.amount))
+        .orderBy(asc(transactions.amount))
     )
-      .filter(t => t.amount < 0) // expenses only
+      .filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPEND.includes(t.category))
       .slice(0, 5)
 
     return NextResponse.json({
@@ -143,7 +150,7 @@ export async function GET(req: NextRequest) {
       currentMonth,
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
+    const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

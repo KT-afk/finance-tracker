@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { transactions } from '@/lib/schema'
-import { and, eq, ne } from 'drizzle-orm'
-import { saveRule } from '@/lib/rules'
-import { CATEGORIES } from '@/lib/schema'
-import { requireAuth } from '@/lib/auth-middleware'
+import { NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/db"
+import { transactions } from "@/lib/schema"
+import { and, eq, ne } from "drizzle-orm"
+import { saveRule } from "@/lib/rules"
+import { CATEGORIES } from "@/lib/schema"
+import { requireAuth } from "@/lib/auth-middleware"
 
 export async function PATCH(
   req: NextRequest,
@@ -20,7 +20,7 @@ export async function PATCH(
     const { category } = body
 
     if (!category || !(CATEGORIES as readonly string[]).includes(category)) {
-      return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 })
     }
 
     // Get the transaction to extract description for rule saving
@@ -31,22 +31,31 @@ export async function PATCH(
       .limit(1)
 
     if (!existing) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 }
+      )
     }
 
     // Update category and mark as corrected
-    await db.update(transactions)
+    await db
+      .update(transactions)
       .set({ category, is_corrected: true })
       .where(eq(transactions.id, id))
 
     // Save a keyword rule so future uploads get the right category automatically
-    const keyword = existing.description
-      .toLowerCase()
-      .replace(/^[a-z0-9]{6,}\s+/g, '')
-      .trim()
-      .split(/\s+/)
-      .slice(0, 3)
-      .join(' ')
+    const transferSender = existing.description.match(
+      /\bfrom\s+(.+?)(?:\s+OTHR\b|\s+\d{8,}|$)/i
+    )
+    const keyword = transferSender
+      ? `from ${transferSender[1].toLowerCase().trim()}`
+      : existing.description
+          .toLowerCase()
+          .replace(/^[a-z0-9]{6,}\s+/g, "")
+          .trim()
+          .split(/\s+/)
+          .slice(0, 3)
+          .join(" ")
 
     if (keyword.length >= 3) {
       await saveRule(keyword, category)
@@ -65,7 +74,8 @@ export async function PATCH(
       )
 
     if (siblings.length > 0) {
-      await db.update(transactions)
+      await db
+        .update(transactions)
         .set({ category, is_corrected: true })
         .where(
           and(
@@ -76,9 +86,12 @@ export async function PATCH(
         )
     }
 
-    return NextResponse.json({ success: true, siblingsUpdated: siblings.length })
+    return NextResponse.json({
+      success: true,
+      siblingsUpdated: siblings.length,
+    })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
+    const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
@@ -100,12 +113,15 @@ export async function DELETE(
       .limit(1)
 
     if (!existing) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 }
+      )
     }
 
-    if (!existing.hash.startsWith('manual:')) {
+    if (!existing.hash.startsWith("manual:")) {
       return NextResponse.json(
-        { error: 'Only manually added transactions can be deleted' },
+        { error: "Only manually added transactions can be deleted" },
         { status: 403 }
       )
     }
@@ -113,7 +129,7 @@ export async function DELETE(
     await db.delete(transactions).where(eq(transactions.id, id))
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
+    const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

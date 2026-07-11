@@ -1,13 +1,48 @@
-import assert from 'node:assert/strict'
-import { categorize } from '../lib/categorize'
+import assert from "node:assert/strict"
+import { categorize } from "../lib/categorize"
 
 async function main() {
   const previousKey = process.env.ANTHROPIC_API_KEY
   delete process.env.ANTHROPIC_API_KEY
 
   try {
+    assert.equal(
+      await categorize(
+        "PAYMENT/TRANSFER via PayNow-TRBU from ONG KONG TAT OTHR 20260607TRBUSGSGBRT318506",
+        { amount: 3000 }
+      ),
+      "Transfer",
+      "self-transfers must not be categorized as income or spend"
+    )
+
+    assert.equal(
+      await categorize(
+        "PAYMENT/TRANSFER via PayNow-DBSS from YOON THIRI OTHR Remainder of mar/apr",
+        { amount: 500 }
+      ),
+      "Income",
+      "incoming payments from other people must not be categorized as spend"
+    )
+
+    assert.equal(
+      await categorize("FAST PAYMENT via PayNow-Mobile to LANDLORD OTHR-rent", {
+        amount: -2400,
+      }),
+      "Housing",
+      "rent payments must be categorized as Housing"
+    )
+
+    assert.equal(
+      await categorize(
+        "COLLECTION/TRANSFER OTHR Interactive Br U17113938.839959",
+        { amount: -500 }
+      ),
+      "Credit Card Payment",
+      "credit card repayments must be excluded from spend"
+    )
+
     await assert.rejects(
-      () => categorize('NETS QR PURCHASE PU TIAN', { requireAi: true }),
+      () => categorize("NETS QR PURCHASE PU TIAN", { requireAi: true }),
       /ANTHROPIC_API_KEY is not configured/
     )
   } finally {
@@ -18,10 +53,10 @@ async function main() {
     }
   }
 
-  console.log('strict categorization test passed')
+  console.log("strict categorization test passed")
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error)
   process.exit(1)
 })
