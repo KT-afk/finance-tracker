@@ -55,8 +55,13 @@ export async function GET(req: NextRequest) {
       const month = t.date.slice(0, 7) // YYYY-MM
       const knownCategory = getKnownCategory(t.description, t.amount)
       if (t.amount >= 0) {
-        // Skip CC payment credits (card statement inbound) — not real income
-        if (t.category === "Credit Card Payment") continue
+        // Transfers and card statement credits are not earned income.
+        if (
+          ["Transfer", "Credit Card Payment"].includes(t.category) ||
+          ["Transfer", "Credit Card Payment"].includes(knownCategory ?? "")
+        ) {
+          continue
+        }
         monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
         continue
       }

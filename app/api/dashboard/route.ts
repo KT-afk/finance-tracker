@@ -64,11 +64,30 @@ export async function GET(req: NextRequest) {
         !EXCLUDED_FROM_SPEND.includes(knownCategory ?? "")
       )
     }
+    const isIncomeTransaction = (transaction: {
+      amount: number
+      category: string
+      description: string
+    }) => {
+      const knownCategory = getKnownCategory(
+        transaction.description,
+        transaction.amount
+      )
+      return (
+        transaction.amount > 0 &&
+        !["Transfer", "Credit Card Payment"].includes(transaction.category) &&
+        !["Transfer", "Credit Card Payment"].includes(knownCategory ?? "")
+      )
+    }
 
     // Total spend (sum of negative amounts, excluding transfers and CC payments)
     const totalSpend = monthTxns
       .filter(isSpendTransaction)
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    const totalIncome = monthTxns
+      .filter(isIncomeTransaction)
+      .reduce((sum, t) => sum + t.amount, 0)
+    const netCashFlow = totalIncome - totalSpend
 
     // Top 5 categories by total spend
     const categoryTotals: Record<string, number> = {}
@@ -149,6 +168,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       totalSpend,
+      totalIncome,
+      netCashFlow,
       daysElapsed,
       month: `${year}-${month}`,
       isEmpty,

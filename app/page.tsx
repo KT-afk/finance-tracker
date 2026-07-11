@@ -30,6 +30,8 @@ interface Transaction {
 
 interface DashboardData {
   totalSpend: number
+  totalIncome: number
+  netCashFlow: number
   daysElapsed: number
   month: string
   isEmpty: boolean
@@ -262,7 +264,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Primary metrics row */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {/* Balance */}
                 <Link href="/accounts">
                   <div className="text-center p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors cursor-pointer">
@@ -281,6 +283,14 @@ export default function HomePage() {
                   </div>
                 </Link>
 
+                {/* Income */}
+                <div className="text-center p-3 rounded-lg bg-zinc-800/50">
+                  <p className="text-xs text-zinc-400 mb-1">Income</p>
+                  <p className="text-lg font-mono font-semibold text-green-400">
+                    {formatSGD(data.totalIncome)}
+                  </p>
+                </div>
+
                 {/* Spend */}
                 <div className="text-center p-3 rounded-lg bg-zinc-800/50">
                   <p className="text-xs text-zinc-400 mb-1">Spent</p>
@@ -289,13 +299,14 @@ export default function HomePage() {
                   </p>
                 </div>
 
-                {/* Savings Rate */}
+                {/* Net cash flow */}
                 <div className="text-center p-3 rounded-lg bg-zinc-800/50">
-                  <p className="text-xs text-zinc-400 mb-1">Saved</p>
-                  <p className="text-lg font-mono font-semibold text-green-400">
-                    {data.momDelta !== null && data.momDelta < 0
-                      ? `${Math.abs(data.momDeltaPct || 0).toFixed(0)}%`
-                      : "0%"}
+                  <p className="text-xs text-zinc-400 mb-1">Net</p>
+                  <p
+                    className={`text-lg font-mono font-semibold ${data.netCashFlow >= 0 ? "text-green-400" : "text-red-400"}`}
+                  >
+                    {data.netCashFlow >= 0 ? "+" : "-"}
+                    {formatSGD(Math.abs(data.netCashFlow))}
                   </p>
                 </div>
               </div>
