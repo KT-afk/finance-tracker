@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
+import { getKnownCategory } from "@/lib/categorize"
 import { and, asc, eq, gte, lte } from "drizzle-orm"
 
 function roundMoney(value: number): number {
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
 
     for (const t of allTxns) {
       const month = t.date.slice(0, 7) // YYYY-MM
+      const knownCategory = getKnownCategory(t.description, t.amount)
       if (t.amount >= 0) {
         // Skip CC payment credits (card statement inbound) — not real income
         if (t.category === "Credit Card Payment") continue
@@ -59,7 +61,12 @@ export async function GET(req: NextRequest) {
         continue
       }
       // expense — skip non-spend categories
-      if (EXCLUDED_FROM_SPEND.includes(t.category)) continue
+      if (
+        EXCLUDED_FROM_SPEND.includes(t.category) ||
+        EXCLUDED_FROM_SPEND.includes(knownCategory ?? "")
+      ) {
+        continue
+      }
       if (!monthlyData[month]) monthlyData[month] = {}
       monthlyData[month][t.category] =
         (monthlyData[month][t.category] ?? 0) + Math.abs(t.amount)
@@ -138,7 +145,14 @@ export async function GET(req: NextRequest) {
         )
         .orderBy(asc(transactions.amount))
     )
-      .filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPEND.includes(t.category))
+      .filter(
+        (t) =>
+          t.amount < 0 &&
+          !EXCLUDED_FROM_SPEND.includes(t.category) &&
+          !EXCLUDED_FROM_SPEND.includes(
+            getKnownCategory(t.description, t.amount) ?? ""
+          )
+      )
       .slice(0, 5)
 
     return NextResponse.json({

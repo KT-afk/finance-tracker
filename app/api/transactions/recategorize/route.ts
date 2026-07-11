@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
-import { eq, and, inArray } from "drizzle-orm"
-import { categorize } from "@/lib/categorize"
+import { eq } from "drizzle-orm"
+import { categorize, getKnownCategory } from "@/lib/categorize"
 import { requireAuth, createRateLimit } from "@/lib/auth-middleware"
 
 // Rate limiting: 10 requests per minute per client
@@ -22,15 +22,16 @@ export async function POST(req: Request) {
   if (rateLimitError) return rateLimitError
 
   try {
-    const uncategorized = await db
+    const uneditedTransactions = await db
       .select()
       .from(transactions)
-      .where(
-        and(
-          inArray(transactions.category, ["Transfer", "Others"]),
-          eq(transactions.is_corrected, false)
-        )
-      )
+      .where(eq(transactions.is_corrected, false))
+
+    const uncategorized = uneditedTransactions.filter(
+      (transaction) =>
+        getKnownCategory(transaction.description, transaction.amount) !==
+          null || ["Transfer", "Others"].includes(transaction.category)
+    )
 
     const total = uncategorized.length
 
@@ -54,10 +55,12 @@ export async function POST(req: Request) {
         try {
           for (let i = 0; i < uncategorized.length; i++) {
             const tx = uncategorized[i]
-            const category = await categorize(tx.description, {
-              requireAi: true,
-              amount: tx.amount,
-            })
+            const category =
+              getKnownCategory(tx.description, tx.amount) ??
+              (await categorize(tx.description, {
+                requireAi: true,
+                amount: tx.amount,
+              }))
 
             if (category !== tx.category) {
               await db

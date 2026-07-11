@@ -1,11 +1,20 @@
 import assert from "node:assert/strict"
-import { categorize } from "../lib/categorize"
+import { categorize, getKnownCategory } from "../lib/categorize"
 
 async function main() {
   const previousKey = process.env.ANTHROPIC_API_KEY
   delete process.env.ANTHROPIC_API_KEY
 
   try {
+    assert.equal(
+      getKnownCategory(
+        "PAYMENT/TRANSFER via PayNow-TRBU from ONG KONG TAT OTHR 20260607TRBUSGSGBRT318506",
+        -3000
+      ),
+      "Transfer",
+      "self-transfers must be excluded even when an imported amount has the wrong sign"
+    )
+
     assert.equal(
       await categorize(
         "PAYMENT/TRANSFER via PayNow-TRBU from ONG KONG TAT OTHR 20260607TRBUSGSGBRT318506",

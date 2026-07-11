@@ -171,6 +171,28 @@ function isSelfTransfer(description: string): boolean {
   return SELF_TRANSFER_NAMES.some((name) => lower.includes(`from ${name}`))
 }
 
+export function getKnownCategory(
+  description: string,
+  amount: number
+): Category | null {
+  if (
+    amount < 0 &&
+    CC_PAYMENT_PATTERNS.some((pattern) => pattern.test(description))
+  ) {
+    return "Credit Card Payment"
+  }
+
+  if (isSelfTransfer(description)) return "Transfer"
+
+  if (INCOMING_TRANSFER_PATTERN.test(description)) {
+    return amount > 0 ? "Income" : "Transfer"
+  }
+
+  if (amount < 0 && RENT_PAYMENT_PATTERN.test(description)) return "Housing"
+
+  return null
+}
+
 /**
  * Categorize a transaction description using:
  * 1. Deterministic CC payment pattern match (no DB/AI needed)
@@ -182,15 +204,6 @@ export async function categorize(
   description: string,
   options: CategorizeOptions = {}
 ): Promise<Category> {
-  // Step 0: Deterministic credit card payment detection — no AI needed
-  if (
-    options.amount !== undefined &&
-    options.amount < 0 &&
-    CC_PAYMENT_PATTERNS.some((p) => p.test(description))
-  ) {
-    return "Credit Card Payment"
-  }
-
   // Parse PayNow/FAST/NETS/IBG description into structured fields
   const { memo, recipient, method } = parsePayNowDescription(description)
 
@@ -208,24 +221,9 @@ export async function categorize(
     }
   }
 
-  // Self-transfers are neither income nor spending.
-  if (isSelfTransfer(description)) {
-    return "Transfer"
-  }
-
-  // Incoming transfers are credits, never spending.
-  if (INCOMING_TRANSFER_PATTERN.test(description)) {
-    return options.amount !== undefined && options.amount > 0
-      ? "Income"
-      : "Transfer"
-  }
-
-  if (
-    options.amount !== undefined &&
-    options.amount < 0 &&
-    RENT_PAYMENT_PATTERN.test(description)
-  ) {
-    return "Housing"
+  if (options.amount !== undefined) {
+    const knownCategory = getKnownCategory(description, options.amount)
+    if (knownCategory) return knownCategory
   }
 
   // Step 2: Claude Haiku fallback with structured prompt
