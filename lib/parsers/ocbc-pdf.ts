@@ -1,9 +1,18 @@
-import { RawTransaction, ParseResult } from './types'
+import { RawTransaction, ParseResult } from "./types"
 
 const MONTHS: Record<string, string> = {
-  JAN: '01', FEB: '02', MAR: '03', APR: '04',
-  MAY: '05', JUN: '06', JUL: '07', AUG: '08',
-  SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+  JAN: "01",
+  FEB: "02",
+  MAR: "03",
+  APR: "04",
+  MAY: "05",
+  JUN: "06",
+  JUL: "07",
+  AUG: "08",
+  SEP: "09",
+  OCT: "10",
+  NOV: "11",
+  DEC: "12",
 }
 
 const SKIP_PATTERNS = [
@@ -73,7 +82,9 @@ const IGNORE_CONTINUATION = [
 ]
 
 function extractStatementYear(text: string): number {
-  const match = text.match(/\d+\s+[A-Z]{3}\s+(\d{4})\s+TO\s+\d+\s+[A-Z]{3}\s+\d{4}/i)
+  const match = text.match(
+    /\d+\s+[A-Z]{3}\s+(\d{4})\s+TO\s+\d+\s+[A-Z]{3}\s+\d{4}/i
+  )
   if (match) return parseInt(match[1])
   return new Date().getFullYear()
 }
@@ -84,7 +95,7 @@ function resolveDate(ddMmm: string, year: number): string {
   const [day, mon] = parts
   const month = MONTHS[mon.toUpperCase()]
   if (!month) throw new Error(`Unknown month: ${mon}`)
-  return `${year}-${month}-${day.padStart(2, '0')}`
+  return `${year}-${month}-${day.padStart(2, "0")}`
 }
 
 const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
@@ -96,7 +107,7 @@ const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
 function detectDepositColumn(text: string): number {
   const headerMatch = text.match(/^(.*)Withdrawal\s+Deposit/m)
   if (headerMatch) {
-    return headerMatch[0].indexOf('Deposit')
+    return headerMatch[0].indexOf("Deposit")
   }
   // Fallback: typical OCBC PDF position
   return 145
@@ -116,25 +127,34 @@ function flushTx(
   results: RawTransaction[]
 ) {
   if (tx) {
-    results.push({ date: tx.date, description: tx.description.trim(), amount: tx.amount, bank: 'ocbc' })
+    results.push({
+      date: tx.date,
+      description: tx.description.trim(),
+      amount: tx.amount,
+      bank: "ocbc",
+    })
   }
 }
 
 function parseOCBCPDFColumnar(text: string): RawTransaction[] {
   const year = extractStatementYear(text)
   const depositColStart = detectDepositColumn(text)
-  const lines = text.split('\n')
+  const lines = text.split("\n")
   const results: RawTransaction[] = []
 
   // currentTx: a fully resolved transaction (date + description + amount)
-  let currentTx: { date: string; description: string; amount: number } | null = null
+  let currentTx: { date: string; description: string; amount: number } | null =
+    null
   // pendingTx: date + description parsed, waiting for the amounts line
   let pendingTx: { date: string; description: string } | null = null
   let inTransactionSection = false
 
   for (const line of lines) {
     // Detect start of transaction section
-    if (/Date\s+Date\s+Description/i.test(line) || /Transaction\s+Date/i.test(line)) {
+    if (
+      /Date\s+Date\s+Description/i.test(line) ||
+      /Transaction\s+Date/i.test(line)
+    ) {
       inTransactionSection = true
       continue
     }
@@ -149,7 +169,7 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
     }
 
     // Skip known non-transaction lines
-    if (SKIP_PATTERNS.some(p => p.test(line))) {
+    if (SKIP_PATTERNS.some((p) => p.test(line))) {
       if (/BALANCE C\/F/i.test(line)) {
         flushTx(currentTx, results)
         currentTx = null
@@ -163,7 +183,7 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
 
     // Try to match a transaction header line: DD MMM  DD MMM  Description
     const txMatch = line.match(
-      new RegExp(String.raw`^\s+(${DATE_TOKEN})\s+${DATE_TOKEN}\s{2,}(.+)`, 'i')
+      new RegExp(String.raw`^\s+(${DATE_TOKEN})\s+${DATE_TOKEN}\s{2,}(.+)`, "i")
     )
 
     if (txMatch) {
@@ -178,17 +198,27 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
       if (amounts.length >= 2) {
         // Old format: amounts on the same line as the date
         const txAmountMatch = amounts[amounts.length - 2]
-        const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ''))
+        const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ""))
         const isDeposit = txAmountMatch.index! >= depositColStart
         const descStart = fullLine.indexOf(txMatch[2])
         const descEnd = txAmountMatch.index!
-        const description = fullLine.substring(descStart, descEnd).replace(/\s{2,}/g, ' ').trim()
-        currentTx = { date: resolveDate(dateStr, year), description, amount: isDeposit ? txAmount : -txAmount }
+        const description = fullLine
+          .substring(descStart, descEnd)
+          .replace(/\s{2,}/g, " ")
+          .trim()
+        currentTx = {
+          date: resolveDate(dateStr, year),
+          description,
+          amount: isDeposit ? txAmount : -txAmount,
+        }
         pendingTx = null
       } else {
         // New format (2026): amounts on the next line — park date+description in pendingTx
         const descStart = fullLine.indexOf(txMatch[2])
-        const description = fullLine.substring(descStart).replace(/\s{2,}/g, ' ').trim()
+        const description = fullLine
+          .substring(descStart)
+          .replace(/\s{2,}/g, " ")
+          .trim()
         pendingTx = { date: resolveDate(dateStr, year), description }
       }
       continue
@@ -200,7 +230,7 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
       if (amounts.length >= 2) {
         // second-to-last = tx amount, last = running balance
         const txAmountMatch = amounts[amounts.length - 2]
-        const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ''))
+        const txAmount = parseFloat(txAmountMatch[0].replace(/,/g, ""))
         const isDeposit = txAmountMatch.index! >= depositColStart
         currentTx = {
           date: pendingTx.date,
@@ -212,8 +242,8 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
       }
       // amounts line not yet seen — append non-boilerplate text to pending description
       const trimmed = line.trim()
-      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed))) {
-        pendingTx.description += ' ' + trimmed
+      if (trimmed && !IGNORE_CONTINUATION.some((p) => p.test(trimmed))) {
+        pendingTx.description += " " + trimmed
       }
       continue
     }
@@ -221,8 +251,8 @@ function parseOCBCPDFColumnar(text: string): RawTransaction[] {
     // Continuation line appended to a completed currentTx description
     if (currentTx) {
       const trimmed = line.trim()
-      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed))) {
-        currentTx.description += ' ' + trimmed
+      if (trimmed && !IGNORE_CONTINUATION.some((p) => p.test(trimmed))) {
+        currentTx.description += " " + trimmed
       }
     }
   }
@@ -272,53 +302,74 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
 
   // Matches: "DD MMM  amount  balance TAB DD MMM  description"
   // The tab character separates the two column groups that pdf-parse interleaves
-  const TX_LINE = /^(\d{1,2}\s+[A-Z]{3})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\t\d{1,2}\s+[A-Z]{3}\s+(.+)$/im
+  const TX_LINE =
+    /^(\d{1,2}\s+[A-Z]{3})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\t\d{1,2}\s+[A-Z]{3}\s+(.+)$/im
 
-  const lines = text.split('\n')
-  let pending: { date: string; amount: number; description: string } | null = null
+  const lines = text.split("\n")
+  let pending: { date: string; amount: number; description: string } | null =
+    null
+
+  function flushPending() {
+    if (!pending) return
+    const isCredit = DEPOSIT_KEYWORDS.some((keyword) =>
+      keyword.test(pending!.description)
+    )
+    results.push({
+      date: pending.date,
+      description: pending.description.trim(),
+      amount: isCredit ? pending.amount : -pending.amount,
+      bank: "ocbc",
+    })
+    pending = null
+  }
 
   for (const line of lines) {
     const m = line.match(TX_LINE)
     if (m) {
-      // Flush previous
-      if (pending) {
-        results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
-      }
+      // Flush previous after all continuation lines have been read.
+      flushPending()
 
       const dateStr = m[1]
-      const firstAmt = parseFloat(m[2].replace(/,/g, ''))
+      const firstAmt = parseFloat(m[2].replace(/,/g, ""))
       // m[3] is the running balance — not needed
       const description = m[4].trim()
 
       // Skip balance carry-forward lines
-      if (/BALANCE/i.test(description)) { pending = null; continue }
+      if (/BALANCE/i.test(description)) {
+        pending = null
+        continue
+      }
 
       let date: string
-      try { date = resolveDate(dateStr, year) } catch { pending = null; continue }
+      try {
+        date = resolveDate(dateStr, year)
+      } catch {
+        pending = null
+        continue
+      }
 
-      // Determine credit vs debit by keyword — fallback to debit
-      const isCredit = DEPOSIT_KEYWORDS.some(kw => kw.test(description))
-      pending = { date, amount: isCredit ? firstAmt : -firstAmt, description }
+      pending = { date, amount: firstAmt, description }
       continue
     }
 
     // Continuation line — append to pending description if not boilerplate
     if (pending) {
       const trimmed = line.trim()
-      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed)) && !/^Deposit Insurance/i.test(trimmed)) {
-        pending.description += ' ' + trimmed
+      if (
+        trimmed &&
+        !IGNORE_CONTINUATION.some((p) => p.test(trimmed)) &&
+        !/^Deposit Insurance/i.test(trimmed)
+      ) {
+        pending.description += " " + trimmed
       }
       // Page boundary resets pending
       if (/^Deposit Insurance/i.test(trimmed)) {
-        results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
-        pending = null
+        flushPending()
       }
     }
   }
 
-  if (pending) {
-    results.push({ date: pending.date, description: pending.description.trim(), amount: pending.amount, bank: 'ocbc' })
-  }
+  flushPending()
 
   return results
 }
@@ -335,7 +386,7 @@ function extractClosingBalance(text: string): number | undefined {
   for (const pat of patterns) {
     const m = text.match(pat)
     if (m) {
-      const val = parseFloat(m[1].replace(/,/g, ''))
+      const val = parseFloat(m[1].replace(/,/g, ""))
       if (!isNaN(val) && val > 0) return val
     }
   }
@@ -356,12 +407,18 @@ export function parseOCBCPDF(text: string): ParseResult {
 
   // Columnar parse yielded nothing — likely plain-text extraction (no column alignment).
   // Log the first 40 lines to help diagnose future format changes.
-  const preview = text.split('\n').slice(0, 40).join('\n')
-  console.warn('[parseOCBCPDF] Columnar parse yielded 0 results, trying plain-text fallback.\nText preview:\n' + preview)
+  const preview = text.split("\n").slice(0, 40).join("\n")
+  console.warn(
+    "[parseOCBCPDF] Columnar parse yielded 0 results, trying plain-text fallback.\nText preview:\n" +
+      preview
+  )
 
   const plainText = parseOCBCPDFPlainText(text)
   if (plainText.length === 0) {
-    console.warn('[parseOCBCPDF] Plain-text fallback also yielded 0 results. Full text length:', text.length)
+    console.warn(
+      "[parseOCBCPDF] Plain-text fallback also yielded 0 results. Full text length:",
+      text.length
+    )
   }
   return { transactions: plainText, endingBalance }
 }

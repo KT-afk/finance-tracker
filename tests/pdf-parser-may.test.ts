@@ -30,6 +30,12 @@ Transaction Date Date Description Cheque Withdrawal       Deposit Balance
 BALANCE C/F
 `
 
+const ocbcPlainTextWithMultilineSalary = `
+01 JUN 2026 TO 30 JUN 2026
+29 JUN 6,733.55 15,743.62\t29 JUN IBG GIRO SALA
+Wise Asia-Pacific P Wise SG Salary
+`
+
 const uobText = `
 Statement Date 31 May 2026
 Post Date Trans Date Description Amount
@@ -112,6 +118,14 @@ assert.deepEqual(
     ["2026-05-01", "PAYNOW TRANSFER TO SHOP", -12.3, "ocbc"],
     ["2026-05-12", "SALARY CREDIT", 1000, "ocbc"],
   ]
+)
+
+const { transactions: plainTextSalaryTransactions } = parseOCBCPDF(
+  ocbcPlainTextWithMultilineSalary
+)
+assert.deepEqual(
+  plainTextSalaryTransactions.map((t) => [t.date, t.description, t.amount]),
+  [["2026-06-29", "IBG GIRO SALA Wise Asia-Pacific P Wise SG Salary", 6733.55]]
 )
 
 const { transactions: uobTransactions } = parseUOBCreditCardPDF(uobText)

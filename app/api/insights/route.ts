@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
-import { getKnownCategory } from "@/lib/categorize"
+import { getEffectiveAmount, getKnownCategory } from "@/lib/categorize"
 import { and, asc, eq, gte, lte } from "drizzle-orm"
 
 function roundMoney(value: number): number {
@@ -55,12 +55,13 @@ export async function GET(req: NextRequest) {
       const month = t.date.slice(0, 7) // YYYY-MM
       const knownCategory = getKnownCategory(t.description, t.amount)
       const effectiveCategory = knownCategory ?? t.category
-      if (t.amount >= 0) {
+      const effectiveAmount = getEffectiveAmount(t.description, t.amount)
+      if (effectiveAmount >= 0) {
         // Transfers and card statement credits are not earned income.
         if (["Transfer", "Credit Card Payment"].includes(effectiveCategory)) {
           continue
         }
-        monthlyIncome[month] = (monthlyIncome[month] ?? 0) + t.amount
+        monthlyIncome[month] = (monthlyIncome[month] ?? 0) + effectiveAmount
         continue
       }
       // expense — skip non-spend categories

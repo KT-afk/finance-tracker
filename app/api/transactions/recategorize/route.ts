@@ -1,7 +1,11 @@
 import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
 import { eq } from "drizzle-orm"
-import { categorize, getKnownCategory } from "@/lib/categorize"
+import {
+  categorize,
+  getEffectiveAmount,
+  getKnownCategory,
+} from "@/lib/categorize"
 import { requireAuth, createRateLimit } from "@/lib/auth-middleware"
 
 // Rate limiting: 10 requests per minute per client
@@ -62,10 +66,11 @@ export async function POST(req: Request) {
                 amount: tx.amount,
               }))
 
-            if (category !== tx.category) {
+            const amount = getEffectiveAmount(tx.description, tx.amount)
+            if (category !== tx.category || amount !== tx.amount) {
               await db
                 .update(transactions)
-                .set({ category })
+                .set({ category, amount })
                 .where(eq(transactions.id, tx.id))
               updated++
             }

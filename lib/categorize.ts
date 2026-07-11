@@ -192,7 +192,7 @@ export function getKnownCategory(
     return "Transfer"
   }
 
-  if (amount > 0 && SALARY_INCOME_PATTERN.test(description)) return "Income"
+  if (SALARY_INCOME_PATTERN.test(description)) return "Income"
 
   if (INCOMING_TRANSFER_PATTERN.test(description)) {
     return amount > 0 ? "Income" : "Transfer"
@@ -201,6 +201,15 @@ export function getKnownCategory(
   if (amount < 0 && RENT_PAYMENT_PATTERN.test(description)) return "Housing"
 
   return null
+}
+
+export function getEffectiveAmount(
+  description: string,
+  amount: number
+): number {
+  return getKnownCategory(description, amount) === "Income"
+    ? Math.abs(amount)
+    : amount
 }
 
 /**

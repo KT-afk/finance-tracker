@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
-import { getKnownCategory } from "@/lib/categorize"
+import { getEffectiveAmount, getKnownCategory } from "@/lib/categorize"
 import { and, eq, gte, lte, lt, desc } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
       )
       const effectiveCategory = knownCategory ?? transaction.category
       return (
-        transaction.amount > 0 &&
+        getEffectiveAmount(transaction.description, transaction.amount) > 0 &&
         !["Transfer", "Credit Card Payment"].includes(effectiveCategory)
       )
     }
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
     const totalIncome = monthTxns
       .filter(isIncomeTransaction)
-      .reduce((sum, t) => sum + t.amount, 0)
+      .reduce((sum, t) => sum + getEffectiveAmount(t.description, t.amount), 0)
     const netCashFlow = totalIncome - totalSpend
 
     // Top 5 categories by total spend

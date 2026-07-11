@@ -1,5 +1,9 @@
 import assert from "node:assert/strict"
-import { categorize, getKnownCategory } from "../lib/categorize"
+import {
+  categorize,
+  getEffectiveAmount,
+  getKnownCategory,
+} from "../lib/categorize"
 
 async function main() {
   const previousKey = process.env.ANTHROPIC_API_KEY
@@ -28,6 +32,14 @@ async function main() {
       ),
       "Income",
       "salary credits must override generic merchant rules"
+    )
+    assert.equal(
+      getEffectiveAmount(
+        "IBG GIRO SALA Wise Asia-Pacific P Wise SG Salary",
+        -6733.55
+      ),
+      6733.55,
+      "mis-signed salary credits must be corrected for existing data"
     )
 
     assert.equal(
