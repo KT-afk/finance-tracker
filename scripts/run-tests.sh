@@ -20,6 +20,7 @@ run_test() {
 }
 
 run_test "calculations"            "$ROOT/tests/calculations.test.ts"
+run_test "cash-flow-semantics"     "$ROOT/tests/cash-flow-semantics.test.ts"
 run_test "categorize-strict"       "$ROOT/tests/categorize-strict.test.ts"
 run_test "login-attempt-store"     "$ROOT/tests/login-attempt-store.test.ts"
 run_test "upload-fails-without-ai" "$ROOT/tests/upload-fails-without-ai.test.ts"

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
-import { getEffectiveAmount, getKnownCategory } from "@/lib/categorize"
+import { transactions } from "@/lib/schema"
+import { classifyCashFlow, summarizeCashFlow } from "@/lib/cash-flow"
 import { and, eq, gte, lte, lt, desc } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -49,53 +49,24 @@ export async function GET(req: NextRequest) {
     // If current month has no data, caller can retry with last month
     const isEmpty = monthTxns.length === 0
 
-    const isSpendTransaction = (transaction: {
-      amount: number
-      category: string
-      description: string
-    }) => {
-      const knownCategory = getKnownCategory(
-        transaction.description,
-        transaction.amount
-      )
-      const effectiveCategory = knownCategory ?? transaction.category
-      return (
-        transaction.amount < 0 &&
-        !EXCLUDED_FROM_SPEND.includes(effectiveCategory)
-      )
-    }
-    const isIncomeTransaction = (transaction: {
-      amount: number
-      category: string
-      description: string
-    }) => {
-      const knownCategory = getKnownCategory(
-        transaction.description,
-        transaction.amount
-      )
-      const effectiveCategory = knownCategory ?? transaction.category
-      return (
-        getEffectiveAmount(transaction.description, transaction.amount) > 0 &&
-        !["Transfer", "Credit Card Payment"].includes(effectiveCategory)
-      )
-    }
-
-    // Total spend (sum of negative amounts, excluding transfers and CC payments)
-    const totalSpend = monthTxns
-      .filter(isSpendTransaction)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    const totalIncome = monthTxns
-      .filter(isIncomeTransaction)
-      .reduce((sum, t) => sum + getEffectiveAmount(t.description, t.amount), 0)
-    const netCashFlow = totalIncome - totalSpend
+    const cashFlow = summarizeCashFlow(monthTxns)
+    const {
+      spend: totalSpend,
+      income: totalIncome,
+      reimbursements: totalReimbursements,
+      netCashFlow,
+      unclassifiedTransfers,
+    } = cashFlow
 
     // Top 5 categories by total spend
     const categoryTotals: Record<string, number> = {}
     for (const t of monthTxns) {
-      if (isSpendTransaction(t)) {
-        const category = getKnownCategory(t.description, t.amount) ?? t.category
+      const classification = classifyCashFlow(t)
+      if (classification.countsAsSpend) {
+        const category = classification.category
         categoryTotals[category] =
-          (categoryTotals[category] ?? 0) + Math.abs(t.amount)
+          (categoryTotals[category] ?? 0) +
+          Math.abs(classification.effectiveAmount)
       }
     }
 
@@ -149,9 +120,7 @@ export async function GET(req: NextRequest) {
       .from(transactions)
       .where(and(...priorWhereConditions))
 
-    const priorSpend = priorTxns
-      .filter(isSpendTransaction)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    const priorSpend = summarizeCashFlow(priorTxns).spend
 
     const hasPrior = priorTxns.length > 0
     const momDelta = hasPrior ? totalSpend - priorSpend : null
@@ -170,7 +139,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       totalSpend,
       totalIncome,
+      totalReimbursements,
       netCashFlow,
+      unclassifiedTransfers,
       daysElapsed,
       month: `${year}-${month}`,
       isEmpty,

@@ -31,7 +31,9 @@ interface Transaction {
 interface DashboardData {
   totalSpend: number
   totalIncome: number
+  totalReimbursements: number
   netCashFlow: number
+  unclassifiedTransfers: number
   daysElapsed: number
   month: string
   isEmpty: boolean
@@ -264,7 +266,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Primary metrics row */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {/* Balance */}
                 <Link href="/accounts">
                   <div className="text-center p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors cursor-pointer">
@@ -291,6 +293,13 @@ export default function HomePage() {
                   </p>
                 </div>
 
+                <div className="text-center p-3 rounded-lg bg-zinc-800/50">
+                  <p className="text-xs text-zinc-400 mb-1">Repaid</p>
+                  <p className="text-lg font-mono font-semibold text-teal-400">
+                    {formatSGD(data.totalReimbursements)}
+                  </p>
+                </div>
+
                 {/* Spend */}
                 <div className="text-center p-3 rounded-lg bg-zinc-800/50">
                   <p className="text-xs text-zinc-400 mb-1">Spent</p>
@@ -310,6 +319,17 @@ export default function HomePage() {
                   </p>
                 </div>
               </div>
+
+              {data.unclassifiedTransfers > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-amber-950/20 border border-amber-800/30">
+                  <span className="text-sm text-amber-200">
+                    Transfers to review
+                  </span>
+                  <span className="font-mono text-sm text-amber-300">
+                    {formatSGD(data.unclassifiedTransfers)}
+                  </span>
+                </div>
+              )}
 
               {/* Trend indicator with clear context */}
               {data.momDelta !== null &&

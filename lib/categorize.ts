@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { CATEGORIES, Category } from "./schema"
 import { findRuleCategory, saveRule } from "./rules"
 import { parsePayNowDescription } from "./parsers/paynow"
+import { getDeterministicCategory, classifyCashFlow } from "./cash-flow"
 
 const CATEGORY_LIST = CATEGORIES.join(", ")
 
@@ -140,76 +141,19 @@ Reply with only the category name, nothing else.`
   return lines.join("\n")
 }
 
-/**
- * Patterns that deterministically identify credit card bill payments.
- * These appear in OCBC, UOB, DBS, and Trust bank transaction descriptions.
- */
-const CC_PAYMENT_PATTERNS = [
-  /PAYMT\s+THRU\s+E-BANK/i, // UOB: "PAYMT THRU E-BANK/HOMEB/CYBERB"
-  /mBK-UOB\s+Cards?/i, // UOB credit card via mobile banking
-  /mBK-DBS\s+Cards?/i, // DBS credit card via mobile banking
-  /mBK-OCBC\s+Cards?/i, // OCBC credit card via mobile banking
-  /COLLECTION\/TRANSFER.*Interactive/i, // OCBC credit card: "COLLECTION/TRANSFER OTHR Interactive Br"
-  /BILL\s+PAYMENT.*CARD/i, // generic bill payment to card
-  /CREDIT\s+CARD\s+(PAYMENT|BILL)/i, // explicit label
-  /CC\s+BILL\s+PAYMENT/i,
-  /GIRO.*CREDIT\s+CARD/i,
-  /AUTO\s*PAY.*CREDIT\s*CARD/i,
-]
-
-const INCOMING_TRANSFER_PATTERN = /\b(?:PAYMENT\/)?TRANSFER\b.*\bfrom\b/i
-const RENT_PAYMENT_PATTERN = /\b(?:rent|rental|lease)\b/i
-const SALARY_INCOME_PATTERN = /\b(?:salary|payroll|wages)\b/i
-const SELF_TRANSFER_NAMES = (
-  process.env.FINANCE_SELF_TRANSFER_NAMES ?? "ONG KONG TAT"
-)
-  .split(",")
-  .map((name) => name.trim().toLowerCase())
-  .filter(Boolean)
-
-function isSelfTransfer(description: string): boolean {
-  const lower = description.toLowerCase()
-  return SELF_TRANSFER_NAMES.some((name) => lower.includes(`from ${name}`))
-}
-
-function isAccountHolderLabel(description: string): boolean {
-  const normalized = description.trim().toLowerCase()
-  return SELF_TRANSFER_NAMES.includes(normalized)
-}
-
 export function getKnownCategory(
   description: string,
   amount: number
 ): Category | null {
-  if (
-    amount < 0 &&
-    CC_PAYMENT_PATTERNS.some((pattern) => pattern.test(description))
-  ) {
-    return "Credit Card Payment"
-  }
-
-  if (isSelfTransfer(description) || isAccountHolderLabel(description)) {
-    return "Transfer"
-  }
-
-  if (SALARY_INCOME_PATTERN.test(description)) return "Income"
-
-  if (INCOMING_TRANSFER_PATTERN.test(description)) {
-    return amount > 0 ? "Income" : "Transfer"
-  }
-
-  if (amount < 0 && RENT_PAYMENT_PATTERN.test(description)) return "Housing"
-
-  return null
+  return getDeterministicCategory(description, amount)
 }
 
 export function getEffectiveAmount(
   description: string,
   amount: number
 ): number {
-  return getKnownCategory(description, amount) === "Income"
-    ? Math.abs(amount)
-    : amount
+  return classifyCashFlow({ description, amount, category: "Others" })
+    .effectiveAmount
 }
 
 /**

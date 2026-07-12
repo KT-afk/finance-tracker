@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
-import { getEffectiveAmount, getKnownCategory } from "@/lib/categorize"
+import { transactions } from "@/lib/schema"
+import { classifyCashFlow } from "@/lib/cash-flow"
 import { and, asc, eq, gte, lte } from "drizzle-orm"
 
 function roundMoney(value: number): number {
@@ -49,29 +49,29 @@ export async function GET(req: NextRequest) {
     const monthlyData: Record<string, Record<string, number>> = {}
     // Also track income and spend per month for P&L
     const monthlyIncome: Record<string, number> = {}
+    const monthlyReimbursements: Record<string, number> = {}
     const monthlySpend: Record<string, number> = {}
 
     for (const t of allTxns) {
       const month = t.date.slice(0, 7) // YYYY-MM
-      const knownCategory = getKnownCategory(t.description, t.amount)
-      const effectiveCategory = knownCategory ?? t.category
-      const effectiveAmount = getEffectiveAmount(t.description, t.amount)
-      if (effectiveAmount >= 0) {
-        // Transfers and card statement credits are not earned income.
-        if (["Transfer", "Credit Card Payment"].includes(effectiveCategory)) {
-          continue
-        }
-        monthlyIncome[month] = (monthlyIncome[month] ?? 0) + effectiveAmount
+      const classification = classifyCashFlow(t)
+      if (classification.countsAsIncome) {
+        monthlyIncome[month] =
+          (monthlyIncome[month] ?? 0) + classification.effectiveAmount
         continue
       }
-      // expense — skip non-spend categories
-      if (EXCLUDED_FROM_SPEND.includes(effectiveCategory)) {
+      if (classification.countsAsReimbursement) {
+        monthlyReimbursements[month] =
+          (monthlyReimbursements[month] ?? 0) + classification.effectiveAmount
         continue
       }
+      if (!classification.countsAsSpend) continue
       if (!monthlyData[month]) monthlyData[month] = {}
-      monthlyData[month][effectiveCategory] =
-        (monthlyData[month][effectiveCategory] ?? 0) + Math.abs(t.amount)
-      monthlySpend[month] = (monthlySpend[month] ?? 0) + Math.abs(t.amount)
+      monthlyData[month][classification.category] =
+        (monthlyData[month][classification.category] ?? 0) +
+        Math.abs(classification.effectiveAmount)
+      monthlySpend[month] =
+        (monthlySpend[month] ?? 0) + Math.abs(classification.effectiveAmount)
     }
 
     // Build last 6 months labels
@@ -121,15 +121,16 @@ export async function GET(req: NextRequest) {
         year: "2-digit",
       })
       const income = roundMoney(monthlyIncome[month] ?? 0)
+      const reimbursements = roundMoney(monthlyReimbursements[month] ?? 0)
       const spend = roundMoney(monthlySpend[month] ?? 0)
-      const hasIncome = income > 0
-      const net = hasIncome ? roundMoney(income - spend) : null
+      const hasCashIn = income > 0 || reimbursements > 0
+      const net = hasCashIn ? roundMoney(income + reimbursements - spend) : null
       // Category breakdown for this month sorted desc
       const cats = monthlyData[month] ?? {}
       const categories = Object.entries(cats)
         .map(([category, amount]) => ({ category, amount: roundMoney(amount) }))
         .sort((a, b) => b.amount - a.amount)
-      return { month, label, income, spend, net, categories }
+      return { month, label, income, reimbursements, spend, net, categories }
     })
 
     // Top 5 biggest transactions this month
@@ -146,13 +147,7 @@ export async function GET(req: NextRequest) {
         )
         .orderBy(asc(transactions.amount))
     )
-      .filter(
-        (t) =>
-          t.amount < 0 &&
-          !EXCLUDED_FROM_SPEND.includes(
-            getKnownCategory(t.description, t.amount) ?? t.category
-          )
-      )
+      .filter((t) => classifyCashFlow(t).countsAsSpend)
       .slice(0, 5)
 
     return NextResponse.json({
