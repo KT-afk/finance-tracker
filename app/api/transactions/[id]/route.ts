@@ -47,15 +47,21 @@ export async function PATCH(
     const transferSender = existing.description.match(
       /\bfrom\s+(.+?)(?:\s+OTHR\b|\s+\d{8,}|$)/i
     )
+    const isTransferLike =
+      /^(?:FAST PAYMENT|FUND TRANSFER|PAYMENT\/TRANSFER|COLLECTION\/TRANSFER)\b/i.test(
+        existing.description
+      )
     const keyword = transferSender
       ? `from ${transferSender[1].toLowerCase().trim()}`
-      : existing.description
-          .toLowerCase()
-          .replace(/^[a-z0-9]{6,}\s+/g, "")
-          .trim()
-          .split(/\s+/)
-          .slice(0, 3)
-          .join(" ")
+      : isTransferLike
+        ? ""
+        : existing.description
+            .toLowerCase()
+            .replace(/^[a-z0-9]{6,}\s+/g, "")
+            .trim()
+            .split(/\s+/)
+            .slice(0, 3)
+            .join(" ")
 
     if (keyword.length >= 3) {
       await saveRule(keyword, category)

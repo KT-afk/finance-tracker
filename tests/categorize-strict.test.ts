@@ -41,6 +41,19 @@ async function main() {
       6733.55,
       "mis-signed salary credits must be corrected for existing data"
     )
+    assert.equal(
+      getKnownCategory(
+        "FAST PAYMENT via PayNow-Mobile to WOXX KEX MEX OTHR-OTHR",
+        -1.9
+      ),
+      null,
+      "ordinary PayNow payments must not be inferred as credit-card payments"
+    )
+    assert.equal(
+      getKnownCategory("Bill Payment mBK-UOB Cards", -1509.92),
+      "Credit Card Payment",
+      "UOB card bill payments must remain deterministic"
+    )
 
     assert.equal(
       await categorize(

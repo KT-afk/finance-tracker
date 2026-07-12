@@ -31,11 +31,18 @@ export async function POST(req: Request) {
       .from(transactions)
       .where(eq(transactions.is_corrected, false))
 
-    const uncategorized = uneditedTransactions.filter(
-      (transaction) =>
-        getKnownCategory(transaction.description, transaction.amount) !==
-          null || ["Transfer", "Others"].includes(transaction.category)
-    )
+    const uncategorized = uneditedTransactions.filter((transaction) => {
+      const knownCategory = getKnownCategory(
+        transaction.description,
+        transaction.amount
+      )
+      return (
+        knownCategory !== null ||
+        ["Transfer", "Others"].includes(transaction.category) ||
+        (transaction.category === "Credit Card Payment" &&
+          knownCategory !== "Credit Card Payment")
+      )
+    })
 
     const total = uncategorized.length
 
