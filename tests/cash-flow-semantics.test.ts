@@ -39,12 +39,13 @@ assert.equal(
 const reimbursement = classifyCashFlow({
   description:
     "PAYMENT/TRANSFER via PayNow-DBSS from YOON THIRI OTHR Remainder of mar/apr",
-  amount: 500,
+  amount: -500,
   category: "Income",
 })
 assert.equal(reimbursement.category, "Reimbursement")
 assert.equal(reimbursement.countsAsReimbursement, true)
 assert.equal(reimbursement.countsAsIncome, false)
+assert.equal(reimbursement.effectiveAmount, 500)
 
 assert.equal(
   shouldRecategorizeTransaction({
@@ -93,7 +94,7 @@ const summary = summarizeCashFlow([
   {
     description:
       "PAYMENT/TRANSFER via PayNow-DBSS from YOON THIRI OTHR Remainder of mar/apr",
-    amount: 500,
+    amount: -500,
     category: "Income",
   },
   {

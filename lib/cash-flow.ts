@@ -61,17 +61,14 @@ function categoryFromDescription(
   description: string,
   amount: number
 ): Category | null {
-  if (
-    amount < 0 &&
-    CC_PAYMENT_PATTERNS.some((pattern) => pattern.test(description))
-  ) {
+  if (CC_PAYMENT_PATTERNS.some((pattern) => pattern.test(description))) {
     return "Credit Card Payment"
   }
   if (isSelfTransfer(description) || isAccountHolderLabel(description)) {
     return "Self Transfer"
   }
   if (SALARY_INCOME_PATTERN.test(description)) return "Income"
-  if (amount > 0 && INCOMING_TRANSFER_PATTERN.test(description)) {
+  if (INCOMING_TRANSFER_PATTERN.test(description)) {
     return REIMBURSEMENT_PATTERN.test(description)
       ? "Reimbursement"
       : "Transfer"
@@ -91,7 +88,9 @@ export function classifyCashFlow(
     categoryFromDescription(transaction.description, transaction.amount) ??
     asCategory(transaction.category)
   const effectiveAmount =
-    category === "Income" ? Math.abs(transaction.amount) : transaction.amount
+    category === "Income" || category === "Reimbursement"
+      ? Math.abs(transaction.amount)
+      : transaction.amount
   const countsAsIncome = category === "Income" && effectiveAmount > 0
   const countsAsReimbursement =
     category === "Reimbursement" && effectiveAmount > 0
