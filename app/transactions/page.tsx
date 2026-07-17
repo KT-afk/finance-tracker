@@ -1,19 +1,19 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { useEffect, useState, useCallback } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { CATEGORY_COLORS, formatSGD } from '@/lib/display'
-import { CATEGORIES, BANKS } from '@/lib/schema'
-import Link from 'next/link'
+} from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { CATEGORY_COLORS, formatSGD } from "@/lib/display"
+import { CATEGORIES, BANKS } from "@/lib/schema"
+import Link from "next/link"
 
 interface Transaction {
   id: string
@@ -34,30 +34,18 @@ interface ApiResponse {
   totalPages: number
 }
 
-function getAvailableMonths(): string[] {
-  const months: string[] = []
-  const now = new Date()
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    months.push(`${y}-${m}`)
-  }
-  return months
-}
-
 function getToday(): string {
   const now = new Date()
   const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
+  const m = String(now.getMonth() + 1).padStart(2, "0")
+  const d = String(now.getDate()).padStart(2, "0")
   return `${y}-${m}-${d}`
 }
 
 export default function TransactionsPage() {
-  const [month, setMonth] = useState<string>('all')
-  const [category, setCategory] = useState<string>('all')
-  const [bank, setBank] = useState<string>('all')
+  const [month, setMonth] = useState<string>("all")
+  const [category, setCategory] = useState<string>("all")
+  const [bank, setBank] = useState<string>("all")
   const [page, setPage] = useState(1)
 
   const [data, setData] = useState<ApiResponse | null>(null)
@@ -65,29 +53,39 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [recategorizing, setRecategorizing] = useState(false)
-  const [recategorizeResult, setRecategorizeResult] = useState<string | null>(null)
+  const [recategorizeResult, setRecategorizeResult] = useState<string | null>(
+    null
+  )
   const [showAddForm, setShowAddForm] = useState(false)
   const [manualDate, setManualDate] = useState(getToday)
-  const [manualType, setManualType] = useState<'expense' | 'income'>('expense')
-  const [manualAmount, setManualAmount] = useState('')
-  const [manualDescription, setManualDescription] = useState('')
+  const [manualType, setManualType] = useState<"expense" | "income">("expense")
+  const [manualAmount, setManualAmount] = useState("")
+  const [manualDescription, setManualDescription] = useState("")
   const [manualBank, setManualBank] = useState<string>(BANKS[0])
-  const [manualCategory, setManualCategory] = useState<string>('Others')
+  const [manualCategory, setManualCategory] = useState<string>("Others")
   const [addingManual, setAddingManual] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [manualError, setManualError] = useState<string | null>(null)
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
+  const [months, setMonths] = useState<string[]>([])
 
-  const months = getAvailableMonths()
+  useEffect(() => {
+    fetch("/api/months")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.months)) setMonths(d.months)
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (month !== 'all') params.set('month', month)
-    if (category !== 'all') params.set('category', category)
-    if (bank !== 'all') params.set('bank', bank)
-    params.set('page', String(page))
-    params.set('pageSize', '50')
+    if (month !== "all") params.set("month", month)
+    if (category !== "all") params.set("category", category)
+    if (bank !== "all") params.set("bank", bank)
+    params.set("page", String(page))
+    params.set("pageSize", "50")
 
     try {
       const res = await fetch(`/api/transactions?${params}`)
@@ -95,7 +93,7 @@ export default function TransactionsPage() {
       if (json.error) setError(json.error)
       else setData(json)
     } catch {
-      setError('Failed to load transactions')
+      setError("Failed to load transactions")
     } finally {
       setLoading(false)
     }
@@ -115,26 +113,30 @@ export default function TransactionsPage() {
     setUpdateMessage(null)
     try {
       const res = await fetch(`/api/transactions/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category: newCategory }),
       })
       if (res.ok) {
         const result = await res.json()
         const siblings = result.siblingsUpdated ?? 0
         if (siblings > 0) {
-          setUpdateMessage(`Updated ${siblings} similar transaction${siblings > 1 ? 's' : ''} too`)
+          setUpdateMessage(
+            `Updated ${siblings} similar transaction${siblings > 1 ? "s" : ""} too`
+          )
           setTimeout(() => setUpdateMessage(null), 4000)
           // Refresh to show sibling changes
           fetchTransactions()
         } else {
           // Optimistic update only for the single transaction
-          setData(prev => {
+          setData((prev) => {
             if (!prev) return prev
             return {
               ...prev,
-              transactions: prev.transactions.map(t =>
-                t.id === id ? { ...t, category: newCategory, is_corrected: true } : t
+              transactions: prev.transactions.map((t) =>
+                t.id === id
+                  ? { ...t, category: newCategory, is_corrected: true }
+                  : t
               ),
             }
           })
@@ -151,14 +153,15 @@ export default function TransactionsPage() {
     setManualError(null)
 
     const parsedAmount = Number(manualAmount)
-    const signedAmount = manualType === 'expense'
-      ? -Math.abs(parsedAmount)
-      : Math.abs(parsedAmount)
+    const signedAmount =
+      manualType === "expense"
+        ? -Math.abs(parsedAmount)
+        : Math.abs(parsedAmount)
 
     try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date: manualDate,
           description: manualDescription,
@@ -170,19 +173,19 @@ export default function TransactionsPage() {
       const json = await res.json()
 
       if (!res.ok) {
-        setManualError(json.error ?? 'Failed to add transaction')
+        setManualError(json.error ?? "Failed to add transaction")
         return
       }
 
-      setManualAmount('')
-      setManualDescription('')
-      setManualCategory('Others')
-      setManualType('expense')
+      setManualAmount("")
+      setManualDescription("")
+      setManualCategory("Others")
+      setManualType("expense")
       setShowAddForm(false)
       setPage(1)
       fetchTransactions()
     } catch {
-      setManualError('Failed to add transaction')
+      setManualError("Failed to add transaction")
     } finally {
       setAddingManual(false)
     }
@@ -191,15 +194,19 @@ export default function TransactionsPage() {
   async function handleDeleteManual(id: string) {
     setDeletingId(id)
     try {
-      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        setError(typeof json.error === 'string' ? json.error : 'Failed to delete transaction')
+        setError(
+          typeof json.error === "string"
+            ? json.error
+            : "Failed to delete transaction"
+        )
         return
       }
       fetchTransactions()
     } catch {
-      setError('Failed to delete transaction')
+      setError("Failed to delete transaction")
     } finally {
       setDeletingId(null)
     }
@@ -211,7 +218,7 @@ export default function TransactionsPage() {
         <h1 className="text-xl font-semibold">Transactions</h1>
         <div className="flex flex-wrap justify-end gap-2">
           <button
-            onClick={() => setShowAddForm(v => !v)}
+            onClick={() => setShowAddForm((v) => !v)}
             className="rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors"
           >
             Add
@@ -221,12 +228,14 @@ export default function TransactionsPage() {
               setRecategorizing(true)
               setRecategorizeResult(null)
               try {
-                const res = await fetch('/api/transactions/recategorize', { method: 'POST' })
+                const res = await fetch("/api/transactions/recategorize", {
+                  method: "POST",
+                })
                 if (!res.ok) {
-                  let message = 'Failed to recategorize'
+                  let message = "Failed to recategorize"
                   try {
                     const data = await res.json()
-                    if (typeof data?.error === 'string' && data.error) {
+                    if (typeof data?.error === "string" && data.error) {
                       message = data.error
                     }
                   } catch {
@@ -236,19 +245,19 @@ export default function TransactionsPage() {
                 }
 
                 const reader = res.body?.getReader()
-                if (!reader) throw new Error('No stream')
+                if (!reader) throw new Error("No stream")
                 const decoder = new TextDecoder()
-                let buffer = ''
-                let lastResult = ''
-                let streamError = ''
+                let buffer = ""
+                let lastResult = ""
+                let streamError = ""
                 let sawDone = false
 
                 while (true) {
                   const { done, value } = await reader.read()
                   if (done) break
                   buffer += decoder.decode(value, { stream: true })
-                  const lines = buffer.split('\n')
-                  buffer = lines.pop() ?? ''
+                  const lines = buffer.split("\n")
+                  buffer = lines.pop() ?? ""
                   for (const line of lines) {
                     if (!line.trim()) continue
                     const data = JSON.parse(line)
@@ -258,7 +267,9 @@ export default function TransactionsPage() {
                       sawDone = true
                       lastResult = data.message
                     } else {
-                      setRecategorizeResult(`Processing ${data.progress} of ${data.total}... (${data.updated} updated)`)
+                      setRecategorizeResult(
+                        `Processing ${data.progress} of ${data.total}... (${data.updated} updated)`
+                      )
                     }
                   }
                 }
@@ -278,13 +289,17 @@ export default function TransactionsPage() {
                 }
 
                 if (!sawDone) {
-                  throw new Error('Recategorization ended before completion')
+                  throw new Error("Recategorization ended before completion")
                 }
 
-                setRecategorizeResult(lastResult || 'Done')
+                setRecategorizeResult(lastResult || "Done")
                 fetchTransactions()
               } catch (error) {
-                setRecategorizeResult(error instanceof Error ? error.message : 'Failed to recategorize')
+                setRecategorizeResult(
+                  error instanceof Error
+                    ? error.message
+                    : "Failed to recategorize"
+                )
               } finally {
                 setRecategorizing(false)
               }
@@ -292,7 +307,7 @@ export default function TransactionsPage() {
             disabled={recategorizing}
             className="rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors disabled:opacity-50"
           >
-            {recategorizing ? 'Recategorizing…' : 'Recategorize'}
+            {recategorizing ? "Recategorizing…" : "Recategorize"}
           </button>
           <Link
             href="/upload"
@@ -311,11 +326,16 @@ export default function TransactionsPage() {
                 <input
                   type="date"
                   value={manualDate}
-                  onChange={e => setManualDate(e.target.value)}
+                  onChange={(e) => setManualDate(e.target.value)}
                   className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100"
                   required
                 />
-                <Select value={manualType} onValueChange={value => setManualType(value as 'expense' | 'income')}>
+                <Select
+                  value={manualType}
+                  onValueChange={(value) =>
+                    setManualType(value as "expense" | "income")
+                  }
+                >
                   <SelectTrigger className="h-10 bg-zinc-800 border-zinc-700 text-sm">
                     <SelectValue />
                   </SelectTrigger>
@@ -333,7 +353,7 @@ export default function TransactionsPage() {
                 step="0.01"
                 placeholder="Amount"
                 value={manualAmount}
-                onChange={e => setManualAmount(e.target.value)}
+                onChange={(e) => setManualAmount(e.target.value)}
                 className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100 placeholder-zinc-500"
                 required
               />
@@ -342,7 +362,7 @@ export default function TransactionsPage() {
                 type="text"
                 placeholder="Description"
                 value={manualDescription}
-                onChange={e => setManualDescription(e.target.value)}
+                onChange={(e) => setManualDescription(e.target.value)}
                 className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100 placeholder-zinc-500"
                 required
               />
@@ -353,19 +373,26 @@ export default function TransactionsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
-                    {BANKS.map(b => (
-                      <SelectItem key={b} value={b}>{b.toUpperCase()}</SelectItem>
+                    {BANKS.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b.toUpperCase()}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                <Select value={manualCategory} onValueChange={setManualCategory}>
+                <Select
+                  value={manualCategory}
+                  onValueChange={setManualCategory}
+                >
                   <SelectTrigger className="h-10 bg-zinc-800 border-zinc-700 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
-                    {CATEGORIES.map(c => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -392,7 +419,7 @@ export default function TransactionsPage() {
                   className="bg-blue-600 text-white hover:bg-blue-500"
                   disabled={addingManual}
                 >
-                  {addingManual ? 'Adding...' : 'Add transaction'}
+                  {addingManual ? "Adding..." : "Add transaction"}
                 </Button>
               </div>
             </form>
@@ -406,31 +433,43 @@ export default function TransactionsPage() {
         </div>
       )}
 
-
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        <Select value={month} onValueChange={setMonth} disabled={recategorizing}>
+        <Select
+          value={month}
+          onValueChange={setMonth}
+          disabled={recategorizing}
+        >
           <SelectTrigger className="bg-zinc-900 border-zinc-700 w-36 text-sm">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-800 border-zinc-700">
             <SelectItem value="all">All months</SelectItem>
-            {months.map(m => (
+            {months.map((m) => (
               <SelectItem key={m} value={m}>
-                {new Date(m + '-01').toLocaleString('en-SG', { month: 'long', year: 'numeric' })}
+                {new Date(m + "-01").toLocaleString("en-SG", {
+                  month: "long",
+                  year: "numeric",
+                })}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Select value={category} onValueChange={setCategory} disabled={recategorizing}>
+        <Select
+          value={category}
+          onValueChange={setCategory}
+          disabled={recategorizing}
+        >
           <SelectTrigger className="bg-zinc-900 border-zinc-700 w-44 text-sm">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-800 border-zinc-700">
             <SelectItem value="all">All categories</SelectItem>
-            {CATEGORIES.map(c => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -441,8 +480,10 @@ export default function TransactionsPage() {
           </SelectTrigger>
           <SelectContent className="bg-zinc-800 border-zinc-700">
             <SelectItem value="all">All banks</SelectItem>
-            {BANKS.map(b => (
-              <SelectItem key={b} value={b}>{b.toUpperCase()}</SelectItem>
+            {BANKS.map((b) => (
+              <SelectItem key={b} value={b}>
+                {b.toUpperCase()}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -451,7 +492,10 @@ export default function TransactionsPage() {
       {loading && (
         <div className="space-y-1">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="rounded-lg bg-zinc-900 border border-zinc-800 h-14 animate-pulse" />
+            <div
+              key={i}
+              className="rounded-lg bg-zinc-900 border border-zinc-800 h-14 animate-pulse"
+            />
           ))}
         </div>
       )}
@@ -467,28 +511,38 @@ export default function TransactionsPage() {
 
           <div className="space-y-1">
             {data.transactions.length === 0 && (
-              <p className="text-center py-10 text-zinc-500 text-sm">No transactions found</p>
+              <p className="text-center py-10 text-zinc-500 text-sm">
+                No transactions found
+              </p>
             )}
-            {data.transactions.map(t => {
-              const color = CATEGORY_COLORS[t.category] ?? '#94A3B8'
+            {data.transactions.map((t) => {
+              const color = CATEGORY_COLORS[t.category] ?? "#94A3B8"
               return (
                 <Card key={t.id} className="bg-zinc-900 border-zinc-800">
                   <CardContent className="py-3 px-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
                     <div className="flex items-start justify-between gap-3 sm:contents">
                       {/* Date */}
-                      <span className="text-xs text-zinc-500 sm:w-20 sm:shrink-0 font-mono">{t.date}</span>
+                      <span className="text-xs text-zinc-500 sm:w-20 sm:shrink-0 font-mono">
+                        {t.date}
+                      </span>
 
                       {/* Amount */}
                       <span
-                        className={`font-mono text-sm font-medium whitespace-nowrap sm:order-3 ${t.amount < 0 ? 'text-white' : 'text-green-400'}`}
+                        className={`font-mono text-sm font-medium whitespace-nowrap sm:order-3 ${t.amount < 0 ? "text-white" : "text-green-400"}`}
                       >
-                        {t.amount < 0 ? '-' : '+'}{formatSGD(Math.abs(t.amount))}
+                        {t.amount < 0 ? "-" : "+"}
+                        {formatSGD(Math.abs(t.amount))}
                       </span>
                     </div>
 
                     {/* Description */}
                     <div className="min-w-0 flex-1 sm:order-2">
-                      <p className="text-sm text-zinc-100 sm:truncate leading-snug">{t.description}</p>
+                      <p
+                        className="text-sm text-zinc-100 sm:truncate leading-snug"
+                        title={t.description}
+                      >
+                        {t.description}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-1">
                         <Badge
                           className="text-[10px] px-1 py-0 font-normal border-0 h-4"
@@ -500,10 +554,14 @@ export default function TransactionsPage() {
                           {t.bank.toUpperCase()}
                         </Badge>
                         {t.is_corrected && (
-                          <span className="text-[10px] text-blue-500/70 font-medium">edited</span>
+                          <span className="text-[10px] text-blue-500/70 font-medium">
+                            edited
+                          </span>
                         )}
                         {t.is_manual && (
-                          <span className="text-[10px] text-zinc-500 font-medium">manual</span>
+                          <span className="text-[10px] text-zinc-500 font-medium">
+                            manual
+                          </span>
                         )}
                       </div>
                     </div>
@@ -511,12 +569,14 @@ export default function TransactionsPage() {
                     {/* Category selector */}
                     <div
                       className={`grid gap-2 sm:order-4 ${
-                        t.is_manual ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'
+                        t.is_manual
+                          ? "grid-cols-[minmax(0,1fr)_auto]"
+                          : "grid-cols-1"
                       }`}
                     >
                       <Select
                         value={t.category}
-                        onValueChange={val => handleCategoryChange(t.id, val)}
+                        onValueChange={(val) => handleCategoryChange(t.id, val)}
                         disabled={updatingId === t.id || recategorizing}
                       >
                         <SelectTrigger
@@ -526,7 +586,7 @@ export default function TransactionsPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-800 border-zinc-700">
-                          {CATEGORIES.map(c => (
+                          {CATEGORIES.map((c) => (
                             <SelectItem key={c} value={c} className="text-xs">
                               {c}
                             </SelectItem>
@@ -542,7 +602,7 @@ export default function TransactionsPage() {
                           disabled={deletingId === t.id}
                           onClick={() => handleDeleteManual(t.id)}
                         >
-                          {deletingId === t.id ? '...' : 'Delete'}
+                          {deletingId === t.id ? "..." : "Delete"}
                         </Button>
                       )}
                     </div>
@@ -560,7 +620,7 @@ export default function TransactionsPage() {
                 size="sm"
                 className="border-zinc-700 text-xs"
                 disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
+                onClick={() => setPage((p) => p - 1)}
               >
                 Previous
               </Button>
@@ -572,7 +632,7 @@ export default function TransactionsPage() {
                 size="sm"
                 className="border-zinc-700 text-xs"
                 disabled={page >= data.totalPages}
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage((p) => p + 1)}
               >
                 Next
               </Button>

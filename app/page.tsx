@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -56,18 +56,20 @@ function getMonthLabel(ym: string): string {
   })
 }
 
-function buildMonthOptions(): { value: string; label: string }[] {
-  const now = new Date()
-  const options = []
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, "0")
-    const value = `${y}-${m}`
-    options.push({ value, label: getMonthLabel(value) })
-  }
-  return options
-}
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+]
 
 interface BalanceData {
   balances: {
@@ -92,8 +94,42 @@ export default function HomePage() {
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [availableMonths, setAvailableMonths] = useState<string[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
-  const monthOptions = buildMonthOptions()
+  useEffect(() => {
+    fetch("/api/months")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.months)) setAvailableMonths(d.months)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [pickerOpen])
+
+  const monthsByYear = availableMonths.reduce<Record<number, number[]>>(
+    (acc, ym) => {
+      const [y, m] = ym.split("-").map(Number)
+      if (!acc[y]) acc[y] = []
+      acc[y].push(m)
+      return acc
+    },
+    {}
+  )
+  const years = Object.keys(monthsByYear)
+    .map(Number)
+    .sort((a, b) => b - a)
 
   useEffect(() => {
     setLoading(true)
@@ -147,21 +183,71 @@ export default function HomePage() {
         <h1 className="text-lg font-semibold text-zinc-100">
           Financial Overview
         </h1>
-        <select
-          value={selectedMonth}
-          onChange={(e) => {
-            setSelectedMonth(e.target.value)
-            setAutoFalledBack(false)
-          }}
-          aria-label="Select month"
-          className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-        >
-          {monthOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative" ref={pickerRef}>
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            aria-label="Select month"
+            aria-expanded={pickerOpen}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5"
+          >
+            <span>{getMonthLabel(selectedMonth)}</span>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              aria-hidden="true"
+              className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`}
+            >
+              <path
+                d="M2 3.5L5 6.5L8 3.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          {pickerOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 rounded-lg border border-zinc-700 bg-zinc-900 p-3 shadow-xl min-w-[220px]">
+              {years.map((year) => (
+                <div key={year} className="mb-2 last:mb-0">
+                  <p className="text-[10px] text-zinc-500 font-medium mb-1.5 uppercase tracking-wider">
+                    {year}
+                  </p>
+                  <div className="grid grid-cols-4 gap-1">
+                    {monthsByYear[year]
+                      .sort((a, b) => b - a)
+                      .map((m) => {
+                        const ym = `${year}-${String(m).padStart(2, "0")}`
+                        const isSelected = ym === selectedMonth
+                        return (
+                          <button
+                            key={ym}
+                            onClick={() => {
+                              setSelectedMonth(ym)
+                              setAutoFalledBack(false)
+                              setPickerOpen(false)
+                            }}
+                            className={`rounded px-1.5 py-1 text-xs font-medium transition-colors ${
+                              isSelected
+                                ? "bg-blue-600 text-white"
+                                : "text-zinc-300 hover:bg-zinc-700"
+                            }`}
+                          >
+                            {MONTH_SHORT[m - 1]}
+                          </button>
+                        )
+                      })}
+                  </div>
+                </div>
+              ))}
+              {years.length === 0 && (
+                <p className="text-xs text-zinc-500">Loading…</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {autoFalledBack && (
         <p className="text-xs text-zinc-500 -mt-3">
@@ -518,7 +604,10 @@ export default function HomePage() {
                     className="flex items-center justify-between py-2.5 gap-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-zinc-100 truncate">
+                      <p
+                        className="text-sm text-zinc-100 truncate"
+                        title={t.description}
+                      >
                         {t.description}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
