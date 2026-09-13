@@ -1,0 +1,15 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": ["app/ask/page.tsx"],
+        "createdAt": "2026-09-13T04:34:02.303Z",
+        "reason": "Codex review: disabled:text-zinc-500 is paired with disabled:bg-zinc-700; enabled purple button uses text-white. State-aware false positive."
+      }
+    ]
+  }
+}

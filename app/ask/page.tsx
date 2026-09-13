@@ -1,18 +1,25 @@
-'use client'
+"use client"
 
-import { useEffect, useRef, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import MiniBarChart from '@/components/MiniBarChart'
+import { useEffect, useRef, useState } from "react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+import MiniBarChart from "@/components/MiniBarChart"
 
 interface AnswerData {
-  type: 'bar'
+  type: "bar"
   labels: string[]
   values: number[]
 }
 
 interface Message {
   id: string
-  role: 'user' | 'ai' | 'loading'
+  role: "user" | "ai" | "loading"
   text: string
   answer_data?: AnswerData | null
   timestamp?: string
@@ -22,24 +29,26 @@ interface MemoryEntry {
   id: number
   key: string
   value: string
-  source: 'user' | 'inferred'
+  source: "user" | "inferred"
   created_at: string
 }
 
-
 function formatTime(iso: string) {
   try {
-    return new Date(iso).toLocaleString('en-SG', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    return new Date(iso).toLocaleString("en-SG", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     })
   } catch {
-    return ''
+    return ""
   }
 }
 
 export default function AskPage() {
   const [messages, setMessages] = useState<Message[]>([])
-  const [question, setQuestion] = useState('')
+  const [question, setQuestion] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [memory, setMemory] = useState<MemoryEntry[]>([])
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -49,17 +58,36 @@ export default function AskPage() {
 
   // Load history on mount
   useEffect(() => {
-    fetch('/api/ask/history')
-      .then(r => r.json())
-      .then(d => {
-        const convs: Array<{ id: number; question: string; answer_text: string; answer_data: string | null; created_at: string }> = d.conversations ?? []
+    fetch("/api/ask/history")
+      .then((r) => r.json())
+      .then((d) => {
+        const convs: Array<{
+          id: number
+          question: string
+          answer_text: string
+          answer_data: string | null
+          created_at: string
+        }> = d.conversations ?? []
         // Build message pairs in chronological order (history is newest-first, so reverse)
         const pairs: Message[] = []
         for (const c of [...convs].reverse()) {
-          pairs.push({ id: `u-${c.id}`, role: 'user', text: c.question, timestamp: c.created_at })
+          pairs.push({
+            id: `u-${c.id}`,
+            role: "user",
+            text: c.question,
+            timestamp: c.created_at,
+          })
           let ad: AnswerData | null = null
-          try { if (c.answer_data) ad = JSON.parse(c.answer_data) } catch {}
-          pairs.push({ id: `a-${c.id}`, role: 'ai', text: c.answer_text, answer_data: ad, timestamp: c.created_at })
+          try {
+            if (c.answer_data) ad = JSON.parse(c.answer_data)
+          } catch {}
+          pairs.push({
+            id: `a-${c.id}`,
+            role: "ai",
+            text: c.answer_text,
+            answer_data: ad,
+            timestamp: c.created_at,
+          })
         }
         setMessages(pairs)
         setHistoryLoaded(true)
@@ -69,17 +97,19 @@ export default function AskPage() {
 
   // Load memory
   function loadMemory() {
-    fetch('/api/memory')
-      .then(r => r.json())
-      .then(d => setMemory(d.entries ?? []))
+    fetch("/api/memory")
+      .then((r) => r.json())
+      .then((d) => setMemory(d.entries ?? []))
       .catch(() => {})
   }
 
-  useEffect(() => { loadMemory() }, [])
+  useEffect(() => {
+    loadMemory()
+  }, [])
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,32 +117,40 @@ export default function AskPage() {
     const q = question.trim()
     if (!q || submitting) return
 
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', text: q }
-    const loadingMsg: Message = { id: 'loading', role: 'loading', text: '' }
+    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: q }
+    const loadingMsg: Message = { id: "loading", role: "loading", text: "" }
 
-    setMessages(prev => [...prev, userMsg, loadingMsg])
-    setQuestion('')
+    setMessages((prev) => [...prev, userMsg, loadingMsg])
+    setQuestion("")
     setSubmitting(true)
 
     try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q }),
       })
       const data = await res.json()
       const aiMsg: Message = {
         id: `a-${Date.now()}`,
-        role: 'ai',
+        role: "ai",
         text: data.error ? `Error: ${data.error}` : data.text,
         answer_data: data.answer_data ?? null,
       }
-      setMessages(prev => prev.filter(m => m.id !== 'loading').concat(aiMsg))
+      setMessages((prev) =>
+        prev.filter((m) => m.id !== "loading").concat(aiMsg)
+      )
       loadMemory()
     } catch {
-      setMessages(prev => prev.filter(m => m.id !== 'loading').concat({
-        id: `a-${Date.now()}`, role: 'ai', text: 'Failed to reach server.',
-      }))
+      setMessages((prev) =>
+        prev
+          .filter((m) => m.id !== "loading")
+          .concat({
+            id: `a-${Date.now()}`,
+            role: "ai",
+            text: "Failed to reach server.",
+          })
+      )
     } finally {
       setSubmitting(false)
       textareaRef.current?.focus()
@@ -120,8 +158,8 @@ export default function AskPage() {
   }
 
   async function deleteMemory(id: number) {
-    await fetch(`/api/memory/${id}`, { method: 'DELETE' })
-    setMemory(prev => prev.filter(m => m.id !== id))
+    await fetch(`/api/memory/${id}`, { method: "DELETE" })
+    setMemory((prev) => prev.filter((m) => m.id !== id))
   }
 
   return (
@@ -131,34 +169,42 @@ export default function AskPage() {
         {historyLoaded && messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-zinc-500 text-center px-8">
-              Ask anything about your spending.<br />
-              <span className="text-zinc-600">e.g. "How much on food last month?" or "That Town Vets charge is Health."</span>
+              Ask anything about your spending.
+              <br />
+              <span className="text-zinc-600">
+                e.g. "How much on food last month?" or "Compare food and
+                transport spending." Read-only: this assistant cannot change
+                transactions or save memories.
+              </span>
             </p>
           </div>
         )}
 
         {messages.map((msg, i) => {
-          if (msg.role === 'loading') {
+          if (msg.role === "loading") {
             return (
               <div key="loading" className="flex justify-start">
                 <div className="bg-zinc-800 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
-                  <div className="flex gap-1 items-center h-4">
-                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full motion-safe:animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full motion-safe:animate-bounce motion-reduce:animate-pulse" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full motion-safe:animate-bounce motion-reduce:animate-pulse" style={{ animationDelay: '300ms' }} />
+                  <div
+                    role="status"
+                    className="text-sm text-zinc-300 motion-safe:animate-pulse"
+                  >
+                    Checking your spending…
                   </div>
                 </div>
               </div>
             )
           }
 
-          if (msg.role === 'user') {
+          if (msg.role === "user") {
             return (
               <div key={msg.id} className="flex justify-end">
                 <div className="bg-zinc-700 rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[85%]">
                   <p className="text-sm text-zinc-100">{msg.text}</p>
                   {msg.timestamp && (
-                    <p className="text-[10px] text-zinc-500 mt-1 text-right">{formatTime(msg.timestamp)}</p>
+                    <p className="text-[10px] text-zinc-500 mt-1 text-right">
+                      {formatTime(msg.timestamp)}
+                    </p>
                   )}
                 </div>
               </div>
@@ -166,14 +212,18 @@ export default function AskPage() {
           }
 
           // AI message
-          const showTime = i === 0 || messages[i - 1]?.role !== 'ai'
+          const showTime = i === 0 || messages[i - 1]?.role !== "ai"
           return (
             <div key={msg.id} className="flex justify-start">
               <div className="bg-zinc-800/80 border border-zinc-700/40 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[90%]">
-                <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  {msg.text}
+                </p>
                 {msg.answer_data && <MiniBarChart data={msg.answer_data} />}
                 {msg.timestamp && showTime && (
-                  <p className="text-[10px] text-zinc-600 mt-2">{formatTime(msg.timestamp)}</p>
+                  <p className="text-[10px] text-zinc-600 mt-2">
+                    {formatTime(msg.timestamp)}
+                  </p>
                 )}
               </div>
             </div>
@@ -188,10 +238,10 @@ export default function AskPage() {
         {/* Memory chip */}
         <div>
           <button
-            onClick={() => setMemoryOpen(o => !o)}
+            onClick={() => setMemoryOpen((o) => !o)}
             className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1"
           >
-            <span className="text-zinc-600">{memoryOpen ? '▲' : '▼'}</span>
+            <span className="text-zinc-600">{memoryOpen ? "▲" : "▼"}</span>
             What I remember ({memory.length})
           </button>
           {memoryOpen && (
@@ -199,9 +249,14 @@ export default function AskPage() {
               {memory.length === 0 ? (
                 <p className="text-xs text-zinc-600">Nothing remembered yet.</p>
               ) : (
-                memory.map(m => (
-                  <div key={m.id} className="flex items-start justify-between gap-2">
-                    <span className="text-xs text-zinc-400 leading-relaxed">{m.value}</span>
+                memory.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-start justify-between gap-2"
+                  >
+                    <span className="text-xs text-zinc-400 leading-relaxed">
+                      {m.value}
+                    </span>
                     <button
                       aria-label="Forget this memory"
                       onClick={() => deleteMemory(m.id)}
@@ -221,9 +276,9 @@ export default function AskPage() {
           <textarea
             ref={textareaRef}
             value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
                 handleSubmit(e as unknown as React.FormEvent)
               }
@@ -231,7 +286,7 @@ export default function AskPage() {
             placeholder="Ask about your finances…"
             className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none leading-snug"
             rows={1}
-            style={{ maxHeight: '120px', overflowY: 'auto' }}
+            style={{ maxHeight: "120px", overflowY: "auto" }}
             disabled={submitting}
           />
           <button
