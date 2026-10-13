@@ -80,6 +80,23 @@ async function main() {
       const savedBody = await (await GET()).json()
       assert.equal(savedBody.total, 12845.67)
       assert.equal(savedBody.balances.length, 2)
+
+      // Saving a credit card balance must upgrade the old schema rather than
+      // silently dropping account_type (which made card debt count as cash).
+      const { saveBalanceHistory } = await import("../lib/balance-history")
+      await saveBalanceHistory({
+        bank: "uob",
+        balance: 2126.87,
+        accountType: "credit_card",
+        recordedAt: "2026-10-04T00:00:00.000Z",
+      })
+      const ccBody = await (await GET()).json()
+      const uob = ccBody.balances.find(
+        (b: { bank: string }) => b.bank === "uob"
+      )
+      assert.equal(uob?.account_type, "credit_card")
+      assert.equal(ccBody.totalCC, 2126.87)
+      assert.equal(ccBody.total, 12845.67)
     })
 
     console.log("balances-api-schema-compat test passed")
