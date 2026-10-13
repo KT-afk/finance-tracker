@@ -128,6 +128,23 @@ assert.deepEqual(
   [["2026-06-29", "IBG GIRO SALA Wise Asia-Pacific P Wise SG Salary", 6733.55]]
 )
 
+const uobTwoCardText = `
+Statement Date 27 SEP 2026
+PREVIOUS BALANCE 1,942.15
+14 SEP 13 SEP PAYMT THRU E-BANK/HOMEB/CYBERB (EP30) 1,942.15 CR
+28 AUG 26 AUG FAIRPRICE FINEST ARTRA SINGAPORE 6.40
+SUB TOTAL 1,454.41
+TOTAL BALANCE FOR PREFERRED VISA 1,454.41
+PREVIOUS BALANCE 357.76
+14 SEP 13 SEP PAYMT THRU E-BANK/HOMEB/CYBERB (EP48) 357.76 CR
+27 AUG 26 AUG EAT-3-BOWLS-SINGPOST SINGAPORE 11.50
+SUB TOTAL 672.46
+TOTAL BALANCE FOR LADY'S CARD 672.46
+`
+const uobTwoCardResult = parseUOBCreditCardPDF(uobTwoCardText)
+assert.equal(uobTwoCardResult.endingBalance, 2126.87)
+assert.equal(uobTwoCardResult.accountType, "credit_card")
+
 const { transactions: uobTransactions } = parseUOBCreditCardPDF(uobText)
 assert.equal(uobTransactions.length, 2)
 assert.deepEqual(

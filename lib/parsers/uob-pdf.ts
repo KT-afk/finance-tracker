@@ -1,9 +1,18 @@
-import { RawTransaction, ParseResult } from './types'
+import { RawTransaction, ParseResult } from "./types"
 
 const MONTHS: Record<string, string> = {
-  JAN: '01', FEB: '02', MAR: '03', APR: '04',
-  MAY: '05', JUN: '06', JUL: '07', AUG: '08',
-  SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+  JAN: "01",
+  FEB: "02",
+  MAR: "03",
+  APR: "04",
+  MAY: "05",
+  JUN: "06",
+  JUL: "07",
+  AUG: "08",
+  SEP: "09",
+  OCT: "10",
+  NOV: "11",
+  DEC: "12",
 }
 
 const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
@@ -11,7 +20,7 @@ const DATE_TOKEN = String.raw`\d{1,2}\s+[A-Z]{3}`
 // Match: DD MMM  DD MMM  Description  Amount
 const TX_LINE = new RegExp(
   String.raw`^\s+(${DATE_TOKEN})\s+(${DATE_TOKEN})\s+(.+?)\s{2,}([\d,]+\.\d{2})\s*(CR)?\s*$`,
-  'i'
+  "i"
 )
 
 // Lines to skip entirely
@@ -29,8 +38,8 @@ const PAGE_BOUNDARY = /Please note that you are bound/i
 const IGNORE_CONTINUATION = [
   /^Ref No\.\s*:/,
   /^USD\s+[\d,.]+/,
-  /^[A-Z]{3}\s+[\d,.]+$/,  // Foreign currency line like "USD 139.00"
-  /^-{10,}/,               // Page separator dashes
+  /^[A-Z]{3}\s+[\d,.]+$/, // Foreign currency line like "USD 139.00"
+  /^-{10,}/, // Page separator dashes
 ]
 
 /**
@@ -47,7 +56,11 @@ function extractStatementYear(text: string): number {
  * Convert "DD MMM" + statement year to YYYY-MM-DD.
  * If the transaction month is after the statement month, it's from the previous year.
  */
-function resolveDate(ddMmm: string, statementYear: number, statementMonth: number): string {
+function resolveDate(
+  ddMmm: string,
+  statementYear: number,
+  statementMonth: number
+): string {
   const parts = ddMmm.trim().split(/\s+/)
   if (parts.length !== 2) throw new Error(`Invalid date: ${ddMmm}`)
   const [day, mon] = parts
@@ -57,7 +70,7 @@ function resolveDate(ddMmm: string, statementYear: number, statementMonth: numbe
   const monthNum = parseInt(month)
   const year = monthNum > statementMonth + 1 ? statementYear - 1 : statementYear
 
-  return `${year}-${month}-${day.padStart(2, '0')}`
+  return `${year}-${month}-${day.padStart(2, "0")}`
 }
 
 /**
@@ -66,6 +79,18 @@ function resolveDate(ddMmm: string, statementYear: number, statementMonth: numbe
  * Account statement: the last running balance (returned separately).
  */
 function extractUOBClosingBalance(text: string): number | undefined {
+  // Multi-card statements list one "TOTAL BALANCE FOR <card>" per card; sum them.
+  const perCard = [
+    ...text.matchAll(/TOTAL\s+BALANCE\s+FOR[^\n]*?([\d,]+\.\d{2})/gi),
+  ]
+  if (perCard.length > 0) {
+    const total = perCard.reduce(
+      (sum, m) => sum + parseFloat(m[1].replace(/,/g, "")),
+      0
+    )
+    return Math.round(total * 100) / 100
+  }
+
   const patterns = [
     /TOTAL\s+BALANCE[^\n]*?([\d,]+\.\d{2})/i,
     /OUTSTANDING\s+BALANCE[^\n]*?([\d,]+\.\d{2})/i,
@@ -75,7 +100,7 @@ function extractUOBClosingBalance(text: string): number | undefined {
   for (const pat of patterns) {
     const m = text.match(pat)
     if (m) {
-      const val = parseFloat(m[1].replace(/,/g, ''))
+      const val = parseFloat(m[1].replace(/,/g, ""))
       if (!isNaN(val) && val >= 0) return val
     }
   }
@@ -85,17 +110,41 @@ function extractUOBClosingBalance(text: string): number | undefined {
 export function parseUOBCreditCardPDF(text: string): ParseResult {
   const statementYear = extractStatementYear(text)
   const stmtMatch = text.match(/Statement Date\s+\d{1,2}\s+([A-Z]{3})\s+\d{4}/i)
-  const statementMonth = stmtMatch ? parseInt(MONTHS[stmtMatch[1].toUpperCase()] ?? '1') : 1
+  const statementMonth = stmtMatch
+    ? parseInt(MONTHS[stmtMatch[1].toUpperCase()] ?? "1")
+    : 1
   const endingBalance = extractUOBClosingBalance(text)
 
-  const layoutTransactions = parseLayoutCreditCardText(text, statementYear, statementMonth)
-  if (layoutTransactions.length > 0) return { transactions: layoutTransactions, endingBalance, accountType: 'credit_card' }
+  const layoutTransactions = parseLayoutCreditCardText(
+    text,
+    statementYear,
+    statementMonth
+  )
+  if (layoutTransactions.length > 0)
+    return {
+      transactions: layoutTransactions,
+      endingBalance,
+      accountType: "credit_card",
+    }
 
-  const stackedTransactions = parseStackedCreditCardText(text, statementYear, statementMonth)
-  if (stackedTransactions.length > 0) return { transactions: stackedTransactions, endingBalance, accountType: 'credit_card' }
+  const stackedTransactions = parseStackedCreditCardText(
+    text,
+    statementYear,
+    statementMonth
+  )
+  if (stackedTransactions.length > 0)
+    return {
+      transactions: stackedTransactions,
+      endingBalance,
+      accountType: "credit_card",
+    }
 
   const accountTransactions = parseAccountStatementText(text)
-  return { transactions: accountTransactions, endingBalance, accountType: 'credit_card' }
+  return {
+    transactions: accountTransactions,
+    endingBalance,
+    accountType: "credit_card",
+  }
 }
 
 function parseLayoutCreditCardText(
@@ -103,14 +152,19 @@ function parseLayoutCreditCardText(
   statementYear: number,
   statementMonth: number
 ): RawTransaction[] {
-  const lines = text.split('\n')
+  const lines = text.split("\n")
   const results: RawTransaction[] = []
 
   let inTransactionSection = false
-  let currentTx: { date: string; description: string; amount: number } | null = null
+  let currentTx: { date: string; description: string; amount: number } | null =
+    null
 
   for (const line of lines) {
-    if (/Post(?:ing)?(?:\s+Date)?\s+Trans(?:action)?(?:\s+Date)?\s+Description/i.test(line)) {
+    if (
+      /Post(?:ing)?(?:\s+Date)?\s+Trans(?:action)?(?:\s+Date)?\s+Description/i.test(
+        line
+      )
+    ) {
       inTransactionSection = true
       continue
     }
@@ -123,7 +177,7 @@ function parseLayoutCreditCardText(
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'uob',
+          bank: "uob",
         })
         currentTx = null
       }
@@ -137,7 +191,7 @@ function parseLayoutCreditCardText(
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'uob',
+          bank: "uob",
         })
         currentTx = null
       }
@@ -147,7 +201,7 @@ function parseLayoutCreditCardText(
 
     if (!inTransactionSection) continue
 
-    if (SKIP_PATTERNS.some(p => p.test(line))) continue
+    if (SKIP_PATTERNS.some((p) => p.test(line))) continue
 
     const txMatch = line.match(TX_LINE)
     if (txMatch) {
@@ -156,13 +210,13 @@ function parseLayoutCreditCardText(
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'uob',
+          bank: "uob",
         })
       }
 
       const [, , transDate, description, amountStr, cr] = txMatch
       const date = resolveDate(transDate, statementYear, statementMonth)
-      const amount = parseFloat(amountStr.replace(/,/g, ''))
+      const amount = parseFloat(amountStr.replace(/,/g, ""))
 
       currentTx = {
         date,
@@ -172,8 +226,8 @@ function parseLayoutCreditCardText(
     } else if (currentTx) {
       const trimmed = line.trim()
       // Skip ref numbers and foreign currency lines
-      if (trimmed && !IGNORE_CONTINUATION.some(p => p.test(trimmed))) {
-        currentTx.description += ' ' + trimmed
+      if (trimmed && !IGNORE_CONTINUATION.some((p) => p.test(trimmed))) {
+        currentTx.description += " " + trimmed
       }
     }
   }
@@ -183,7 +237,7 @@ function parseLayoutCreditCardText(
       date: currentTx.date,
       description: currentTx.description.trim(),
       amount: currentTx.amount,
-      bank: 'uob',
+      bank: "uob",
     })
   }
 
@@ -195,18 +249,25 @@ function parseStackedCreditCardText(
   statementYear: number,
   statementMonth: number
 ): RawTransaction[] {
-  const lines = text.split('\n')
+  const lines = text.split("\n")
   const results: RawTransaction[] = []
 
   let inTransactionSection = false
   let pendingTx: { date: string; description: string } | null = null
 
-  function pushTransaction(description: string, date: string, amountStr: string, cr?: string) {
+  function pushTransaction(
+    description: string,
+    date: string,
+    amountStr: string,
+    cr?: string
+  ) {
     results.push({
       date,
       description: description.trim(),
-      amount: cr ? parseFloat(amountStr.replace(/,/g, '')) : -parseFloat(amountStr.replace(/,/g, '')),
-      bank: 'uob',
+      amount: cr
+        ? parseFloat(amountStr.replace(/,/g, ""))
+        : -parseFloat(amountStr.replace(/,/g, "")),
+      bank: "uob",
     })
   }
 
@@ -226,7 +287,7 @@ function parseStackedCreditCardText(
     }
 
     if (!inTransactionSection) continue
-    if (SKIP_PATTERNS.some(p => p.test(trimmed))) continue
+    if (SKIP_PATTERNS.some((p) => p.test(trimmed))) continue
     if (/^(SGD|Post|Date|Trans)$/i.test(trimmed)) continue
     if (/^--\s*\d+\s+of\s+\d+\s*--$/i.test(trimmed)) continue
     if (/^Page \d+ of \d+/i.test(trimmed)) continue
@@ -236,15 +297,23 @@ function parseStackedCreditCardText(
 
     const amountOnly = trimmed.match(/^([\d,]+\.\d{2})\s*(CR)?$/i)
     if (amountOnly && pendingTx) {
-      pushTransaction(pendingTx.description, pendingTx.date, amountOnly[1], amountOnly[2])
+      pushTransaction(
+        pendingTx.description,
+        pendingTx.date,
+        amountOnly[1],
+        amountOnly[2]
+      )
       pendingTx = null
       continue
     }
 
-    if (IGNORE_CONTINUATION.some(p => p.test(trimmed))) continue
+    if (IGNORE_CONTINUATION.some((p) => p.test(trimmed))) continue
 
     const txMatch = trimmed.match(
-      new RegExp(String.raw`^(${DATE_TOKEN})\s+(${DATE_TOKEN})\s+(.+?)(?:\s+([\d,]+\.\d{2})\s*(CR)?)?$`, 'i')
+      new RegExp(
+        String.raw`^(${DATE_TOKEN})\s+(${DATE_TOKEN})\s+(.+?)(?:\s+([\d,]+\.\d{2})\s*(CR)?)?$`,
+        "i"
+      )
     )
 
     if (txMatch) {
@@ -260,7 +329,7 @@ function parseStackedCreditCardText(
     }
 
     if (pendingTx) {
-      pendingTx.description += ' ' + trimmed
+      pendingTx.description += " " + trimmed
     }
   }
 
@@ -268,10 +337,12 @@ function parseStackedCreditCardText(
 }
 
 function parseAccountStatementText(text: string): RawTransaction[] {
-  const periodMatch = text.match(/Period:\s+\d{1,2}\s+([A-Za-z]{3})\s+(\d{4})\s+to/i)
+  const periodMatch = text.match(
+    /Period:\s+\d{1,2}\s+([A-Za-z]{3})\s+(\d{4})\s+to/i
+  )
   const year = periodMatch ? parseInt(periodMatch[2]) : new Date().getFullYear()
 
-  const lines = text.split('\n')
+  const lines = text.split("\n")
   const results: RawTransaction[] = []
   let inTransactionSection = false
   let runningBalance: number | null = null
@@ -279,7 +350,7 @@ function parseAccountStatementText(text: string): RawTransaction[] {
 
   function parseBalance(raw: string): number {
     const isOverdrawn = /OD$/i.test(raw)
-    const value = parseFloat(raw.replace(/[,\sA-Z]/gi, ''))
+    const value = parseFloat(raw.replace(/[,\sA-Z]/gi, ""))
     return isOverdrawn ? -value : value
   }
 
@@ -287,29 +358,29 @@ function parseAccountStatementText(text: string): RawTransaction[] {
     const [day, mon] = dateStr.trim().split(/\s+/)
     const month = MONTHS[mon.toUpperCase()]
     if (!month) throw new Error(`Unknown month: ${mon}`)
-    return `${year}-${month}-${day.padStart(2, '0')}`
+    return `${year}-${month}-${day.padStart(2, "0")}`
   }
 
   function cleanDescription(parts: string[]): string {
     return parts
-      .filter(part => !/^(?=.*\d)[A-Z0-9]{12,}$/i.test(part.trim()))
-      .join(' ')
-      .replace(/\s+/g, ' ')
+      .filter((part) => !/^(?=.*\d)[A-Z0-9]{12,}$/i.test(part.trim()))
+      .join(" ")
+      .replace(/\s+/g, " ")
       .trim()
   }
 
   function inferAmount(amount: number, nextBalance: number): number {
     if (runningBalance === null) return -amount
 
-    const depositDelta = Math.abs((runningBalance + amount) - nextBalance)
-    const withdrawalDelta = Math.abs((runningBalance - amount) - nextBalance)
+    const depositDelta = Math.abs(runningBalance + amount - nextBalance)
+    const withdrawalDelta = Math.abs(runningBalance - amount - nextBalance)
     return depositDelta <= withdrawalDelta ? amount : -amount
   }
 
   function pushPending(amountRaw: string, balanceRaw: string) {
     if (!pendingTx) return
 
-    const amount = parseFloat(amountRaw.replace(/,/g, ''))
+    const amount = parseFloat(amountRaw.replace(/,/g, ""))
     const nextBalance = parseBalance(balanceRaw)
     const signedAmount = inferAmount(amount, nextBalance)
 
@@ -317,7 +388,7 @@ function parseAccountStatementText(text: string): RawTransaction[] {
       date: pendingTx.date,
       description: cleanDescription(pendingTx.descriptionParts),
       amount: signedAmount,
-      bank: 'uob',
+      bank: "uob",
     })
 
     runningBalance = nextBalance
@@ -346,7 +417,9 @@ function parseAccountStatementText(text: string): RawTransaction[] {
     if (/^Total\s/i.test(trimmed)) continue
     if (!trimmed) continue
 
-    const balanceMatch = trimmed.match(/^(\d{1,2}\s+[A-Za-z]{3})\s+BALANCE B\/F\s+([\d,]+\.\d{2}(?:OD)?)$/i)
+    const balanceMatch = trimmed.match(
+      /^(\d{1,2}\s+[A-Za-z]{3})\s+BALANCE B\/F\s+([\d,]+\.\d{2}(?:OD)?)$/i
+    )
     if (balanceMatch) {
       runningBalance = parseBalance(balanceMatch[2])
       continue
@@ -365,7 +438,9 @@ function parseAccountStatementText(text: string): RawTransaction[] {
       continue
     }
 
-    const amountMatch = trimmed.match(/^([\d,]+\.\d{2})\s+([\d,]+\.\d{2}(?:OD)?)$/i)
+    const amountMatch = trimmed.match(
+      /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2}(?:OD)?)$/i
+    )
     if (amountMatch) {
       pushPending(amountMatch[1], amountMatch[2])
       continue
