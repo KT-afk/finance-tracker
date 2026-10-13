@@ -4,6 +4,7 @@ import { existsSync } from "node:fs"
 import { extractTextFromPDF } from "../lib/parsers/pdf"
 import { parseOCBCPDF } from "../lib/parsers/ocbc-pdf"
 import { parseUOBCreditCardPDF } from "../lib/parsers/uob-pdf"
+import { checkReconciliation } from "../lib/parsers/reconcile"
 
 const exactOcbcPath = process.env.OCBC_MAY_PDF
 const exactUobPath = process.env.UOB_MAY_PDF
@@ -132,7 +133,7 @@ assert.deepEqual(
 // not keywords — incoming PayNow "from <name>" has no deposit keyword.
 const ocbcPlainTextIncomingPayNow = `
 1 SEP 2026 TO 30 SEP 2026
-17,139.81\tBALANCE B/F
+11,219.39\tBALANCE B/F
 29 SEP 5,438.00 16,657.39\t29 SEP IBG GIRO
 SALA Wise Asia-Pacific P Wise SG Salary
 30 SEP 1,250.00 17,907.39\t30 SEP PAYMENT/TRANSFER
@@ -141,12 +142,27 @@ from YOON THIRI
 30 SEP 30.00 17,877.39\t30 SEP FAST PAYMENT
 via PayNow-UEN
 to FABRIC A SEC PTE
-17,877.93\tBALANCE C/F
+17,877.39\tBALANCE C/F
 `
+const ocbcIncomingResult = parseOCBCPDF(ocbcPlainTextIncomingPayNow)
 assert.deepEqual(
-  parseOCBCPDF(ocbcPlainTextIncomingPayNow).transactions.map((t) => t.amount),
+  ocbcIncomingResult.transactions.map((t) => t.amount),
   [5438, 1250, -30]
 )
+// Opening + parsed transactions = closing, so the statement reconciles.
+assert.deepEqual(checkReconciliation(ocbcIncomingResult), {
+  expected: 6658,
+  actual: 6658,
+  difference: 0,
+  ok: true,
+})
+// A dropped transaction must surface as a mismatch.
+const ocbcMissingTx = checkReconciliation({
+  ...ocbcIncomingResult,
+  transactions: ocbcIncomingResult.transactions.slice(0, 2),
+})
+assert.equal(ocbcMissingTx?.ok, false)
+assert.equal(ocbcMissingTx?.difference, 30)
 
 const uobTwoCardText = `
 Statement Date 27 SEP 2026
@@ -164,6 +180,9 @@ TOTAL BALANCE FOR LADY'S CARD 672.46
 const uobTwoCardResult = parseUOBCreditCardPDF(uobTwoCardText)
 assert.equal(uobTwoCardResult.endingBalance, 2126.87)
 assert.equal(uobTwoCardResult.accountType, "credit_card")
+// Card debt fell from 2,299.91 to 2,126.87, so transactions should net +173.04.
+assert.equal(checkReconciliation(uobTwoCardResult)?.expected, 173.04)
+assert.equal(checkReconciliation({ transactions: [] }), undefined)
 
 const { transactions: uobTransactions } = parseUOBCreditCardPDF(uobText)
 assert.equal(uobTransactions.length, 2)

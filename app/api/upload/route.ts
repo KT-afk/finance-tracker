@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
 import { Bank, BANKS } from "@/lib/schema"
 import { saveBalanceHistory } from "@/lib/balance-history"
+import { checkReconciliation } from "@/lib/parsers/reconcile"
 import { inArray } from "drizzle-orm"
 
 export async function POST(req: NextRequest) {
@@ -84,9 +85,15 @@ export async function POST(req: NextRequest) {
       }))
     )
 
+    // If the statement's own totals don't match what we parsed, hold the
+    // balance back until the user chooses to import anyway.
+    const reconciliation = checkReconciliation(parseResult)
+    const balanceOnHold =
+      endingBalance !== undefined && reconciliation?.ok === false
+
     // Save ending balance if extracted from CSV
     let savedBalance = false
-    if (endingBalance !== undefined) {
+    if (endingBalance !== undefined && !balanceOnHold) {
       try {
         await saveBalanceHistory({
           bank: bank as Bank,
@@ -115,6 +122,10 @@ export async function POST(req: NextRequest) {
         dateTo,
         bank,
         endingBalance,
+        reconciliation,
+        pendingBalance: balanceOnHold
+          ? { bank, balance: endingBalance, accountType }
+          : undefined,
       },
       transactions: categorized,
     })

@@ -107,6 +107,28 @@ function extractUOBClosingBalance(text: string): number | undefined {
   return undefined
 }
 
+/**
+ * Net cash change implied by a card statement: previous balance minus new
+ * balance, summed across cards. Payments reduce debt, so they count positive.
+ */
+function extractUOBExpectedNet(text: string): number | undefined {
+  const amount = (m: RegExpMatchArray) =>
+    parseFloat(m[1].replace(/,/g, "")) * (m[2] ? -1 : 1)
+  const previous = [
+    ...text.matchAll(/PREVIOUS\s+BALANCE[^\n]*?([\d,]+\.\d{2})(\s*CR)?/gi),
+  ]
+  const current = [
+    ...text.matchAll(/TOTAL\s+BALANCE\s+FOR[^\n]*?([\d,]+\.\d{2})(\s*CR)?/gi),
+  ]
+  if (current.length === 0 || previous.length !== current.length)
+    return undefined
+
+  const net =
+    previous.reduce((sum, m) => sum + amount(m), 0) -
+    current.reduce((sum, m) => sum + amount(m), 0)
+  return Math.round(net * 100) / 100
+}
+
 export function parseUOBCreditCardPDF(text: string): ParseResult {
   const statementYear = extractStatementYear(text)
   const stmtMatch = text.match(/Statement Date\s+\d{1,2}\s+([A-Z]{3})\s+\d{4}/i)
@@ -114,6 +136,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     ? parseInt(MONTHS[stmtMatch[1].toUpperCase()] ?? "1")
     : 1
   const endingBalance = extractUOBClosingBalance(text)
+  const expectedNet = extractUOBExpectedNet(text)
 
   const layoutTransactions = parseLayoutCreditCardText(
     text,
@@ -124,6 +147,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     return {
       transactions: layoutTransactions,
       endingBalance,
+      expectedNet,
       accountType: "credit_card",
     }
 
@@ -136,6 +160,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     return {
       transactions: stackedTransactions,
       endingBalance,
+      expectedNet,
       accountType: "credit_card",
     }
 
@@ -143,6 +168,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
   return {
     transactions: accountTransactions,
     endingBalance,
+    expectedNet,
     accountType: "credit_card",
   }
 }

@@ -45,6 +45,29 @@ interface PreviewData {
   dateTo: string
   bank: string
   endingBalance?: number
+  mismatches: Mismatch[]
+  pendingBalances: PendingBalance[]
+}
+
+interface Mismatch {
+  file: string
+  expected: number
+  actual: number
+  difference: number
+}
+
+interface PendingBalance {
+  bank: string
+  balance: number
+  accountType: string
+}
+
+function formatSignedAmount(n: number): string {
+  const formatted = Math.abs(n).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `${n < 0 ? "−" : "+"}$${formatted}`
 }
 
 export default function UploadPage() {
@@ -95,6 +118,8 @@ export default function UploadPage() {
       let dateFrom = ""
       let dateTo = ""
       let latestEndingBalance: number | undefined
+      const mismatches: Mismatch[] = []
+      const pendingBalances: PendingBalance[] = []
 
       const skippedFiles: string[] = []
 
@@ -128,6 +153,13 @@ export default function UploadPage() {
           dateTo = data.preview.dateTo
         if (data.preview.endingBalance !== undefined)
           latestEndingBalance = data.preview.endingBalance
+        if (data.preview.reconciliation?.ok === false)
+          mismatches.push({
+            file: files[i].name,
+            ...data.preview.reconciliation,
+          })
+        if (data.preview.pendingBalance)
+          pendingBalances.push(data.preview.pendingBalance)
       }
 
       if (allTransactions.length === 0 && skippedFiles.length > 0) {
@@ -151,6 +183,8 @@ export default function UploadPage() {
         dateTo,
         bank,
         endingBalance: latestEndingBalance,
+        mismatches,
+        pendingBalances,
       })
       setPendingTransactions(allTransactions)
     } catch {
@@ -169,7 +203,10 @@ export default function UploadPage() {
       const res = await fetch("/api/upload/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactions: pendingTransactions }),
+        body: JSON.stringify({
+          transactions: pendingTransactions,
+          balances: preview?.pendingBalances ?? [],
+        }),
       })
       const data = await res.json()
 
@@ -326,9 +363,48 @@ export default function UploadPage() {
                   </span>
                 </p>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Account balance will be automatically updated after
-                  confirmation.
+                  {preview.pendingBalances.length > 0
+                    ? "Not saved yet — it will only be saved if you import anyway."
+                    : "Account balance will be automatically updated after confirmation."}
                 </p>
+              </div>
+            )}
+
+            {/* Statement totals check */}
+            {preview.mismatches.length > 0 && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+              >
+                <p className="font-medium text-amber-300">
+                  <span aria-hidden="true">⚠ </span>
+                  Totals don&apos;t match the statement
+                </p>
+                <p className="mt-1 text-xs text-zinc-300">
+                  Some transactions may be missing or have the wrong sign. Check
+                  them before importing, or cancel.
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-zinc-300">
+                  {preview.mismatches.map((m) => (
+                    <li key={m.file} className="break-words">
+                      <span className="text-zinc-400">{m.file}:</span> statement
+                      says{" "}
+                      <span className="font-mono tabular-nums text-white">
+                        {formatSignedAmount(m.expected)}
+                      </span>
+                      , parsed{" "}
+                      <span className="font-mono tabular-nums text-white">
+                        {formatSignedAmount(m.actual)}
+                      </span>{" "}
+                      (off by{" "}
+                      <span className="font-mono tabular-nums text-amber-300">
+                        {formatSignedAmount(m.difference)}
+                      </span>
+                      )
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
@@ -346,7 +422,9 @@ export default function UploadPage() {
               >
                 Cancel
               </Button>
-              {preview.newCount === 0 && preview.endingBalance !== undefined ? (
+              {preview.newCount === 0 &&
+              preview.endingBalance !== undefined &&
+              preview.pendingBalances.length === 0 ? (
                 <Button
                   className="flex-1 bg-green-700 text-white hover:bg-green-600"
                   onClick={() => router.push("/")}
@@ -356,12 +434,20 @@ export default function UploadPage() {
               ) : (
                 <Button
                   className="flex-1 bg-blue-600 text-white hover:bg-blue-500"
-                  disabled={confirming || preview.newCount === 0}
+                  disabled={
+                    confirming ||
+                    (preview.newCount === 0 &&
+                      preview.pendingBalances.length === 0)
+                  }
                   onClick={handleConfirm}
                 >
                   {confirming
                     ? "Saving…"
-                    : `Import ${preview.newCount} transactions`}
+                    : preview.newCount === 0
+                      ? "Save balance anyway"
+                      : preview.mismatches.length > 0
+                        ? `Import ${preview.newCount} transactions anyway`
+                        : `Import ${preview.newCount} transactions`}
                 </Button>
               )}
             </div>

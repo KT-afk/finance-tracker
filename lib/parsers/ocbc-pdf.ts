@@ -418,11 +418,35 @@ function extractClosingBalance(text: string): number | undefined {
  * Falls back to a plain-text regex parser if the columnar one yields 0 results
  * (which happens when pdf-parse is used as the extraction fallback on Vercel).
  */
+/**
+ * Extract the opening balance from the BALANCE B/F line.
+ */
+function extractOpeningBalance(text: string): number | undefined {
+  const patterns = [
+    /BALANCE\s+B\/F[^\n]*?([\d,]+\.\d{2})/i,
+    /([\d,]+\.\d{2})[^\n]*BALANCE\s+B\/F/i,
+  ]
+  for (const pat of patterns) {
+    const m = text.match(pat)
+    if (m) {
+      const val = parseFloat(m[1].replace(/,/g, ""))
+      if (!isNaN(val)) return val
+    }
+  }
+  return undefined
+}
+
 export function parseOCBCPDF(text: string): ParseResult {
   const endingBalance = extractClosingBalance(text)
+  const openingBalance = extractOpeningBalance(text)
+  const expectedNet =
+    endingBalance !== undefined && openingBalance !== undefined
+      ? endingBalance - openingBalance
+      : undefined
 
   const columnar = parseOCBCPDFColumnar(text)
-  if (columnar.length > 0) return { transactions: columnar, endingBalance }
+  if (columnar.length > 0)
+    return { transactions: columnar, endingBalance, expectedNet }
 
   // Columnar parse yielded nothing — likely plain-text extraction (no column alignment).
   // Log the first 40 lines to help diagnose future format changes.
@@ -439,5 +463,5 @@ export function parseOCBCPDF(text: string): ParseResult {
       text.length
     )
   }
-  return { transactions: plainText, endingBalance }
+  return { transactions: plainText, endingBalance, expectedNet }
 }

@@ -1,16 +1,19 @@
-import { Bank } from '../schema'
+import { Bank } from "../schema"
 
 export interface RawTransaction {
-  date: string        // ISO date string YYYY-MM-DD
+  date: string // ISO date string YYYY-MM-DD
   description: string
-  amount: number      // negative = expense, positive = income
+  amount: number // negative = expense, positive = income
   bank: Bank
 }
 
 export interface ParseResult {
   transactions: RawTransaction[]
-  endingBalance?: number        // Extracted from file if available
-  accountType?: 'savings' | 'credit_card'  // Defaults to savings if not set
+  endingBalance?: number // Extracted from file if available
+  accountType?: "savings" | "credit_card" // Defaults to savings if not set
+  // Net cash change implied by the statement's opening/closing figures
+  // (credit cards: previous balance - new balance). Used to verify parsing.
+  expectedNet?: number
 }
 
 /**
@@ -22,10 +25,10 @@ export interface ParseResult {
 export function tokenizeCSV(csv: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
-  let field = ''
+  let field = ""
   let inQuotes = false
   // Normalise line endings to \n
-  const src = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const src = csv.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
 
   for (let i = 0; i < src.length; i++) {
     const ch = src[i]
@@ -46,12 +49,12 @@ export function tokenizeCSV(csv: string): string[][] {
     } else {
       if (ch === '"') {
         inQuotes = true
-      } else if (ch === ',') {
+      } else if (ch === ",") {
         row.push(field)
-        field = ''
-      } else if (ch === '\n') {
+        field = ""
+      } else if (ch === "\n") {
         row.push(field)
-        field = ''
+        field = ""
         rows.push(row)
         row = []
       } else {
@@ -61,7 +64,7 @@ export function tokenizeCSV(csv: string): string[][] {
   }
   // Push the last field/row
   row.push(field)
-  if (row.some(f => f !== '')) rows.push(row)
+  if (row.some((f) => f !== "")) rows.push(row)
 
   return rows
 }
@@ -83,9 +86,9 @@ export function parseCSVRows(
   // Find the header row
   let headerIdx = 0
   if (headerCandidates && headerCandidates.length > 0) {
-    const candidates = headerCandidates.map(c => c.toLowerCase())
+    const candidates = headerCandidates.map((c) => c.toLowerCase())
     for (let i = 0; i < allRows.length; i++) {
-      const firstCell = (allRows[i][0] ?? '').trim().toLowerCase()
+      const firstCell = (allRows[i][0] ?? "").trim().toLowerCase()
       if (candidates.includes(firstCell)) {
         headerIdx = i
         break
@@ -93,22 +96,25 @@ export function parseCSVRows(
     }
   } else {
     // Default: skip blank rows to find first non-empty row
-    while (headerIdx < allRows.length && allRows[headerIdx].every(c => c.trim() === '')) {
+    while (
+      headerIdx < allRows.length &&
+      allRows[headerIdx].every((c) => c.trim() === "")
+    ) {
       headerIdx++
     }
   }
 
   if (headerIdx >= allRows.length) return []
 
-  const headers = allRows[headerIdx].map(h => h.trim())
+  const headers = allRows[headerIdx].map((h) => h.trim())
   const rows: Record<string, string>[] = []
 
   for (let i = headerIdx + 1; i < allRows.length; i++) {
     const values = allRows[i]
-    if (values.every(v => v.trim() === '')) continue
+    if (values.every((v) => v.trim() === "")) continue
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
-      row[h] = (values[idx] ?? '').trim()
+      row[h] = (values[idx] ?? "").trim()
     })
     rows.push(row)
   }
@@ -121,26 +127,35 @@ export function parseCSVRows(
  */
 export function parseDDMMMYYYY(dateStr: string): string {
   const months: Record<string, string> = {
-    Jan: '01', Feb: '02', Mar: '03', Apr: '04',
-    May: '05', Jun: '06', Jul: '07', Aug: '08',
-    Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+    Jan: "01",
+    Feb: "02",
+    Mar: "03",
+    Apr: "04",
+    May: "05",
+    Jun: "06",
+    Jul: "07",
+    Aug: "08",
+    Sep: "09",
+    Oct: "10",
+    Nov: "11",
+    Dec: "12",
   }
-  const parts = dateStr.trim().split(' ')
+  const parts = dateStr.trim().split(" ")
   if (parts.length !== 3) throw new Error(`Invalid date: ${dateStr}`)
   const [day, mon, year] = parts
   const month = months[mon]
   if (!month) throw new Error(`Unknown month: ${mon}`)
-  return `${year}-${month}-${day.padStart(2, '0')}`
+  return `${year}-${month}-${day.padStart(2, "0")}`
 }
 
 /**
  * Convert DD/MM/YYYY to YYYY-MM-DD
  */
 export function parseDDMMYYYY(dateStr: string): string {
-  const parts = dateStr.trim().split('/')
+  const parts = dateStr.trim().split("/")
   if (parts.length !== 3) throw new Error(`Invalid date: ${dateStr}`)
   const [day, month, year] = parts
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
 }
 
 /**
