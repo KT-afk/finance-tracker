@@ -128,6 +128,26 @@ assert.deepEqual(
   [["2026-06-29", "IBG GIRO SALA Wise Asia-Pacific P Wise SG Salary", 6733.55]]
 )
 
+// Plain-text (pdf-parse) output: direction must come from the running balance,
+// not keywords — incoming PayNow "from <name>" has no deposit keyword.
+const ocbcPlainTextIncomingPayNow = `
+1 SEP 2026 TO 30 SEP 2026
+17,139.81\tBALANCE B/F
+29 SEP 5,438.00 16,657.39\t29 SEP IBG GIRO
+SALA Wise Asia-Pacific P Wise SG Salary
+30 SEP 1,250.00 17,907.39\t30 SEP PAYMENT/TRANSFER
+via PayNow-DBSS
+from YOON THIRI
+30 SEP 30.00 17,877.39\t30 SEP FAST PAYMENT
+via PayNow-UEN
+to FABRIC A SEC PTE
+17,877.93\tBALANCE C/F
+`
+assert.deepEqual(
+  parseOCBCPDF(ocbcPlainTextIncomingPayNow).transactions.map((t) => t.amount),
+  [5438, 1250, -30]
+)
+
 const uobTwoCardText = `
 Statement Date 27 SEP 2026
 PREVIOUS BALANCE 1,942.15

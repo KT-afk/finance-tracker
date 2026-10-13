@@ -293,8 +293,8 @@ const DEPOSIT_KEYWORDS = [
  * Strategy:
  * - Match lines of the form: DATE amount balance TAB DATE description
  * - Accumulate continuation lines (via PayNow, to NAME, etc.) into description
- * - Classify debit/credit by column position: amount is before balance,
- *   and we detect deposits via DEPOSIT_KEYWORDS on the description
+ * - Classify debit/credit from the change in running balance; fall back to
+ *   DEPOSIT_KEYWORDS only when no previous balance is known
  */
 function parseOCBCPDFPlainText(text: string): RawTransaction[] {
   const year = extractStatementYear(text)
@@ -306,14 +306,19 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
     /^(\d{1,2}\s+[A-Z]{3})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\t\d{1,2}\s+[A-Z]{3}\s+(.+)$/im
 
   const lines = text.split("\n")
-  let pending: { date: string; amount: number; description: string } | null =
-    null
+  let pending: {
+    date: string
+    amount: number
+    description: string
+    isCredit: boolean | null
+  } | null = null
+  let previousBalance: number | null = null
 
   function flushPending() {
     if (!pending) return
-    const isCredit = DEPOSIT_KEYWORDS.some((keyword) =>
-      keyword.test(pending!.description)
-    )
+    const isCredit =
+      pending.isCredit ??
+      DEPOSIT_KEYWORDS.some((keyword) => keyword.test(pending!.description))
     results.push({
       date: pending.date,
       description: pending.description.trim(),
@@ -324,6 +329,12 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
   }
 
   for (const line of lines) {
+    const broughtForward = line.match(/^([\d,]+\.\d{2})\s+BALANCE B\/F/i)
+    if (broughtForward) {
+      previousBalance = parseFloat(broughtForward[1].replace(/,/g, ""))
+      continue
+    }
+
     const m = line.match(TX_LINE)
     if (m) {
       // Flush previous after all continuation lines have been read.
@@ -331,8 +342,16 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
 
       const dateStr = m[1]
       const firstAmt = parseFloat(m[2].replace(/,/g, ""))
-      // m[3] is the running balance — not needed
+      const balance = parseFloat(m[3].replace(/,/g, ""))
       const description = m[4].trim()
+
+      let isCredit: boolean | null = null
+      if (previousBalance !== null) {
+        const delta = balance - previousBalance
+        if (Math.abs(delta - firstAmt) < 0.005) isCredit = true
+        else if (Math.abs(delta + firstAmt) < 0.005) isCredit = false
+      }
+      previousBalance = balance
 
       // Skip balance carry-forward lines
       if (/BALANCE/i.test(description)) {
@@ -348,7 +367,7 @@ function parseOCBCPDFPlainText(text: string): RawTransaction[] {
         continue
       }
 
-      pending = { date, amount: firstAmt, description }
+      pending = { date, amount: firstAmt, description, isCredit }
       continue
     }
 
