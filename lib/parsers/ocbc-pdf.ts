@@ -448,13 +448,8 @@ export function parseOCBCPDF(text: string): ParseResult {
   if (columnar.length > 0)
     return { transactions: columnar, endingBalance, expectedNet }
 
-  // Columnar parse yielded nothing — likely plain-text extraction (no column alignment).
-  // Log the first 40 lines to help diagnose future format changes.
-  const preview = text.split("\n").slice(0, 40).join("\n")
-  console.warn(
-    "[parseOCBCPDF] Columnar parse yielded 0 results, trying plain-text fallback.\nText preview:\n" +
-      preview
-  )
+  // Columnar parse yielded nothing — plain-text (pdf-parse) extraction, the
+  // default path since extractTextFromPDF prefers pdf-parse.
 
   const plainText = parseOCBCPDFPlainText(text)
   if (plainText.length === 0) {

@@ -1,16 +1,21 @@
-import { RawTransaction, ParseResult } from './types'
+import { RawTransaction, ParseResult } from "./types"
 
 const MONTHS: Record<string, string> = {
-  Jan: '01', Feb: '02', Mar: '03', Apr: '04',
-  May: '05', Jun: '06', Jul: '07', Aug: '08',
-  Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+  Jan: "01",
+  Feb: "02",
+  Mar: "03",
+  Apr: "04",
+  May: "05",
+  Jun: "06",
+  Jul: "07",
+  Aug: "08",
+  Sep: "09",
+  Oct: "10",
+  Nov: "11",
+  Dec: "12",
 }
 
-const SKIP_LINES = [
-  /Previous balance/i,
-  /Interest$/i,
-  /^\s*$/,
-]
+const SKIP_LINES = [/Previous balance/i, /Interest$/i, /^\s*$/]
 
 /**
  * Extract statement year and month from Trust Bank PDF.
@@ -22,14 +27,33 @@ function extractStatementInfo(text: string): { year: number; month: string } {
     const mon = match[1]
     const year = parseInt(match[2])
     const monthNum = MONTHS[mon]
-    return { year, month: monthNum ?? '01' }
+    return { year, month: monthNum ?? "01" }
   }
   const now = new Date()
-  return { year: now.getFullYear(), month: String(now.getMonth() + 1).padStart(2, '0') }
+  return {
+    year: now.getFullYear(),
+    month: String(now.getMonth() + 1).padStart(2, "0"),
+  }
+}
+
+const parseAmount = (raw: string) => parseFloat(raw.replace(/[+,]/g, ""))
+
+/**
+ * Read the ACTIVITY SUMMARY "Total" row: first figure is the opening balance,
+ * last is the closing balance, both summed across Main Account + Savings.
+ */
+function extractSummaryTotals(
+  text: string
+): { opening: number; closing: number } | undefined {
+  const m = text.match(
+    /^\s*Total\s+S\$([\d,]+\.\d{2})[^\n]*S\$([\d,]+\.\d{2})\s*$/m
+  )
+  if (!m) return undefined
+  return { opening: parseAmount(m[1]), closing: parseAmount(m[2]) }
 }
 
 /**
- * Parse Trust Bank PDF text (from pdftotext -layout) into RawTransactions.
+ * Parse Trust Bank PDF text (pdftotext -layout or pdf-parse) into RawTransactions.
  *
  * Format:
  *   Posting date   Description                    Amount in FCY   Amount in SGD
@@ -40,15 +64,25 @@ function extractStatementInfo(text: string): { year: number; month: string } {
  * - Foreign currency transactions have an FCY amount and a separate SGD amount
  * - Continuation lines (e.g., FX rate info) are indented
  * - "Main Account" and "Savings" are section headers
+ * - pdf-parse puts an FX transaction's SGD amount on a later line, so a dated
+ *   line without an amount waits for the next line that ends in one
  */
 export function parseTrustPDF(text: string): ParseResult {
   const { year, month } = extractStatementInfo(text)
-  const lines = text.split('\n')
+  // Savings statements have "Main Account" / "Savings" pots and an activity
+  // summary. Card statements keep the original parsing (no sample to verify).
+  const isSavingsStatement = /Savings Account by Trust/i.test(text)
+  const toIsoDate = (dateStr: string) =>
+    `${year}-${month}-${dateStr.split(/\s+/)[0].padStart(2, "0")}`
+  const lines = text.split("\n")
   const results: RawTransaction[] = []
-  let endingBalance: number | undefined
+  let closingBalanceSum = 0
+  let lastClosingBalance: number | undefined
+  let pendingTx: { date: string; description: string } | null = null
 
   let inTransactionSection = false
-  let currentTx: { date: string; description: string; amount: number } | null = null
+  let currentTx: { date: string; description: string; amount: number } | null =
+    null
 
   for (const line of lines) {
     // Detect transaction section start
@@ -58,13 +92,16 @@ export function parseTrustPDF(text: string): ParseResult {
     }
 
     // Section ends at page boundary or new section
-    if (/^Page \d+ of \d+/i.test(line.trim()) || /^Trust Bank Singapore/i.test(line.trim())) {
+    if (
+      /^Page \d+ of \d+/i.test(line.trim()) ||
+      /^Trust Bank Singapore/i.test(line.trim())
+    ) {
       if (currentTx) {
         results.push({
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'trust',
+          bank: "trust",
         })
         currentTx = null
       }
@@ -79,7 +116,7 @@ export function parseTrustPDF(text: string): ParseResult {
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'trust',
+          bank: "trust",
         })
         currentTx = null
       }
@@ -91,47 +128,70 @@ export function parseTrustPDF(text: string): ParseResult {
     // Capture closing balance before skipping
     const closingMatch = line.match(/Closing balance\s+([\d,]+\.\d{2})/i)
     if (closingMatch) {
-      endingBalance = parseFloat(closingMatch[1].replace(/,/g, ''))
+      lastClosingBalance = parseAmount(closingMatch[1])
+      closingBalanceSum += lastClosingBalance
       continue
     }
 
     // Skip known non-transaction lines
-    if (SKIP_LINES.some(p => p.test(line))) continue
+    if (SKIP_LINES.some((p) => p.test(line))) continue
 
     // Try to match a transaction line: DD MMM  Description  [FCY amount]  SGD amount
     const txMatch = line.match(
       /^(\d{2}\s+[A-Za-z]{3})\s{2,}(.+?)\s{2,}(\+?[\d,]+\.\d{2})\s*$/
     )
 
-    if (txMatch) {
+    // Dated line with no amount yet (pdf-parse FX layout)
+    const datedNoAmount =
+      isSavingsStatement &&
+      !txMatch &&
+      line.match(/^(\d{2}\s+[A-Za-z]{3})\s{2,}(\S.*?)\s*$/)
+
+    if (txMatch || datedNoAmount) {
       // Flush previous
       if (currentTx) {
         results.push({
           date: currentTx.date,
           description: currentTx.description.trim(),
           amount: currentTx.amount,
-          bank: 'trust',
+          bank: "trust",
         })
       }
 
-      const [, dateStr, descAndMaybeFcy, amountStr] = txMatch
+      currentTx = null
+      if (datedNoAmount) {
+        const [, dateStr, description] = datedNoAmount
+        pendingTx = {
+          date: toIsoDate(dateStr),
+          description: description.trim(),
+        }
+        continue
+      }
+      pendingTx = null
+
+      const [, dateStr, descAndMaybeFcy, amountStr] = txMatch!
 
       // The description might include an FCY amount — strip it
       // FCY amounts look like "434,600.00 KRW" before the SGD amount
       const description = descAndMaybeFcy
-        .replace(/[\d,]+\.\d{2}\s+[A-Z]{3}\s*$/, '')
+        .replace(/[\d,]+\.\d{2}\s+[A-Z]{3}\s*$/, "")
         .trim()
 
-      const day = dateStr.split(/\s+/)[0]
-      const date = `${year}-${month}-${day.padStart(2, '0')}`
-
-      const isDeposit = amountStr.startsWith('+')
-      const amount = parseFloat(amountStr.replace(/[+,]/g, ''))
-
+      const amount = parseAmount(amountStr)
       currentTx = {
-        date,
+        date: toIsoDate(dateStr),
         description,
-        amount: isDeposit ? amount : -amount,
+        amount: amountStr.startsWith("+") ? amount : -amount,
+      }
+    } else if (pendingTx) {
+      const amountMatch = line.match(/(\+?[\d,]+\.\d{2})\s*$/)
+      if (amountMatch) {
+        const amount = parseAmount(amountMatch[1])
+        currentTx = {
+          ...pendingTx,
+          amount: amountMatch[1].startsWith("+") ? amount : -amount,
+        }
+        pendingTx = null
       }
     } else if (currentTx) {
       // Continuation line (e.g., FX rate info) — skip, don't append
@@ -145,9 +205,32 @@ export function parseTrustPDF(text: string): ParseResult {
       date: currentTx.date,
       description: currentTx.description.trim(),
       amount: currentTx.amount,
-      bank: 'trust',
+      bank: "trust",
     })
   }
 
-  return { transactions: results, endingBalance, accountType: 'credit_card' }
+  if (!isSavingsStatement) {
+    return {
+      transactions: results,
+      endingBalance: lastClosingBalance,
+      accountType: "credit_card",
+    }
+  }
+
+  const totals = extractSummaryTotals(text)
+  const endingBalance =
+    totals?.closing ??
+    (lastClosingBalance !== undefined
+      ? Math.round(closingBalanceSum * 100) / 100
+      : undefined)
+  const expectedNet = totals
+    ? Math.round((totals.closing - totals.opening) * 100) / 100
+    : undefined
+
+  return {
+    transactions: results,
+    endingBalance,
+    expectedNet,
+    accountType: "savings",
+  }
 }
