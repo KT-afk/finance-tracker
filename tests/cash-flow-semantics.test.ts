@@ -47,6 +47,17 @@ assert.equal(reimbursement.countsAsReimbursement, true)
 assert.equal(reimbursement.countsAsIncome, false)
 assert.equal(reimbursement.effectiveAmount, 500)
 
+// Incoming transfers stay "Transfer" for review, but once the user marks one
+// as Reimbursement that choice must stick.
+const markedRepaid = classifyCashFlow({
+  description:
+    "PAYMENT/TRANSFER via PayNow-DBSS from SIOW JER JIAN OTHR Send money",
+  amount: 10.9,
+  category: "Reimbursement",
+})
+assert.equal(markedRepaid.category, "Reimbursement")
+assert.equal(markedRepaid.countsAsReimbursement, true)
+
 // A charge mis-tagged as Reimbursement must not count as money repaid.
 const mistaggedCharge = classifyCashFlow({
   description: "giving.sg SG",

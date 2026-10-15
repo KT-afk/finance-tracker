@@ -48,7 +48,7 @@ export async function PATCH(
       /\bfrom\s+(.+?)(?:\s+OTHR\b|\s+\d{8,}|$)/i
     )
     const isTransferLike =
-      /^(?:FAST PAYMENT|FUND TRANSFER|PAYMENT\/TRANSFER|COLLECTION\/TRANSFER)\b/i.test(
+      /^(?:FAST PAYMENT|FUND TRANSFER|PAYMENT\/TRANSFER|COLLECTION\/TRANSFER|IBG GIRO)\b/i.test(
         existing.description
       )
     const keyword = transferSender

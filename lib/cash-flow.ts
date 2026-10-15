@@ -98,9 +98,16 @@ function asCategory(category: string): Category {
 export function classifyCashFlow(
   transaction: CashFlowTransaction
 ): CashFlowClassification {
+  const deterministic = categoryFromDescription(
+    transaction.description,
+    transaction.amount
+  )
+  // Incoming transfers default to "Transfer" for review; a Reimbursement tag
+  // can only come from the user (categorize() never assigns it to these).
   const category =
-    categoryFromDescription(transaction.description, transaction.amount) ??
-    asCategory(transaction.category)
+    deterministic === "Transfer" && transaction.category === "Reimbursement"
+      ? "Reimbursement"
+      : (deterministic ?? asCategory(transaction.category))
   const effectiveAmount = transaction.amount
   const countsAsIncome = category === "Income" && effectiveAmount > 0
   const countsAsReimbursement =
