@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { Suspense, useEffect, useState, useCallback } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -43,9 +44,31 @@ function getToday(): string {
 }
 
 export default function TransactionsPage() {
-  const [month, setMonth] = useState<string>("all")
-  const [category, setCategory] = useState<string>("all")
-  const [bank, setBank] = useState<string>("all")
+  // useSearchParams needs a Suspense boundary for static rendering
+  return (
+    <Suspense>
+      <TransactionsView />
+    </Suspense>
+  )
+}
+
+function TransactionsView() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  // Filters live in the URL so dashboard links and Back/Forward restore them
+  const [month, setMonth] = useState<string>(
+    () => searchParams.get("month") ?? "all"
+  )
+  const [category, setCategory] = useState<string>(
+    () => searchParams.get("category") ?? "all"
+  )
+  const [bank, setBank] = useState<string>(
+    () => searchParams.get("bank") ?? "all"
+  )
+  const [review, setReview] = useState<string | null>(() =>
+    searchParams.get("review") === "transfers" ? "transfers" : null
+  )
   const [page, setPage] = useState(1)
 
   const [data, setData] = useState<ApiResponse | null>(null)
@@ -78,12 +101,23 @@ export default function TransactionsPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (month !== "all") params.set("month", month)
+    if (category !== "all") params.set("category", category)
+    if (bank !== "all") params.set("bank", bank)
+    if (review) params.set("review", review)
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [month, category, bank, review, pathname, router])
+
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
     if (month !== "all") params.set("month", month)
     if (category !== "all") params.set("category", category)
     if (bank !== "all") params.set("bank", bank)
+    if (review) params.set("review", review)
     params.set("page", String(page))
     params.set("pageSize", "50")
 
@@ -97,7 +131,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false)
     }
-  }, [month, category, bank, page])
+  }, [month, category, bank, review, page])
 
   useEffect(() => {
     fetchTransactions()
@@ -106,7 +140,7 @@ export default function TransactionsPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [month, category, bank])
+  }, [month, category, bank, review])
 
   async function handleCategoryChange(id: string, newCategory: string) {
     setUpdatingId(id)
@@ -507,7 +541,23 @@ export default function TransactionsPage() {
 
       {data && !loading && (
         <>
-          <p className="text-xs text-zinc-500">{data.total} transactions</p>
+          {review === "transfers" ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-800/30 bg-amber-950/20 px-3 py-2 text-sm">
+              <span className="text-amber-200">
+                {data.total} transfer{data.total === 1 ? "" : "s"} to review —
+                set a category on each to count it correctly
+              </span>
+              <button
+                type="button"
+                onClick={() => setReview(null)}
+                className="min-h-6 rounded px-2 text-xs text-amber-300 hover:bg-amber-900/40 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                Show all transactions
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-500">{data.total} transactions</p>
+          )}
 
           <div className="space-y-1">
             {data.transactions.length === 0 && (
