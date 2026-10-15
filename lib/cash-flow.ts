@@ -41,16 +41,30 @@ const RENT_PAYMENT_PATTERN = /\b(?:rent|rental|lease)\b/i
 const SALARY_INCOME_PATTERN = /\b(?:salary|payroll|wages)\b/i
 const REIMBURSEMENT_PATTERN =
   /\b(?:reimburse(?:ment)?|repay(?:ment)?|remainder|split|share)\b/i
+// Includes how banks print the name on outgoing PayNow: short form and
+// OCBC's masked form.
 const SELF_TRANSFER_NAMES = (
-  process.env.FINANCE_SELF_TRANSFER_NAMES ?? "ONG KONG TAT"
+  process.env.FINANCE_SELF_TRANSFER_NAMES ??
+  "ONG KONG TAT,ONX KOXX TAX,KONG TAT"
 )
   .split(",")
   .map((name) => name.trim().toLowerCase())
   .filter(Boolean)
 
+const OUTGOING_TRANSFER_PATTERN =
+  /^(?:FAST PAYMENT|FUND TRANSFER|PAYMENT\/TRANSFER)\b/i
+
 function isSelfTransfer(description: string): boolean {
   const lower = description.toLowerCase()
-  return SELF_TRANSFER_NAMES.some((name) => lower.includes(`from ${name}`))
+  if (SELF_TRANSFER_NAMES.some((name) => lower.includes(`from ${name}`))) {
+    return true
+  }
+  return (
+    OUTGOING_TRANSFER_PATTERN.test(description) &&
+    SELF_TRANSFER_NAMES.some((name) =>
+      new RegExp(`\\bto ${name}(?:\\s|$)`, "i").test(lower)
+    )
+  )
 }
 
 function isAccountHolderLabel(description: string): boolean {
@@ -87,10 +101,7 @@ export function classifyCashFlow(
   const category =
     categoryFromDescription(transaction.description, transaction.amount) ??
     asCategory(transaction.category)
-  const effectiveAmount =
-    category === "Income" || category === "Reimbursement"
-      ? Math.abs(transaction.amount)
-      : transaction.amount
+  const effectiveAmount = transaction.amount
   const countsAsIncome = category === "Income" && effectiveAmount > 0
   const countsAsReimbursement =
     category === "Reimbursement" && effectiveAmount > 0

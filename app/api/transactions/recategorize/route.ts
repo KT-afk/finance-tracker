@@ -1,11 +1,7 @@
 import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
 import { eq } from "drizzle-orm"
-import {
-  categorize,
-  getEffectiveAmount,
-  getKnownCategory,
-} from "@/lib/categorize"
+import { categorize, getKnownCategory } from "@/lib/categorize"
 import { shouldRecategorizeTransaction } from "@/lib/cash-flow"
 import { requireAuth, createRateLimit } from "@/lib/auth-middleware"
 
@@ -65,11 +61,10 @@ export async function POST(req: Request) {
                 amount: tx.amount,
               }))
 
-            const amount = getEffectiveAmount(tx.description, tx.amount)
-            if (category !== tx.category || amount !== tx.amount) {
+            if (category !== tx.category) {
               await db
                 .update(transactions)
-                .set({ category, amount })
+                .set({ category })
                 .where(eq(transactions.id, tx.id))
               updated++
             }

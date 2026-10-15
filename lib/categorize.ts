@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { CATEGORIES, Category } from "./schema"
 import { findRuleCategory, saveRule } from "./rules"
 import { parsePayNowDescription } from "./parsers/paynow"
-import { getDeterministicCategory, classifyCashFlow } from "./cash-flow"
+import { getDeterministicCategory } from "./cash-flow"
 
 const CATEGORY_LIST = CATEGORIES.join(", ")
 
@@ -146,14 +146,6 @@ export function getKnownCategory(
   amount: number
 ): Category | null {
   return getDeterministicCategory(description, amount)
-}
-
-export function getEffectiveAmount(
-  description: string,
-  amount: number
-): number {
-  return classifyCashFlow({ description, amount, category: "Others" })
-    .effectiveAmount
 }
 
 /**
