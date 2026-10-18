@@ -1,7 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { CATEGORIES, Category } from "./schema"
 import { findRuleCategory, saveRule } from "./rules"
-import { parsePayNowDescription } from "./parsers/paynow"
+import {
+  parsePayNowDescription,
+  parseStatementDescription,
+} from "./parsers/paynow"
 import { getDeterministicCategory } from "./cash-flow"
 
 const CATEGORY_LIST = CATEGORIES.join(", ")
@@ -164,8 +167,15 @@ export async function categorize(
     if (knownCategory) return knownCategory
   }
 
-  // Parse PayNow/FAST/NETS/IBG description into structured fields
-  const { memo, recipient, method } = parsePayNowDescription(description)
+  // Parse PayNow/FAST/NETS/IBG description into structured fields.
+  // CSV-era format first, then the PDF statement format.
+  const legacyFields = parsePayNowDescription(description)
+  const hasLegacyFields = Boolean(
+    legacyFields.memo || legacyFields.recipient || legacyFields.method
+  )
+  const { memo, recipient, method } = hasLegacyFields
+    ? legacyFields
+    : parseStatementDescription(description)
 
   // Step 1: Check saved rules — memo first, then recipient, then raw description
   const lookupTargets = [memo, recipient, description].filter(
@@ -216,8 +226,10 @@ export async function categorize(
     )
 
     if (matched) {
-      // Step 3: Save keyword rule — memo or merchant, never reference codes or human names
-      const keyword = deriveKeyword(memo, recipient)
+      // Step 3: Save keyword rule — memo or merchant, never reference codes or human names.
+      // Only from CSV-era fields: statement-format fields would learn rules from
+      // short memo words ("ring", "food") and all-caps personal names.
+      const keyword = deriveKeyword(legacyFields.memo, legacyFields.recipient)
       if (keyword.length >= 3) {
         await saveRule(keyword, matched)
       }

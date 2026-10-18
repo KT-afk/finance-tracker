@@ -13,7 +13,7 @@ export interface PayNowFields {
   method: string
 }
 
-const EMPTY: PayNowFields = { memo: '', recipient: '', method: '' }
+const EMPTY: PayNowFields = { memo: "", recipient: "", method: "" }
 
 /**
  * Returns true if the given string is a junk memo — i.e. a raw reference
@@ -26,7 +26,7 @@ const EMPTY: PayNowFields = { memo: '', recipient: '', method: '' }
  */
 function isJunkMemo(value: string): boolean {
   const v = value.trim()
-  if (!v || v.toUpperCase() === 'OTHR') return true
+  if (!v || v.toUpperCase() === "OTHR") return true
   if (/^\d+$/.test(v)) return true
   if (/^[A-Za-z0-9]{8,}$/.test(v)) return true
   return false
@@ -34,7 +34,7 @@ function isJunkMemo(value: string): boolean {
 
 function cleanMemo(raw: string): string {
   const v = raw.trim()
-  return isJunkMemo(v) ? '' : v
+  return isJunkMemo(v) ? "" : v
 }
 
 /**
@@ -60,7 +60,7 @@ export function parsePayNowDescription(description: string): PayNowFields {
   if (m) {
     const method = normaliseMethod(m[1].trim())
     const recipient = m[2].trim()
-    return { memo: '', recipient, method }
+    return { memo: "", recipient, method }
   }
 
   // ── Pattern 2: FUND TRANSFER OTHR - [REF] to [MERCHANT] via PayNow-[METHOD]
@@ -71,9 +71,9 @@ export function parsePayNowDescription(description: string): PayNowFields {
   )
   if (m) {
     // Strip any trailing truncation char that got merged with "via" (e.g. "STUDIO P")
-    const recipient = m[1].replace(/\s+\S$/, '').trim() || m[1].trim()
+    const recipient = m[1].replace(/\s+\S$/, "").trim() || m[1].trim()
     const method = normaliseMethod(m[2].trim())
-    return { memo: '', recipient, method }
+    return { memo: "", recipient, method }
   }
 
   // ── Pattern 3: FAST PAYMENT OTHR-[MEMO] to [RECIPIENT] via PayNow-[METHOD]
@@ -84,7 +84,7 @@ export function parsePayNowDescription(description: string): PayNowFields {
   )
   if (m) {
     const memo = cleanMemo(m[1])
-    const recipient = m[2].replace(/\s+\S$/, '').trim() || m[2].trim()
+    const recipient = m[2].replace(/\s+\S$/, "").trim() || m[2].trim()
     const method = normaliseMethod(m[3].trim())
     return { memo, recipient, method }
   }
@@ -105,9 +105,10 @@ export function parsePayNowDescription(description: string): PayNowFields {
   // e.g. "NETS QR KING KONG CURRY NETS QR PURCHASE 69529901"
   // Merchant is everything between first "NETS QR " and the next "NETS QR"
   m = d.match(/^NETS QR\s+(.+?)\s+NETS QR\b/i)
-  if (m) {
+  // PDF statements put the terminal number here instead — not a merchant
+  if (m && !/^\d+$/.test(m[1].trim())) {
     const recipient = m[1].trim()
-    return { memo: '', recipient, method: 'NETS-QR' }
+    return { memo: "", recipient, method: "NETS-QR" }
   }
 
   // ── Pattern 6: IBG GIRO [REF] [PARTIAL_MERCHANT]COLL [REF]
@@ -116,8 +117,105 @@ export function parsePayNowDescription(description: string): PayNowFields {
   m = d.match(/^IBG GIRO\s+\S+\s+(.+?)COLL\b/i)
   if (m) {
     const recipient = m[1].trim()
-    return { memo: '', recipient, method: 'GIRO' }
+    return { memo: "", recipient, method: "GIRO" }
   }
+
+  return EMPTY
+}
+
+// Text that PDF extraction appends to a description
+const STATEMENT_ARTIFACTS = [
+  /\s*--\s*\d+\s+of\s+\d+\s*--.*$/i,
+  /\s+[\d,]+\.\d{2}\s+BALANCE C\/F.*$/i,
+]
+
+// Bank placeholders, not something a person typed
+const PLACEHOLDER_MEMOS = new Set([
+  "othr",
+  "othr-othr",
+  "other",
+  "123",
+  "pay",
+  "transfer",
+  "transfer - mobile",
+  "paynow transfer",
+  "paynow payment",
+])
+
+/**
+ * Statement memos are often reference codes with a short suffix
+ * ("DICNP17825440367882F 9ZC", "qsb-sqr-sg-382408149 951").
+ */
+function isStatementJunkMemo(memo: string): boolean {
+  const v = memo.trim()
+  if (!v || PLACEHOLDER_MEMOS.has(v.toLowerCase())) return true
+  if (/^\d+$/.test(v)) return true
+  const first = v.split(/\s+/)[0]
+  if (first.length >= 6 && /\d/.test(first)) return true
+  if (/^[A-Z0-9]{10,}$/.test(first)) return true
+  // A long letters+digits token anywhere ("QR3 dy00lx2t9 0069")
+  if (
+    v
+      .split(/\s+/)
+      .some((w) => w.length >= 8 && /\d/.test(w) && /[a-z]/i.test(w))
+  ) {
+    return true
+  }
+  return false
+}
+
+// Drop trailing reference numbers / hex IDs from a name
+function stripReferences(name: string): string {
+  const words = name.split(/\s+/)
+  const firstRef = words.findIndex(
+    (w, i) => i > 0 && /\d/.test(w) && w.length >= 6
+  )
+  return (firstRef === -1 ? words : words.slice(0, firstRef)).join(" ")
+}
+
+function statementMethod(via: string): string {
+  const m = via.match(/PayNow-(QR Code|Mobile|UEN|NRIC\/FIN|[A-Z]{4})/i)
+  if (!m) return "FAST"
+  const kind = m[1].toUpperCase()
+  if (kind === "QR CODE") return "PayNow-QR"
+  if (kind === "MOBILE") return "PayNow-Mobile"
+  if (kind === "UEN") return "PayNow-UEN"
+  if (kind === "NRIC/FIN") return "PayNow-NRIC"
+  return "PayNow" // incoming, labelled with the sender's bank code (DBSS, HSBC…)
+}
+
+/**
+ * Parse descriptions as printed on PDF statements (the current upload path),
+ * where the order is "… via PayNow-X to|from NAME OTHR-memo" and NETS lines
+ * read "NETS QR <terminal> NETS QR PURCHASE <MERCHANT>".
+ */
+export function parseStatementDescription(description: string): PayNowFields {
+  let d = description.replace(/\s+/g, " ").trim()
+  for (const pattern of STATEMENT_ARTIFACTS) d = d.replace(pattern, "").trim()
+
+  let m = d.match(
+    /^(?:FAST PAYMENT|FUND TRANSFER|PAYMENT\/TRANSFER)\b(.*?)\b(?:to|from)\s+(.+?)(?:\s+OTHR\b\s*-?\s*(.*))?$/i
+  )
+  if (m) {
+    const [, via, recipient, memo = ""] = m
+    return {
+      memo: isStatementJunkMemo(memo) ? "" : memo.trim(),
+      recipient: recipient.trim(),
+      method: statementMethod(via),
+    }
+  }
+
+  m = d.match(/^NETS QR\s+\d+\s+NETS QR PURCHASE\s+(.+)$/i)
+  if (m && !/^\d+$/.test(m[1].trim())) {
+    return { memo: "", recipient: m[1].trim(), method: "NETS-QR" }
+  }
+
+  m = d.match(/^IBG GIRO\s+(?:SALA|COLL|OTHR)\s+(?:\d+\s+)?(.+)$/i)
+  if (m) return { memo: "", recipient: stripReferences(m[1]), method: "GIRO" }
+
+  m = d.match(/^COLLECTION\/TRANSFER\s+(?:COLL|OTHR)\s+(.+)$/i)
+  if (m)
+    return { memo: "", recipient: stripReferences(m[1]), method: "Collection" }
 
   return EMPTY
 }
@@ -130,9 +228,9 @@ export function parsePayNowDescription(description: string): PayNowFields {
  */
 function normaliseMethod(raw: string): string {
   const r = raw.trim()
-  if (/PayNow-QR/i.test(r)) return 'PayNow-QR'
-  if (/PayNow-Mobile/i.test(r)) return 'PayNow-Mobile'
-  if (/PayNow-UEN/i.test(r)) return 'PayNow-UEN'
-  if (/PayNow/i.test(r)) return 'PayNow'
+  if (/PayNow-QR/i.test(r)) return "PayNow-QR"
+  if (/PayNow-Mobile/i.test(r)) return "PayNow-Mobile"
+  if (/PayNow-UEN/i.test(r)) return "PayNow-UEN"
+  if (/PayNow/i.test(r)) return "PayNow"
   return r
 }
