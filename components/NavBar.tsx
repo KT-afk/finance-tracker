@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: HomeIcon },
   { href: '/transactions', label: 'Transactions', mobileLabel: 'Txns', icon: ListIcon },
   { href: '/accounts', label: 'Accounts', mobileLabel: 'Accts', icon: AccountsIcon },
+  { href: '/owed', label: 'Owed', mobileLabel: 'Owed', icon: OwedIcon },
   { href: '/insights', label: 'Insights', mobileLabel: 'Trends', icon: TrendingIcon },
   { href: '/ask', label: 'Ask', mobileLabel: 'Ask', icon: AskIcon },
 ]
@@ -58,6 +59,17 @@ function AccountsIcon() {
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path d="M12 8v8" />
       <path d="M8 12h8" />
+    </svg>
+  )
+}
+
+function OwedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 1l4 4-4 4" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="M7 23l-4-4 4-4" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </svg>
   )
 }

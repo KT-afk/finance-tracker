@@ -105,6 +105,19 @@ export const owedRules = sqliteTable("owed_rules", {
   created_at: text("created_at").notNull(),
 })
 
+// Bank name on a transfer (lowercased) → who it is, learnt from repayments
+export const owedSenders = sqliteTable("owed_senders", {
+  sender: text("sender").primaryKey(),
+  person: text("person").notNull(),
+  created_at: text("created_at").notNull(),
+})
+
+// Transactions the owner said have nothing to do with owed money
+export const owedDismissed = sqliteTable("owed_dismissed", {
+  transaction_id: text("transaction_id").primaryKey(),
+  created_at: text("created_at").notNull(),
+})
+
 export const aiConversations = sqliteTable("ai_conversations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   question: text("question").notNull(),

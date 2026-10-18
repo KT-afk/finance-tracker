@@ -20,6 +20,8 @@ interface OwedEditorProps {
     owed: OwedInfo | null
   }
   knownPeople: string[]
+  // Pre-filled "Who" when there's no entry yet, e.g. a recognised sender
+  defaultPerson?: string | null
   onSaved: () => void
   onCancel: () => void
 }
@@ -34,13 +36,16 @@ export const inputClass =
 export function OwedEditor({
   transaction,
   knownPeople,
+  defaultPerson,
   onSaved,
   onCancel,
 }: OwedEditorProps) {
   const id = useId()
   const isShare = transaction.amount < 0
   const existing = transaction.owed
-  const [person, setPerson] = useState(existing?.person ?? knownPeople[0] ?? "")
+  const [person, setPerson] = useState(
+    existing?.person ?? defaultPerson ?? knownPeople[0] ?? ""
+  )
   const [amount, setAmount] = useState(
     existing
       ? String(existing.amount)

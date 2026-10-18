@@ -8,6 +8,7 @@ export type OwedLedgerInput = {
   date: string
   description: string
   category: string
+  transaction_amount: number
 }
 
 export type OwedLedgerEntry = OwedLedgerInput & {
@@ -18,6 +19,32 @@ export type OwedLedgerEntry = OwedLedgerInput & {
 export type OwedBalance = {
   person: string
   balance: number
+}
+
+export type ToSortItem = {
+  id: string
+  date: string
+  description: string
+  amount: number
+  category: string
+  // Who this probably is, from an earlier repayment or a split rule
+  suggestedPerson: string | null
+}
+
+export type OwedRuleView = {
+  id: string
+  keyword: string
+  person: string
+  amount: number
+  starts_on: string
+}
+
+// GET /api/owed
+export type OwedSummaryResponse = {
+  balances: OwedBalance[]
+  ledger: OwedLedgerEntry[]
+  rules: OwedRuleView[]
+  toSort: { incoming: ToSortItem[]; outgoing: ToSortItem[] }
 }
 
 export type OwedRuleMatchInput = {

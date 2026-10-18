@@ -263,6 +263,23 @@ async function main() {
     assert.deepEqual(summary.balances, [{ person: "Jane", balance: 1200 }])
     assert.equal((await month("2026-09")).totalSpend, 0)
 
+    // To sort: her earlier repayment taught us "JANE TAN" is Jane, so that
+    // transfer is suggested even after being recategorised; the October rent
+    // whose split was removed is flagged as possibly owed
+    let toSort = await owed.getToSort("2026-06-20")
+    assert.deepEqual(
+      toSort.incoming.map((t) => [t.id, t.suggestedPerson]),
+      [["back", "Jane"]]
+    )
+    assert.deepEqual(
+      toSort.outgoing.map((t) => [t.id, t.suggestedPerson]),
+      [["oct", "Jane"]]
+    )
+    await owed.dismissToSort("oct")
+    toSort = await owed.getToSort("2026-06-20")
+    assert.deepEqual(toSort.outgoing, [])
+    await assert.rejects(owed.dismissToSort("missing"), /not found/)
+
     // Validation
     await assert.rejects(
       owed.setOwedShare("jul", { person: "Jane", amount: 5000 }),

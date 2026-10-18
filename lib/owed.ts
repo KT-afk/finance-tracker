@@ -1,14 +1,22 @@
 import { randomUUID } from "crypto"
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm"
+import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm"
 import { db } from "./db"
 import {
   OFF_BANK,
   SPEND_CATEGORIES,
+  owedDismissed,
   owedEntries,
   owedRules,
+  owedSenders,
   transactions,
 } from "./schema"
-import { buildOwedLedger, owedRuleMatches } from "./owed-ledger"
+import { classifyCashFlow } from "./cash-flow"
+import { describeTransaction } from "./describe-transaction"
+import {
+  buildOwedLedger,
+  owedRuleMatches,
+  type ToSortItem,
+} from "./owed-ledger"
 
 let ensured: Promise<void> | null = null
 
@@ -33,6 +41,19 @@ export function ensureOwedTables(): Promise<void> {
         person text NOT NULL,
         amount real NOT NULL,
         starts_on text NOT NULL,
+        created_at text NOT NULL
+      )
+    `)
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS owed_senders (
+        sender text PRIMARY KEY NOT NULL,
+        person text NOT NULL,
+        created_at text NOT NULL
+      )
+    `)
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS owed_dismissed (
+        transaction_id text PRIMARY KEY NOT NULL,
         created_at text NOT NULL
       )
     `)
@@ -182,7 +203,20 @@ export async function markRepayment(
     .update(transactions)
     .set({ category: "Repayment", is_corrected: true })
     .where(eq(transactions.id, transactionId))
+
+  // Remember the bank's name for them, so their next transfer is suggested
+  const sender = senderKey(transaction.description)
+  if (sender) {
+    await db
+      .insert(owedSenders)
+      .values({ sender, person, created_at: new Date().toISOString() })
+      .onConflictDoUpdate({ target: owedSenders.sender, set: { person } })
+  }
   return { person, amount }
+}
+
+function senderKey(description: string): string {
+  return describeTransaction(description).title.trim().toLowerCase()
 }
 
 export const ADJUSTMENT_KINDS = ["covered", "forgiven"] as const
@@ -433,9 +467,99 @@ export async function getOwedSummary() {
       date: transactions.date,
       description: transactions.description,
       category: transactions.category,
+      transaction_amount: transactions.amount,
     })
     .from(owedEntries)
     .innerJoin(transactions, eq(transactions.id, owedEntries.transaction_id))
   const rules = await db.select().from(owedRules)
   return { ...buildOwedLedger(rows), rules, spendCategories: SPEND_CATEGORIES }
+}
+
+// How far back "To sort" looks
+const TO_SORT_DAYS = 120
+
+function daysAgo(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Recent bank transactions that may belong on the owed page:
+ * - incoming: transfers still to review, or from someone who has repaid
+ *   before — likely repayments
+ * - outgoing: unsplit Housing, or payments an auto-split rule matches but
+ *   that aren't split — likely a missed share
+ * Anything already on the page or dismissed is left out.
+ */
+export async function getToSort(since = daysAgo(TO_SORT_DAYS)): Promise<{
+  incoming: ToSortItem[]
+  outgoing: ToSortItem[]
+}> {
+  await ensureOwedTables()
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(and(gte(transactions.date, since), ne(transactions.bank, OFF_BANK)))
+  const ids = rows.map((r) => r.id)
+  const entries = await loadOwedEntriesFor(ids)
+  const dismissed = new Set(
+    (await db.select().from(owedDismissed)).map((d) => d.transaction_id)
+  )
+  const senders = new Map(
+    (await db.select().from(owedSenders)).map((s) => [s.sender, s.person])
+  )
+  const rules = await db.select().from(owedRules)
+
+  const incoming: ToSortItem[] = []
+  const outgoing: ToSortItem[] = []
+  for (const row of rows) {
+    if (entries.has(row.id) || dismissed.has(row.id)) continue
+    const item = {
+      id: row.id,
+      date: row.date,
+      description: row.description,
+      amount: row.amount,
+      category: row.category,
+      suggestedPerson: null as string | null,
+    }
+    if (row.amount > 0) {
+      const known = senders.get(senderKey(row.description)) ?? null
+      const toReview = classifyCashFlow(row).isUnclassifiedTransfer
+      if (known || toReview) incoming.push({ ...item, suggestedPerson: known })
+    } else {
+      const rule = rules.find((r) =>
+        owedRuleMatches({ ...r, starts_on: "" }, row)
+      )
+      if (rule || row.category === "Housing") {
+        outgoing.push({ ...item, suggestedPerson: rule?.person ?? null })
+      }
+    }
+  }
+
+  const byDateDesc = (a: ToSortItem, b: ToSortItem) =>
+    b.date.localeCompare(a.date)
+  incoming.sort(
+    (a, b) =>
+      Number(b.suggestedPerson !== null) - Number(a.suggestedPerson !== null) ||
+      byDateDesc(a, b)
+  )
+  outgoing.sort(byDateDesc)
+  return { incoming, outgoing }
+}
+
+/** "Not owed money": hide a transaction from To sort for good. */
+export async function dismissToSort(transactionId: string) {
+  await ensureOwedTables()
+  await getBankTransaction(transactionId)
+  await db
+    .insert(owedDismissed)
+    .values({
+      transaction_id: transactionId,
+      created_at: new Date().toISOString(),
+    })
+    .onConflictDoNothing()
 }
