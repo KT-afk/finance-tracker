@@ -165,6 +165,11 @@ export default function HomePage() {
       .finally(() => setLoading(false))
   }, [selectedBank, selectedMonth])
 
+  // Credit cards aren't part of Total Balance, so don't count them as banks
+  const cashBankCount =
+    balanceData?.balances.filter((b) => b.account_type !== "credit_card")
+      .length ?? 0
+
   const isEmpty =
     !loading &&
     data &&
@@ -362,10 +367,10 @@ export default function HomePage() {
                         ? formatSGD(balanceData.total)
                         : "$0"}
                     </p>
-                    {balanceData && balanceData.balances.length > 0 && (
+                    {cashBankCount > 0 && (
                       <p className="text-xs text-zinc-500 mt-1">
-                        {balanceData.balances.length} bank
-                        {balanceData.balances.length > 1 ? "s" : ""}
+                        {cashBankCount} bank
+                        {cashBankCount > 1 ? "s" : ""}
                       </p>
                     )}
                   </div>
