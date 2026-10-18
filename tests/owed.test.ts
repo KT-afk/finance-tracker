@@ -342,6 +342,18 @@ async function main() {
     })
     assert.equal(lower.person, "Jane")
 
+    // Amounts typed with commas are fine
+    const comma = await owed.addOwedAdjustment({
+      kind: "covered",
+      person: "Jane",
+      amount: "1,000",
+      note: "",
+      category: "",
+      date: "2026-11-04",
+    })
+    assert.equal(comma.amount, 1000)
+    await owed.removeOwedEntry(comma.transactionId)
+
     // Impossible dates and silly amounts
     await assert.rejects(
       owed.addOwedAdjustment({
@@ -363,7 +375,7 @@ async function main() {
       }),
       /start date/
     )
-    for (const amount of [1e15, [5], null]) {
+    for (const amount of [1e15, [5], null, "0x10", "1e3"]) {
       await assert.rejects(
         owed.addOwedAdjustment({
           kind: "covered",

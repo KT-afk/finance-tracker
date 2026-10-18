@@ -461,7 +461,9 @@ function History({
   const entries = useMemo(
     () =>
       personFilter
-        ? data.ledger.filter((e) => e.person === personFilter)
+        ? data.ledger.filter(
+            (e) => e.person.toLowerCase() === personFilter.toLowerCase()
+          )
         : data.ledger,
     [data.ledger, personFilter]
   )

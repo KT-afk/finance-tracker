@@ -104,7 +104,14 @@ function cleanAmount(
   max = MAX_AMOUNT,
   tooMuch = "Amount can't be more than the payment"
 ): number {
-  if (typeof amount !== "number" && typeof amount !== "string") {
+  // Accept "1,000" or " 1000.50 "; reject anything else, like "0x10"
+  if (typeof amount === "string") {
+    const plain = amount.replace(/[,\s]/g, "")
+    if (!/^\d+(\.\d+)?$/.test(plain)) {
+      throw new OwedError("Amount must be a number, like 1000")
+    }
+    amount = plain
+  } else if (typeof amount !== "number") {
     throw new OwedError("Amount must be more than 0")
   }
   if (Number(amount) > MAX_AMOUNT) throw new OwedError("Amount is too large")
