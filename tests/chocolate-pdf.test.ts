@@ -55,4 +55,22 @@ assert.equal(checkReconciliation(result)?.ok, true)
 const hashes = normalize(result.transactions).map((t) => t.hash)
 assert.equal(new Set(hashes).size, hashes.length)
 
+// Re-uploading the same statement gives the same hashes (no duplicates)…
+assert.deepEqual(
+  normalize(parseChocolatePDF(text).transactions).map((t) => t.hash),
+  hashes
+)
+// …and a re-issued statement with an extra row doesn't shift the others' IDs
+const reissued = text
+  .replace(
+    "13 Sep Money added",
+    "05 Sep Card transaction: Watsons \tS$1.00 \tS$16.44\n13 Sep Money added"
+  )
+  .replace("S$117.44\n17 Sep", "S$116.44\n17 Sep")
+const reissuedHashes = new Set(
+  normalize(parseChocolatePDF(reissued).transactions).map((t) => t.hash)
+)
+for (const h of hashes)
+  assert.ok(reissuedHashes.has(h), "existing rows keep their IDs")
+
 console.log("Chocolate PDF parser test passed")

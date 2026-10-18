@@ -40,6 +40,14 @@ function categoryHintFor(
   return undefined
 }
 
+// Stable across re-uploads and re-issued statements: the nth occurrence of a
+// given date/description/amount always gets the same ID.
+function dedupeKey(seen: Map<string, number>, key: string): string {
+  const n = (seen.get(key) ?? 0) + 1
+  seen.set(key, n)
+  return `${key}|${n}`
+}
+
 export function parseChocolatePDF(text: string): ParseResult {
   const period = text.match(
     /(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})\s+[–-]\s+\d{1,2}\s+[A-Z][a-z]{2}\s+(\d{4})/
@@ -47,7 +55,6 @@ export function parseChocolatePDF(text: string): ParseResult {
   if (!period) throw new Error("Could not find the Chocolate statement period")
   const startYear = parseInt(period[3])
   const endYear = parseInt(period[4])
-  const statementMonth = `${period[4]}-${MONTHS[period[2]] ?? "01"}`
 
   const start = text.match(/Start of month balance\s+(S\$[\d,]+\.\d{2})/)
   const end = text.match(/End of month balance\s+(S\$[\d,]+\.\d{2})/)
@@ -62,7 +69,8 @@ export function parseChocolatePDF(text: string): ParseResult {
   const transactions: RawTransaction[] = []
   let previousBalance = openingBalance ?? null
   let pending = ""
-  let sequence = 0
+  // Repeats of the same date/merchant/amount (e.g. two identical rides)
+  const seen = new Map<string, number>()
 
   for (const line of lines) {
     const startsRow = /^\d{2}\s+[A-Z][a-z]{2}\s/.test(line)
@@ -95,13 +103,15 @@ export function parseChocolatePDF(text: string): ParseResult {
     const month = MONTHS[mon] ?? "01"
     // A December row on a statement ending in January belongs to the start year
     const year = month === "12" && startYear !== endYear ? startYear : endYear
-    sequence++
     transactions.push({
       date: `${year}-${month}-${day}`,
       description,
       amount: round2(isIncoming ? amount : -amount),
       bank: "chocolate",
-      externalId: `${statementMonth}:${sequence}`,
+      externalId: dedupeKey(
+        seen,
+        `${year}-${month}-${day}|${description}|${amount}`
+      ),
       categoryHint: categoryHintFor(description, isIncoming),
     })
   }
