@@ -23,6 +23,7 @@ export const CATEGORIES = [
   "Transfer",
   "Self Transfer",
   "Reimbursement",
+  "Repayment",
   "Credit Card Payment",
   "Travel",
   "Personal",
@@ -35,6 +36,7 @@ export const EXCLUDED_FROM_SPEND: readonly string[] = [
   "Transfer",
   "Self Transfer",
   "Reimbursement",
+  "Repayment",
   "Credit Card Payment",
   "Income",
 ]
@@ -57,6 +59,31 @@ export const categoryRules = sqliteTable("category_rules", {
   id: text("id").primaryKey(),
   keyword: text("keyword").notNull().unique(),
   category: text("category").notNull(),
+  created_at: text("created_at").notNull(),
+})
+
+// Money someone owes the owner: a "share" is the part of an outgoing payment
+// they should cover; a "repayment" is an incoming transfer that pays it back.
+// Balance per person = sum of shares - sum of repayments.
+export const OWED_ENTRY_KINDS = ["share", "repayment"] as const
+export type OwedEntryKind = (typeof OWED_ENTRY_KINDS)[number]
+
+export const owedEntries = sqliteTable("owed_entries", {
+  id: text("id").primaryKey(),
+  transaction_id: text("transaction_id").notNull().unique(),
+  person: text("person").notNull(),
+  kind: text("kind", { enum: OWED_ENTRY_KINDS }).notNull(),
+  amount: real("amount").notNull(), // always positive
+  created_at: text("created_at").notNull(),
+})
+
+// Splits every matching outgoing payment on or after starts_on, e.g. rent.
+export const owedRules = sqliteTable("owed_rules", {
+  id: text("id").primaryKey(),
+  keyword: text("keyword").notNull().unique(),
+  person: text("person").notNull(),
+  amount: real("amount").notNull(),
+  starts_on: text("starts_on").notNull(), // YYYY-MM-DD
   created_at: text("created_at").notNull(),
 })
 

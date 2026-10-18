@@ -7,7 +7,9 @@ import {
 } from "./parsers/paynow"
 import { getDeterministicCategory } from "./cash-flow"
 
-const CATEGORY_LIST = CATEGORIES.join(", ")
+// Repayment is only ever set by the owner, together with who paid it back.
+const ASSIGNABLE_CATEGORIES = CATEGORIES.filter((c) => c !== "Repayment")
+const CATEGORY_LIST = ASSIGNABLE_CATEGORIES.join(", ")
 
 let anthropicClient: Anthropic | null = null
 
@@ -185,7 +187,7 @@ export async function categorize(
     const ruleCategory = await findRuleCategory(target)
     if (
       ruleCategory &&
-      (CATEGORIES as readonly string[]).includes(ruleCategory)
+      (ASSIGNABLE_CATEGORIES as readonly string[]).includes(ruleCategory)
     ) {
       return ruleCategory as Category
     }
@@ -221,7 +223,7 @@ export async function categorize(
       message.content[0] as { type: string; text: string }
     ).text?.trim()
 
-    const matched = CATEGORIES.find(
+    const matched = ASSIGNABLE_CATEGORIES.find(
       (c) => c.toLowerCase() === raw?.toLowerCase()
     )
 

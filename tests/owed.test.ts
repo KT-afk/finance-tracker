@@ -1,0 +1,207 @@
+/**
+ * Owed money end to end: a split payment counts only the owner's part as
+ * spend, a repayment is neither income nor spend, and the running total
+ * per person adds up.
+ */
+import assert from "node:assert/strict"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { createRequire } from "node:module"
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
+  DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void }
+}
+
+const RENT = "FAST PAYMENT via PayNow to LANDLORD LIM OTHR rent"
+
+function seed(dbPath: string) {
+  const db = new DatabaseSync(dbPath)
+  db.exec(`
+    CREATE TABLE transactions (
+      id text PRIMARY KEY NOT NULL,
+      date text NOT NULL,
+      description text NOT NULL,
+      amount real NOT NULL,
+      bank text NOT NULL,
+      category text DEFAULT 'Others' NOT NULL,
+      is_corrected integer DEFAULT false NOT NULL,
+      hash text NOT NULL UNIQUE,
+      uploaded_at text NOT NULL
+    );
+    CREATE TABLE category_rules (
+      id text PRIMARY KEY NOT NULL,
+      keyword text NOT NULL UNIQUE,
+      category text NOT NULL,
+      created_at text NOT NULL
+    );
+    INSERT INTO transactions VALUES
+      ('jun', '2026-06-01', '${RENT} jun', -3000, 'dbs', 'Housing', 0, 'h0', 'x'),
+      ('jul', '2026-07-01', '${RENT} jul', -3000, 'dbs', 'Housing', 0, 'h1', 'x'),
+      ('aug', '2026-08-01', '${RENT}  aug', -3000, 'dbs', 'Housing', 0, 'h2', 'x'),
+      ('food', '2026-08-03', 'FAIRPRICE FINEST', -100, 'dbs', 'Groceries', 0, 'h3', 'x'),
+      ('back', '2026-09-15',
+        'PAYMENT/TRANSFER via PayNow-DBSS from JANE TAN OTHR rent', 1000,
+        'dbs', 'Transfer', 0, 'h4', 'x');
+  `)
+  db.close()
+}
+
+async function json(res: Response) {
+  return res.json()
+}
+
+async function main() {
+  const tmpDir = mkdtempSync(path.join(tmpdir(), "finance-owed-test-"))
+  const dbPath = path.join(tmpDir, "test.db")
+  seed(dbPath)
+  process.env.FINANCE_DB_PATH = dbPath
+  delete process.env.DATABASE_URL
+  delete process.env.TURSO_DATABASE_URL
+  delete process.env.TURSO_AUTH_TOKEN
+  delete process.env.DATABASE_AUTH_TOKEN
+  delete process.env.APP_PASSWORD
+
+  try {
+    const owed = await import("../lib/owed")
+    const dashboard = await import("../app/api/dashboard/route")
+    const categories = await import("../app/api/categories/route")
+    const confirm = await import("../app/api/upload/confirm/route")
+    const patch = await import("../app/api/transactions/[id]/route")
+    const { querySpending } = await import("../lib/agent/query-spending")
+
+    const month = async (m: string) =>
+      json(
+        await dashboard.GET(
+          new Request(`http://localhost/api/dashboard?month=${m}`) as never
+        )
+      )
+
+    // Rule from July backfills July and August, not June
+    const { applied } = await owed.createOwedRule({
+      keyword: "LANDLORD LIM",
+      person: "Jane",
+      amount: 1000,
+      startsOn: "2026-07-01",
+    })
+    assert.equal(applied, 2)
+
+    const jun = await month("2026-06")
+    assert.equal(jun.totalSpend, 3000, "before the rule's start date")
+    const jul = await month("2026-07")
+    assert.equal(jul.totalSpend, 2000, "only the owner's part is spend")
+    assert.deepEqual(jul.topCategories, [{ category: "Housing", amount: 2000 }])
+    const aug = await month("2026-08")
+    assert.equal(aug.totalSpend, 2100)
+    assert.equal(aug.momDelta, 100)
+
+    // Repayment arrives months later: not income, not a transfer to review
+    await owed.markRepayment("back", { person: "Jane" })
+    const sep = await month("2026-09")
+    assert.equal(sep.totalIncome, 0)
+    assert.equal(sep.totalReimbursements, 0)
+    assert.equal(sep.unclassifiedTransfers, 0)
+    assert.equal(sep.netCashFlow, 0)
+
+    let summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 1000 }])
+    assert.deepEqual(
+      summary.ledger.map((e) => [e.transaction_id, e.balance]),
+      [
+        ["back", 1000],
+        ["aug", 2000],
+        ["jul", 1000],
+      ]
+    )
+
+    // New rent from an upload is split automatically
+    const res = await confirm.POST(
+      new Request("http://localhost/api/upload/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactions: [
+            {
+              id: "oct",
+              date: "2026-10-01",
+              description: `${RENT} oct`,
+              amount: -3000,
+              bank: "dbs",
+              category: "Housing",
+              is_corrected: false,
+              hash: "h5",
+              uploaded_at: "x",
+            },
+          ],
+        }),
+      }) as never
+    )
+    assert.equal(res.status, 200)
+    summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 2000 }])
+
+    // Removing a split by hand isn't undone by the rule later
+    await owed.removeOwedEntry("oct")
+    assert.equal(await owed.applyOwedRulesTo(["jul"]), 0)
+
+    // Category totals and the agent's spending tool see the owner's part only
+    const cats = await json(
+      await categories.GET(
+        new Request("http://localhost/api/categories?month=2026-07")
+      )
+    )
+    assert.deepEqual(
+      cats.items.map((i: { category: string; total: number }) => [
+        i.category,
+        i.total,
+      ]),
+      [["Housing", 2000]]
+    )
+    const housing = await querySpending("Housing")
+    assert.equal(housing.total, 3000 + 2000 + 2000 + 3000)
+
+    // Repayment can't be set from the plain category picker...
+    const rejected = await patch.PATCH(
+      new Request("http://localhost/api/transactions/food", {
+        method: "PATCH",
+        body: JSON.stringify({ category: "Repayment" }),
+      }) as never,
+      { params: Promise.resolve({ id: "food" }) }
+    )
+    assert.equal(rejected.status, 400)
+
+    // ...and recategorising a repayment drops it from the total
+    const moved = await patch.PATCH(
+      new Request("http://localhost/api/transactions/back", {
+        method: "PATCH",
+        body: JSON.stringify({ category: "Reimbursement" }),
+      }) as never,
+      { params: Promise.resolve({ id: "back" }) }
+    )
+    assert.equal(moved.status, 200)
+    summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 2000 }])
+
+    // Validation
+    await assert.rejects(
+      owed.setOwedShare("jul", { person: "Jane", amount: 5000 }),
+      /more than the payment/
+    )
+    await assert.rejects(
+      owed.markRepayment("jul", { person: "Jane" }),
+      /money you received/
+    )
+    await assert.rejects(
+      owed.setOwedShare("jul", { person: " ", amount: 10 }),
+      /who owes/
+    )
+
+    console.log("owed test passed")
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true })
+  }
+}
+
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

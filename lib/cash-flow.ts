@@ -4,6 +4,8 @@ export type CashFlowTransaction = {
   description: string
   amount: number
   category: string
+  // Part of an outgoing payment someone else owes back; not the owner's spend.
+  owedShare?: number
 }
 
 export type CashFlowClassification = {
@@ -107,13 +109,19 @@ export function classifyCashFlow(
     transaction.description,
     transaction.amount
   )
-  // Incoming transfers default to "Transfer" for review; a Reimbursement tag
-  // can only come from the user (categorize() never assigns it to these).
+  // Incoming transfers default to "Transfer" for review; a Reimbursement or
+  // Repayment tag can only come from the user (categorize() never assigns
+  // either to these).
   const category =
-    deterministic === "Transfer" && transaction.category === "Reimbursement"
-      ? "Reimbursement"
+    deterministic === "Transfer" &&
+    (transaction.category === "Reimbursement" ||
+      transaction.category === "Repayment")
+      ? asCategory(transaction.category)
       : (deterministic ?? asCategory(transaction.category))
-  const effectiveAmount = transaction.amount
+  const effectiveAmount =
+    transaction.amount < 0 && transaction.owedShare
+      ? Math.min(0, transaction.amount + transaction.owedShare)
+      : transaction.amount
   const countsAsIncome = category === "Income" && effectiveAmount > 0
   const countsAsReimbursement =
     category === "Reimbursement" && effectiveAmount > 0
@@ -126,6 +134,7 @@ export function classifyCashFlow(
       "Credit Card Payment",
       "Income",
       "Reimbursement",
+      "Repayment",
     ].includes(category)
 
   return {

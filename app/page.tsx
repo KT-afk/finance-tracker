@@ -13,6 +13,7 @@ import {
 import Link from "next/link"
 import InsightCard from "@/components/InsightCard"
 import StatementCoverage from "@/components/StatementCoverage"
+import OwedCard from "@/components/OwedCard"
 
 interface CategoryTotal {
   category: string
@@ -543,6 +544,8 @@ export default function HomePage() {
               </div>
             </CardContent>
           </Card>
+
+          <OwedCard />
 
           {/* Top categories */}
           {data.topCategories.length > 0 && (

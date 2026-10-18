@@ -181,4 +181,35 @@ assert.deepEqual(summary, {
   unclassifiedTransfers: 40,
 })
 
+// A split payment: only the owner's part is spend
+const splitRent = classifyCashFlow({
+  description: "FAST PAYMENT via PayNow-Mobile to LANDLORD OTHR-rent",
+  amount: -3000,
+  category: "Housing",
+  owedShare: 1000,
+})
+assert.equal(splitRent.effectiveAmount, -2000)
+assert.equal(splitRent.countsAsSpend, true)
+
+const fullyOwed = classifyCashFlow({
+  description: "GRAB DINNER",
+  amount: -50,
+  category: "Food & Drink",
+  owedShare: 50,
+})
+assert.equal(fullyOwed.countsAsSpend, false)
+
+// A repayment of money owed is neither income nor a transfer to review
+const repayment = classifyCashFlow({
+  description:
+    "PAYMENT/TRANSFER via PayNow-DBSS from SIOW JER JIAN OTHR Send money",
+  amount: 1000,
+  category: "Repayment",
+})
+assert.equal(repayment.category, "Repayment")
+assert.equal(repayment.countsAsIncome, false)
+assert.equal(repayment.countsAsReimbursement, false)
+assert.equal(repayment.isUnclassifiedTransfer, false)
+assert.equal(repayment.countsAsSpend, false)
+
 console.log("cash flow semantics test passed")

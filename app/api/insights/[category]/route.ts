@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { transactions } from '@/lib/schema'
 import { CATEGORIES } from '@/lib/schema'
 import { and, eq, gte, lt } from 'drizzle-orm'
+import { withOwedShares } from '@/lib/owed'
 
 function getMonthRange(monthsBack: number): { start: string; label: string } {
   const now = new Date()
@@ -24,6 +25,13 @@ function getMonthEnd(monthsBack: number): string {
   return `${year}-${month}-01`
 }
 
+// Only the owner's part of a split payment counts as spend in this category
+function ownPart<T extends { amount: number; owedShare: number }>(rows: T[]): T[] {
+  return rows
+    .map(row => ({ ...row, amount: Math.min(0, row.amount + row.owedShare) }))
+    .filter(row => row.amount < 0)
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ category: string }> }
@@ -39,16 +47,20 @@ export async function GET(
     const sixMonthsAgoStart = getMonthRange(5).start
 
     // --- 1. 6-month trend ---
-    const trendTxns = await db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.category, category),
-          gte(transactions.date, sixMonthsAgoStart),
-          lt(transactions.amount, 0)
-        )
+    const trendTxns = ownPart(
+      await withOwedShares(
+        await db
+          .select()
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.category, category),
+              gte(transactions.date, sixMonthsAgoStart),
+              lt(transactions.amount, 0)
+            )
+          )
       )
+    )
 
     const monthLabels = Array.from({ length: 6 }, (_, i) => getMonthRange(5 - i).label)
     const monthTotals: Record<string, number> = {}
@@ -78,15 +90,19 @@ export async function GET(
     })
 
     // --- 2. All-time expense txns for this category ---
-    const allTxns = await db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.category, category),
-          lt(transactions.amount, 0)
-        )
+    const allTxns = ownPart(
+      await withOwedShares(
+        await db
+          .select()
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.category, category),
+              lt(transactions.amount, 0)
+            )
+          )
       )
+    )
 
     // --- 3. Top merchants ---
     const merchantTotals: Record<string, number> = {}

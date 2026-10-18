@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { BANKS, CATEGORIES, transactions, type Bank } from "@/lib/schema"
 import { and, eq, gte, lte, desc } from "drizzle-orm"
 import { classifyCashFlow } from "@/lib/cash-flow"
+import { applyOwedRulesTo, loadOwedEntriesFor } from "@/lib/owed"
 
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -56,10 +57,18 @@ export async function GET(req: NextRequest) {
 
     const total = allTxns.length
     const offset = (page - 1) * pageSize
-    const paged = allTxns.slice(offset, offset + pageSize).map((tx) => ({
-      ...tx,
-      is_manual: tx.hash.startsWith("manual:"),
-    }))
+    const pageTxns = allTxns.slice(offset, offset + pageSize)
+    const owed = await loadOwedEntriesFor(pageTxns.map((tx) => tx.id))
+    const paged = pageTxns.map((tx) => {
+      const entry = owed.get(tx.id)
+      return {
+        ...tx,
+        is_manual: tx.hash.startsWith("manual:"),
+        owed: entry
+          ? { kind: entry.kind, person: entry.person, amount: entry.amount }
+          : null,
+      }
+    })
 
     return NextResponse.json({
       transactions: paged,
@@ -102,7 +111,10 @@ export async function POST(req: NextRequest) {
     if (!(BANKS as readonly string[]).includes(bank)) {
       return NextResponse.json({ error: "Invalid bank" }, { status: 400 })
     }
-    if (!(CATEGORIES as readonly string[]).includes(category)) {
+    if (
+      !(CATEGORIES as readonly string[]).includes(category) ||
+      category === "Repayment"
+    ) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 })
     }
 
@@ -121,6 +133,7 @@ export async function POST(req: NextRequest) {
     }
 
     await db.insert(transactions).values(transaction)
+    await applyOwedRulesTo([id])
 
     return NextResponse.json({ transaction }, { status: 201 })
   } catch (e: unknown) {

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, type Bank } from "@/lib/schema"
 import { classifyCashFlow } from "@/lib/cash-flow"
-import { and, asc, eq, gte, lte } from "drizzle-orm"
+import { withOwedShares } from "@/lib/owed"
+import { and, eq, gte, lte } from "drizzle-orm"
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
@@ -38,10 +39,14 @@ export async function GET(req: NextRequest) {
 
     // Fetch last 6 months of data
     const sixMonthsAgo = getMonthRange(5)
-    const allTxns = await db
-      .select()
-      .from(transactions)
-      .where(and(gte(transactions.date, sixMonthsAgo.start), ...bankCondition))
+    const allTxns = await withOwedShares(
+      await db
+        .select()
+        .from(transactions)
+        .where(
+          and(gte(transactions.date, sixMonthsAgo.start), ...bankCondition)
+        )
+    )
 
     // Group by month and category (expenses only for trend/mom)
     const monthlyData: Record<string, Record<string, number>> = {}
@@ -133,20 +138,25 @@ export async function GET(req: NextRequest) {
 
     // Top 5 biggest transactions this month
     const biggestTxns = (
-      await db
-        .select()
-        .from(transactions)
-        .where(
-          and(
-            gte(transactions.date, getMonthRange(0).start),
-            lte(transactions.date, getMonthRange(0).end),
-            ...bankCondition
+      await withOwedShares(
+        await db
+          .select()
+          .from(transactions)
+          .where(
+            and(
+              gte(transactions.date, getMonthRange(0).start),
+              lte(transactions.date, getMonthRange(0).end),
+              ...bankCondition
+            )
           )
-        )
-        .orderBy(asc(transactions.amount))
+      )
     )
-      .filter((t) => classifyCashFlow(t).countsAsSpend)
+      .map((t) => ({ t, spend: classifyCashFlow(t) }))
+      .filter(({ spend }) => spend.countsAsSpend)
+      // Rank by the owner's own part, so a split rent isn't shown at full price
+      .sort((a, b) => a.spend.effectiveAmount - b.spend.effectiveAmount)
       .slice(0, 5)
+      .map(({ t, spend }) => ({ ...t, amount: spend.effectiveAmount }))
 
     return NextResponse.json({
       momComparison,

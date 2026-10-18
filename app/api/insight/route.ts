@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
 import { transactions, aiMemory } from '@/lib/schema'
 import { sql, and, gte, lt } from 'drizzle-orm'
+import { loadOwedShares } from '@/lib/owed'
 
 const MODEL = 'claude-sonnet-4-6'
 
@@ -68,6 +69,7 @@ export async function POST() {
     async function buildMonthSummary(start: string, end: string): Promise<string> {
       const rows = await db
         .select({
+          id: transactions.id,
           category: transactions.category,
           description: transactions.description,
           amount: transactions.amount,
@@ -78,11 +80,15 @@ export async function POST() {
       if (rows.length === 0) return '  (no data)'
 
       const catMap: Record<string, { total: number; merchants: Record<string, number> }> = {}
+      const owedShares = await loadOwedShares()
       for (const tx of rows) {
+        // Only the owner's part of a split payment is their spend
+        const spend = Math.abs(tx.amount) - (owedShares.get(tx.id) ?? 0)
+        if (spend <= 0) continue
         if (!catMap[tx.category]) catMap[tx.category] = { total: 0, merchants: {} }
-        catMap[tx.category].total += Math.abs(tx.amount)
+        catMap[tx.category].total += spend
         catMap[tx.category].merchants[tx.description] =
-          (catMap[tx.category].merchants[tx.description] ?? 0) + Math.abs(tx.amount)
+          (catMap[tx.category].merchants[tx.description] ?? 0) + spend
       }
 
       return Object.entries(catMap)

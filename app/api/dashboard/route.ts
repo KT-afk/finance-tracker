@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, type Bank } from "@/lib/schema"
 import { classifyCashFlow, summarizeCashFlow } from "@/lib/cash-flow"
+import { withOwedShares } from "@/lib/owed"
 import { and, eq, gte, lte, lt, desc } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -39,10 +40,12 @@ export async function GET(req: NextRequest) {
       whereConditions.push(eq(transactions.bank, bank as Bank))
     }
 
-    const monthTxns = await db
-      .select()
-      .from(transactions)
-      .where(and(...whereConditions))
+    const monthTxns = await withOwedShares(
+      await db
+        .select()
+        .from(transactions)
+        .where(and(...whereConditions))
+    )
 
     // If current month has no data, caller can retry with last month
     const isEmpty = monthTxns.length === 0
@@ -105,14 +108,17 @@ export async function GET(req: NextRequest) {
       priorWhereConditions.push(eq(transactions.bank, bank as Bank))
     }
 
-    const priorTxns = await db
-      .select({
-        amount: transactions.amount,
-        category: transactions.category,
-        description: transactions.description,
-      })
-      .from(transactions)
-      .where(and(...priorWhereConditions))
+    const priorTxns = await withOwedShares(
+      await db
+        .select({
+          id: transactions.id,
+          amount: transactions.amount,
+          category: transactions.category,
+          description: transactions.description,
+        })
+        .from(transactions)
+        .where(and(...priorWhereConditions))
+    )
 
     const priorSpend = summarizeCashFlow(priorTxns).spend
 

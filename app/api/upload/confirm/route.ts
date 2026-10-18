@@ -7,6 +7,7 @@ import {
   ValidationSchema,
 } from "@/lib/auth-middleware"
 import { saveBalanceHistory } from "@/lib/balance-history"
+import { applyOwedRulesTo } from "@/lib/owed"
 import { AccountType, Bank, BANKS } from "@/lib/schema"
 
 interface TransactionPayload {
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
 
     let inserted = 0
     let skipped = 0
+    const insertedIds: string[] = []
     const validationErrors: string[] = []
 
     for (const t of txns) {
@@ -132,12 +134,17 @@ export async function POST(req: NextRequest) {
           .onConflictDoNothing({ target: transactions.hash })
           .returning({ id: transactions.id })
 
-        if (result.length > 0) inserted++
-        else skipped++
+        if (result.length > 0) {
+          inserted++
+          insertedIds.push(result[0].id)
+        } else skipped++
       } catch {
         skipped++
       }
     }
+
+    // e.g. split this month's rent with the partner's share
+    await applyOwedRulesTo(insertedIds)
 
     for (const b of balances) {
       await saveBalanceHistory({

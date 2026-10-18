@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions, EXCLUDED_FROM_SPEND } from "@/lib/schema"
 import { and, gte, lt, eq, notInArray } from "drizzle-orm"
+import { loadOwedShares } from "@/lib/owed"
 
 type Period =
   "this_month" | "last_month" | "2_months_ago" | "3_months_ago" | "all_time"
@@ -124,11 +125,13 @@ export async function GET(request: Request) {
 
     const rows = await db
       .select({
+        id: transactions.id,
         category: transactions.category,
         amount: transactions.amount,
       })
       .from(transactions)
       .where(and(...conditions))
+    const owedShares = await loadOwedShares()
 
     if (rows.length === 0) {
       return NextResponse.json({ items: [], grandTotal: 0 })
@@ -138,7 +141,12 @@ export async function GET(request: Request) {
     const map = new Map<string, number>()
     const countMap = new Map<string, number>()
     for (const row of rows) {
-      const abs = Math.abs(row.amount)
+      // Only the owner's part of a split payment is their spend
+      const abs = Math.max(
+        0,
+        Math.abs(row.amount) - (owedShares.get(row.id) ?? 0)
+      )
+      if (abs === 0) continue
       map.set(row.category, (map.get(row.category) ?? 0) + abs)
       countMap.set(row.category, (countMap.get(row.category) ?? 0) + 1)
     }

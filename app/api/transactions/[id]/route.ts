@@ -5,6 +5,7 @@ import { and, eq, ne } from "drizzle-orm"
 import { saveRule } from "@/lib/rules"
 import { CATEGORIES } from "@/lib/schema"
 import { requireAuth } from "@/lib/auth-middleware"
+import { dropRepayment } from "@/lib/owed"
 
 export async function PATCH(
   req: NextRequest,
@@ -22,6 +23,12 @@ export async function PATCH(
     if (!category || !(CATEGORIES as readonly string[]).includes(category)) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 })
     }
+    if (category === "Repayment") {
+      return NextResponse.json(
+        { error: "Mark repayments with who paid you back" },
+        { status: 400 }
+      )
+    }
 
     // Get the transaction to extract description for rule saving
     const [existing] = await db
@@ -36,6 +43,8 @@ export async function PATCH(
         { status: 404 }
       )
     }
+
+    if (existing.category === "Repayment") await dropRepayment(id)
 
     // Update category and mark as corrected
     await db
