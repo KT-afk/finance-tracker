@@ -103,6 +103,12 @@ async function main() {
     assert.equal(await ask(), "insight 3", "new memory makes a new insight")
     assert.equal(calls, 3)
 
+    // Two requests at once share one model call
+    await db.run(sql`DELETE FROM insight_cache`)
+    const [x, y] = await Promise.all([route.POST(), route.POST()])
+    assert.equal((await x.json()).text, (await y.json()).text)
+    assert.equal(calls, 4, "concurrent requests share one call")
+
     // Expiry: fine just before a week, stale at a week
     const now = Date.now()
     await cache.saveInsight("h", "old", now - cache.INSIGHT_TTL_MS + 1000)

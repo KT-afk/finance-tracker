@@ -34,8 +34,9 @@ function getPastMonthRanges(
 ): Array<{ label: string; start: string; end: string }> {
   const ranges = []
   for (let i = 1; i <= monthsBack; i++) {
-    const d = new Date()
-    d.setMonth(d.getMonth() - i)
+    // Day 1, so the 29th-31st don't roll into the wrong month
+    const today = new Date()
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
     const y = d.getFullYear()
     const m = d.getMonth()
     const start = `${y}-${String(m + 1).padStart(2, "0")}-01`
@@ -45,6 +46,29 @@ function getPastMonthRanges(
     ranges.push({ label, start, end })
   }
   return ranges
+}
+
+// One model call per input, even if the card asks twice at once
+const pending = new Map<string, Promise<string>>()
+
+async function generateInsight(
+  inputHash: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  const client = getClient()
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 400,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  })
+
+  const text =
+    (message.content[0] as { type: string; text: string }).text?.trim() ?? ""
+  // A failed save only costs a call next time; still show this insight
+  if (text) await saveInsight(inputHash, text).catch(console.error)
+  return text
 }
 
 export async function POST() {
@@ -92,6 +116,8 @@ export async function POST() {
             sql`${transactions.amount} < 0`
           )
         )
+        // Fixed order so ties rank the same way and the cache keeps hitting
+        .orderBy(transactions.id)
 
       if (rows.length === 0) return "  (no data)"
 
@@ -143,7 +169,7 @@ export async function POST() {
     ).join("\n\n")
 
     // Memory
-    const memories = await db.select().from(aiMemory)
+    const memories = await db.select().from(aiMemory).orderBy(aiMemory.id)
     const memoryBlock =
       memories.length > 0
         ? memories.map((m) => `- [${m.source}] ${m.key}: ${m.value}`).join("\n")
@@ -176,20 +202,20 @@ Generate a spending insight for ${currentMonthLabel}.`
 
     // Same input within a week gets the saved insight instead of a new call
     const inputHash = hashInsightInput(MODEL, systemPrompt, userPrompt)
-    const cached = await getCachedInsight(inputHash)
+    const cached = await getCachedInsight(inputHash).catch((error) => {
+      console.error(error)
+      return null
+    })
     if (cached) return NextResponse.json({ text: cached })
 
-    const client = getClient()
-    const message = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    })
-
-    const text =
-      (message.content[0] as { type: string; text: string }).text?.trim() ?? ""
-    if (text) await saveInsight(inputHash, text)
+    let job = pending.get(inputHash)
+    if (!job) {
+      job = generateInsight(inputHash, systemPrompt, userPrompt).finally(() =>
+        pending.delete(inputHash)
+      )
+      pending.set(inputHash, job)
+    }
+    const text = await job
     return NextResponse.json({ text })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error"
