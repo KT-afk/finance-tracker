@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { CATEGORY_COLORS, formatSGD } from "@/lib/display"
-import { CATEGORIES, BANKS } from "@/lib/schema"
+import { CATEGORIES, BANKS, OFF_BANK, SPEND_CATEGORIES } from "@/lib/schema"
 import { describeTransaction } from "@/lib/describe-transaction"
 import Link from "next/link"
 import { OwedEditor, type OwedInfo } from "@/components/OwedEditor"
@@ -453,7 +453,9 @@ function TransactionsView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
-                    {CATEGORIES.filter((c) => c !== "Repayment").map((c) => (
+                    {CATEGORIES.filter(
+                      (c) => c !== "Repayment" && c !== "Paid by Others"
+                    ).map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>
@@ -599,6 +601,15 @@ function TransactionsView() {
               const color = CATEGORY_COLORS[t.category] ?? "#94A3B8"
               const summary = describeTransaction(t.description)
               const expanded = expandedIds.has(t.id)
+              const offBank = t.bank === OFF_BANK
+              const categoryOptions: readonly string[] = offBank
+                ? SPEND_CATEGORIES
+                : CATEGORIES.filter(
+                    // Set via "Repayment…" / Owed to you, which record who paid
+                    (c) =>
+                      (c !== "Repayment" && c !== "Paid by Others") ||
+                      t.category === c
+                  )
               return (
                 <Card key={t.id} className="bg-zinc-900 border-zinc-800">
                   <CardContent className="py-3 px-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
@@ -657,7 +668,7 @@ function TransactionsView() {
                             color,
                           }}
                         >
-                          {t.bank.toUpperCase()}
+                          {offBank ? "No bank" : t.bank.toUpperCase()}
                         </Badge>
                         {t.is_corrected && (
                           <span className="text-[10px] text-blue-500/70 font-medium">
@@ -673,7 +684,11 @@ function TransactionsView() {
                           <span className="text-[10px] text-teal-300 font-medium min-w-0 truncate">
                             {t.owed.kind === "share"
                               ? `${formatSGD(t.owed.amount)} owed by ${t.owed.person}`
-                              : `Repaid by ${t.owed.person}`}
+                              : t.owed.kind === "repayment"
+                                ? `Repaid by ${t.owed.person}`
+                                : t.owed.kind === "covered"
+                                  ? `Paid by ${t.owed.person}`
+                                  : `Let go, owed by ${t.owed.person}`}
                           </span>
                         )}
                       </div>
@@ -682,9 +697,11 @@ function TransactionsView() {
                     {/* Category selector */}
                     <div
                       className={`grid gap-2 sm:order-4 ${
-                        t.is_manual
-                          ? "grid-cols-[minmax(0,1fr)_auto_auto]"
-                          : "grid-cols-[minmax(0,1fr)_auto]"
+                        offBank
+                          ? "grid-cols-1"
+                          : t.is_manual
+                            ? "grid-cols-[minmax(0,1fr)_auto_auto]"
+                            : "grid-cols-[minmax(0,1fr)_auto]"
                       }`}
                     >
                       <Select
@@ -699,11 +716,7 @@ function TransactionsView() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-800 border-zinc-700">
-                          {CATEGORIES.filter(
-                            // Repayment is set via "Repayment…" so it
-                            // records who paid
-                            (c) => c !== "Repayment" || t.category === c
-                          ).map((c) => (
+                          {categoryOptions.map((c) => (
                             <SelectItem key={c} value={c} className="text-xs">
                               {c}
                             </SelectItem>
@@ -711,26 +724,28 @@ function TransactionsView() {
                         </SelectContent>
                       </Select>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 sm:h-7 border-zinc-700 px-3 text-xs text-zinc-300"
-                        aria-expanded={owedEditingId === t.id}
-                        onClick={() =>
-                          setOwedEditingId((cur) =>
-                            cur === t.id ? null : t.id
-                          )
-                        }
-                      >
-                        {t.amount < 0
-                          ? t.owed
-                            ? "Edit split…"
-                            : "Split…"
-                          : t.owed
-                            ? "Edit repayment…"
-                            : "Repayment…"}
-                      </Button>
+                      {!offBank && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 sm:h-7 border-zinc-700 px-3 text-xs text-zinc-300"
+                          aria-expanded={owedEditingId === t.id}
+                          onClick={() =>
+                            setOwedEditingId((cur) =>
+                              cur === t.id ? null : t.id
+                            )
+                          }
+                        >
+                          {t.amount < 0
+                            ? t.owed
+                              ? "Edit split…"
+                              : "Split…"
+                            : t.owed
+                              ? "Edit repayment…"
+                              : "Repayment…"}
+                        </Button>
+                      )}
 
                       {t.is_manual && (
                         <Button

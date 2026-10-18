@@ -1,7 +1,13 @@
 import { randomUUID } from "crypto"
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm"
 import { db } from "./db"
-import { owedEntries, owedRules, transactions } from "./schema"
+import {
+  OFF_BANK,
+  SPEND_CATEGORIES,
+  owedEntries,
+  owedRules,
+  transactions,
+} from "./schema"
 import { buildOwedLedger, owedRuleMatches } from "./owed-ledger"
 
 let ensured: Promise<void> | null = null
@@ -79,6 +85,15 @@ async function getTransaction(id: string) {
   return transaction
 }
 
+// Shares and repayments are for money that moved through the owner's banks
+async function getBankTransaction(id: string) {
+  const transaction = await getTransaction(id)
+  if (transaction.bank === OFF_BANK) {
+    throw new OwedError("This isn’t a bank transaction")
+  }
+  return transaction
+}
+
 /** transaction id → amount owed back, for every split payment. */
 export async function loadOwedShares(): Promise<Map<string, number>> {
   await ensureOwedTables()
@@ -112,7 +127,7 @@ export async function setOwedShare(
   input: { person: unknown; amount: unknown }
 ) {
   await ensureOwedTables()
-  const transaction = await getTransaction(transactionId)
+  const transaction = await getBankTransaction(transactionId)
   if (transaction.amount >= 0) {
     throw new OwedError("Only money you paid out can be split")
   }
@@ -140,7 +155,7 @@ export async function markRepayment(
   input: { person: unknown; amount?: unknown }
 ) {
   await ensureOwedTables()
-  const transaction = await getTransaction(transactionId)
+  const transaction = await getBankTransaction(transactionId)
   if (transaction.amount <= 0) {
     throw new OwedError("Only money you received can be a repayment")
   }
@@ -170,9 +185,92 @@ export async function markRepayment(
   return { person, amount }
 }
 
+export const ADJUSTMENT_KINDS = ["covered", "forgiven"] as const
+export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number]
+
+async function balanceOf(person: string): Promise<number> {
+  const { balances } = await getOwedSummary()
+  return balances.find((b) => b.person === person)?.balance ?? 0
+}
+
 /**
- * Removes the split or repayment on a transaction. A repayment's category
- * goes back to Transfer so it shows up for review again.
+ * Takes down what someone owes without a bank transfer:
+ * - covered: they paid for something of the owner's (default "Paid by Others")
+ * - forgiven: the owner lets the amount go
+ * Either way it becomes the owner's spend, recorded as an OFF_BANK
+ * transaction so every spend total picks it up.
+ */
+export async function addOwedAdjustment(input: {
+  kind: unknown
+  person: unknown
+  amount: unknown
+  note: unknown
+  category: unknown
+  date: unknown
+}) {
+  await ensureOwedTables()
+  const kind = input.kind as AdjustmentKind
+  if (!ADJUSTMENT_KINDS.includes(kind)) throw new OwedError("Invalid kind")
+  const person = cleanPerson(input.person)
+  const date = typeof input.date === "string" ? input.date : ""
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new OwedError("Pick a date")
+  const category =
+    typeof input.category === "string" && input.category
+      ? input.category
+      : "Paid by Others"
+  if (!(SPEND_CATEGORIES as readonly string[]).includes(category)) {
+    throw new OwedError("Invalid category")
+  }
+  const note =
+    typeof input.note === "string" ? input.note.replace(/\s+/g, " ").trim() : ""
+  if (note.length > 200) throw new OwedError("Note is too long")
+
+  let amount: number
+  if (kind === "forgiven") {
+    const owed = await balanceOf(person)
+    if (owed <= 0) throw new OwedError(`${person} doesn’t owe you anything`)
+    amount = roundMoney(Number(input.amount))
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new OwedError("Amount must be more than 0")
+    }
+    if (amount > owed) {
+      throw new OwedError("That’s more than they owe you")
+    }
+  } else {
+    amount = cleanAmount(input.amount, Number.MAX_SAFE_INTEGER)
+  }
+
+  const description =
+    note ||
+    (kind === "covered" ? `Paid by ${person}` : `Let go: owed by ${person}`)
+  const id = randomUUID()
+  const now = new Date().toISOString()
+  await db.insert(transactions).values({
+    id,
+    date,
+    description,
+    amount: -amount,
+    bank: OFF_BANK,
+    category,
+    is_corrected: true,
+    hash: `owed:${id}`,
+    uploaded_at: now,
+  })
+  await db.insert(owedEntries).values({
+    id: randomUUID(),
+    transaction_id: id,
+    person,
+    kind,
+    amount,
+    created_at: now,
+  })
+  return { transactionId: id, person, kind, amount, category, date }
+}
+
+/**
+ * Removes an owed entry. A repayment's category goes back to Transfer so it
+ * shows up for review again; a covered or forgiven amount is deleted along
+ * with its OFF_BANK transaction.
  */
 export async function removeOwedEntry(transactionId: string) {
   await ensureOwedTables()
@@ -185,6 +283,13 @@ export async function removeOwedEntry(transactionId: string) {
       .update(transactions)
       .set({ category: "Transfer", is_corrected: true })
       .where(eq(transactions.id, transactionId))
+  }
+  if (entry?.kind === "covered" || entry?.kind === "forgiven") {
+    await db
+      .delete(transactions)
+      .where(
+        and(eq(transactions.id, transactionId), eq(transactions.bank, OFF_BANK))
+      )
   }
   return entry ?? null
 }
@@ -327,9 +432,10 @@ export async function getOwedSummary() {
       amount: owedEntries.amount,
       date: transactions.date,
       description: transactions.description,
+      category: transactions.category,
     })
     .from(owedEntries)
     .innerJoin(transactions, eq(transactions.id, owedEntries.transaction_id))
   const rules = await db.select().from(owedRules)
-  return { ...buildOwedLedger(rows), rules }
+  return { ...buildOwedLedger(rows), rules, spendCategories: SPEND_CATEGORIES }
 }

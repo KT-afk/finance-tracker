@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { OwedAdjustmentForm } from "@/components/OwedAdjustmentForm"
 import { describeTransaction } from "@/lib/describe-transaction"
 import { formatSGD } from "@/lib/display"
 import type { OwedBalance, OwedLedgerEntry } from "@/lib/owed-ledger"
@@ -34,6 +35,23 @@ function formatDate(iso: string): string {
   return dateFormat.format(new Date(y, m - 1, d))
 }
 
+function entryLabel(e: OwedLedgerEntry): string {
+  const title = describeTransaction(e.description).title || e.description
+  switch (e.kind) {
+    case "share":
+      return `${e.person}’s share of ${title}`
+    case "repayment":
+      return `${e.person} paid you back`
+    case "covered":
+      return `${e.person} paid for ${title}`
+    case "forgiven":
+      return `You let ${e.person} off`
+  }
+}
+
+const smallButton =
+  "min-h-6 rounded px-2 text-xs focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50"
+
 function balanceLabel({ person, balance }: OwedBalance): string {
   if (balance > 0) return `${person} owes you`
   if (balance < 0) return `You owe ${person}`
@@ -45,6 +63,11 @@ export default function OwedCard() {
   const [summary, setSummary] = useState<OwedSummary | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [removingRuleId, setRemovingRuleId] = useState<string | null>(null)
+  const [removingEntryId, setRemovingEntryId] = useState<string | null>(null)
+  const [adjusting, setAdjusting] = useState<{
+    person: string
+    kind: "covered" | "forgiven"
+  } | null>(null)
 
   const load = useCallback(() => {
     fetch("/api/owed")
@@ -71,6 +94,29 @@ export default function OwedCard() {
     } finally {
       setRemovingRuleId(null)
     }
+  }
+
+  async function removeEntry(entry: OwedLedgerEntry) {
+    const ok = window.confirm(
+      `Remove “${entryLabel(entry)}” (${formatSGD(entry.amount)})? ${entry.person} will owe that amount again.`
+    )
+    if (!ok) return
+    setRemovingEntryId(entry.transaction_id)
+    try {
+      await fetch(`/api/transactions/${entry.transaction_id}/owed`, {
+        method: "DELETE",
+      })
+      load()
+    } finally {
+      setRemovingEntryId(null)
+    }
+  }
+
+  // Letting go of rent should count as Housing, not "Paid by Others"
+  function lastShareCategory(person: string): string | undefined {
+    return summary?.ledger.find(
+      (e) => e.person === person && e.kind === "share"
+    )?.category
   }
 
   if (!summary) return null
@@ -100,9 +146,55 @@ export default function OwedCard() {
                 >
                   {formatSGD(Math.abs(b.balance))}
                 </p>
+                <div className="mt-2 flex flex-wrap gap-1 -mx-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAdjusting({ person: b.person, kind: "covered" })
+                    }
+                    className={`${smallButton} text-blue-400 hover:bg-zinc-700/60 hover:text-blue-300 focus-visible:ring-blue-500`}
+                  >
+                    {b.person} paid for something…
+                  </button>
+                  {b.balance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAdjusting({ person: b.person, kind: "forgiven" })
+                      }
+                      className={`${smallButton} text-zinc-300 hover:bg-zinc-700/60 hover:text-zinc-100 focus-visible:ring-blue-500`}
+                    >
+                      Let it go…
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {adjusting && (
+          <OwedAdjustmentForm
+            key={`${adjusting.person}-${adjusting.kind}`}
+            kind={adjusting.kind}
+            person={adjusting.person}
+            defaultAmount={
+              adjusting.kind === "forgiven"
+                ? summary.balances.find((b) => b.person === adjusting.person)
+                    ?.balance
+                : undefined
+            }
+            defaultCategory={
+              adjusting.kind === "forgiven"
+                ? lastShareCategory(adjusting.person)
+                : undefined
+            }
+            onCancel={() => setAdjusting(null)}
+            onSaved={() => {
+              setAdjusting(null)
+              load()
+            }}
+          />
         )}
 
         {rows.length > 0 && (
@@ -114,9 +206,8 @@ export default function OwedCard() {
             </div>
             <ul className="divide-y divide-zinc-800">
               {rows.map((e) => {
-                const title =
-                  describeTransaction(e.description).title || e.description
                 const isShare = e.kind === "share"
+                const removable = e.kind === "covered" || e.kind === "forgiven"
                 return (
                   <li
                     key={e.transaction_id}
@@ -124,12 +215,23 @@ export default function OwedCard() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm text-zinc-200">
-                        {isShare
-                          ? `${e.person}’s share of ${title}`
-                          : `${e.person} paid you back`}
+                        {entryLabel(e)}
                       </p>
                       <p className="text-xs text-zinc-500">
                         {formatDate(e.date)}
+                        {removable && ` · ${e.category}`}
+                        {removable && (
+                          <button
+                            type="button"
+                            onClick={() => removeEntry(e)}
+                            disabled={removingEntryId === e.transaction_id}
+                            className={`${smallButton} ml-1 text-red-300 hover:bg-red-900/30 hover:text-red-200 focus-visible:ring-red-500`}
+                          >
+                            {removingEntryId === e.transaction_id
+                              ? "Removing…"
+                              : "Remove"}
+                          </button>
+                        )}
                       </p>
                     </div>
                     <span
@@ -188,7 +290,8 @@ export default function OwedCard() {
         )}
 
         <p className="text-xs text-zinc-500">
-          Repayments lower the total and don’t count as income. Use{" "}
+          Repayments lower the total and don’t count as income. Things they paid
+          for, and amounts you let go, count as your spending. Use{" "}
           <Link
             href="/transactions"
             className="text-blue-400 hover:text-blue-300"

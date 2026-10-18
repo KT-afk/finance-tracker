@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
 import { and, eq, ne } from "drizzle-orm"
 import { saveRule } from "@/lib/rules"
-import { CATEGORIES } from "@/lib/schema"
+import { CATEGORIES, OFF_BANK, SPEND_CATEGORIES } from "@/lib/schema"
 import { requireAuth } from "@/lib/auth-middleware"
 import { dropRepayment } from "@/lib/owed"
 
@@ -41,6 +41,25 @@ export async function PATCH(
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }
+      )
+    }
+
+    // Something someone else paid for, or an amount let go: just recategorise,
+    // no keyword rule or look-alikes since it never came from a bank
+    if (existing.bank === OFF_BANK) {
+      if (!(SPEND_CATEGORIES as readonly string[]).includes(category)) {
+        return NextResponse.json({ error: "Invalid category" }, { status: 400 })
+      }
+      await db
+        .update(transactions)
+        .set({ category })
+        .where(eq(transactions.id, id))
+      return NextResponse.json({ success: true, siblingsUpdated: 0 })
+    }
+    if (category === "Paid by Others") {
+      return NextResponse.json(
+        { error: "Record things others paid for from Owed to you" },
+        { status: 400 }
       )
     }
 

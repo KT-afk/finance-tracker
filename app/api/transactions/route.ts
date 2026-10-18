@@ -113,7 +113,8 @@ export async function POST(req: NextRequest) {
     }
     if (
       !(CATEGORIES as readonly string[]).includes(category) ||
-      category === "Repayment"
+      category === "Repayment" ||
+      category === "Paid by Others"
     ) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 })
     }

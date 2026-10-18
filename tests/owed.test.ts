@@ -181,6 +181,88 @@ async function main() {
     summary = await owed.getOwedSummary()
     assert.deepEqual(summary.balances, [{ person: "Jane", balance: 2000 }])
 
+    // She paid for groceries for the owner: lowers what she owes, and is
+    // the owner's spend under no bank
+    const covered = await owed.addOwedAdjustment({
+      kind: "covered",
+      person: "Jane",
+      amount: 200,
+      note: "Groceries",
+      category: "",
+      date: "2026-09-20",
+    })
+    assert.equal(covered.category, "Paid by Others")
+    summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 1800 }])
+    const sepAll = await month("2026-09")
+    assert.equal(sepAll.totalSpend, 200)
+    assert.deepEqual(sepAll.topCategories, [
+      { category: "Paid by Others", amount: 200 },
+    ])
+    const sepDbs = await json(
+      await dashboard.GET(
+        new Request(
+          "http://localhost/api/dashboard?month=2026-09&bank=dbs"
+        ) as never
+      )
+    )
+    assert.equal(sepDbs.totalSpend, 0, "not attributed to any bank")
+
+    // Off-bank rows can be recategorised but not split or repaid
+    const recat = await patch.PATCH(
+      new Request("http://localhost/api/transactions/x", {
+        method: "PATCH",
+        body: JSON.stringify({ category: "Groceries" }),
+      }) as never,
+      { params: Promise.resolve({ id: covered.transactionId }) }
+    )
+    assert.equal(recat.status, 200)
+    assert.deepEqual((await month("2026-09")).topCategories, [
+      { category: "Groceries", amount: 200 },
+    ])
+    await assert.rejects(
+      owed.setOwedShare(covered.transactionId, { person: "Jane", amount: 1 }),
+      /bank transaction/
+    )
+    const paidByOthers = await patch.PATCH(
+      new Request("http://localhost/api/transactions/food", {
+        method: "PATCH",
+        body: JSON.stringify({ category: "Paid by Others" }),
+      }) as never,
+      { params: Promise.resolve({ id: "food" }) }
+    )
+    assert.equal(paidByOthers.status, 400)
+
+    // Letting some of it go: capped at what she owes, becomes the owner's spend
+    await assert.rejects(
+      owed.addOwedAdjustment({
+        kind: "forgiven",
+        person: "Jane",
+        amount: 5000,
+        note: "",
+        category: "Housing",
+        date: "2026-10-05",
+      }),
+      /more than they owe/
+    )
+    await owed.addOwedAdjustment({
+      kind: "forgiven",
+      person: "Jane",
+      amount: 800,
+      note: "",
+      category: "Housing",
+      date: "2026-10-05",
+    })
+    summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 1000 }])
+    assert.equal((await month("2026-10")).totalSpend, 3000 + 800)
+
+    // Removing the groceries entry deletes its transaction and restores the debt
+    await owed.removeOwedEntry(covered.transactionId)
+    summary = await owed.getOwedSummary()
+    assert.deepEqual(summary.balances, [{ person: "Jane", balance: 1200 }])
+    assert.equal((await month("2026-09")).totalSpend, 0)
+
     // Validation
     await assert.rejects(
       owed.setOwedShare("jul", { person: "Jane", amount: 5000 }),

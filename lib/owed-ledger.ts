@@ -7,6 +7,7 @@ export type OwedLedgerInput = {
   amount: number
   date: string
   description: string
+  category: string
 }
 
 export type OwedLedgerEntry = OwedLedgerInput & {
@@ -35,7 +36,8 @@ function roundMoney(value: number): number {
 }
 
 /**
- * One running total per person: shares add to it, repayments take it down.
+ * One running total per person: shares add to it; repayments, things they
+ * paid for and amounts let go take it down.
  * Repayments are not matched to a specific month on purpose.
  * Ledger is returned newest first.
  */
@@ -46,8 +48,14 @@ export function buildOwedLedger(entries: OwedLedgerInput[]): {
   const sorted = [...entries].sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
-      // Same day: count the share before the repayment
-      (a.kind === b.kind ? 0 : a.kind === "share" ? -1 : 1)
+      // Same day: count the share before anything that pays it down
+      (a.kind === b.kind
+        ? 0
+        : a.kind === "share"
+          ? -1
+          : b.kind === "share"
+            ? 1
+            : 0)
   )
   const running = new Map<string, number>()
   const ledger: OwedLedgerEntry[] = sorted.map((entry) => {

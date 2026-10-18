@@ -3,9 +3,10 @@
 import { useId, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { describeTransaction } from "@/lib/describe-transaction"
+import { SPEND_CATEGORIES, type OwedEntryKind } from "@/lib/schema"
 
 export interface OwedInfo {
-  kind: "share" | "repayment"
+  kind: OwedEntryKind
   person: string
   amount: number
 }
@@ -23,7 +24,7 @@ interface OwedEditorProps {
   onCancel: () => void
 }
 
-const inputClass =
+export const inputClass =
   "h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 text-base sm:text-sm text-zinc-100 placeholder-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
 
 /**
@@ -52,6 +53,10 @@ export function OwedEditor({
     describeTransaction(transaction.description).title.toLowerCase()
   )
   const [startsOn, setStartsOn] = useState(transaction.date)
+  const [deducted, setDeducted] = useState(false)
+  const [deductedAmount, setDeductedAmount] = useState("")
+  const [deductedNote, setDeductedNote] = useState("")
+  const [deductedCategory, setDeductedCategory] = useState("Paid by Others")
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +84,26 @@ export function OwedEditor({
       if (!res.ok) {
         setError(await readError(res, "Couldn’t save"))
         return
+      }
+      if (!isShare && deducted) {
+        const adjRes = await fetch("/api/owed/adjustments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "covered",
+            person: trimmedPerson,
+            amount: Number(deductedAmount.trim()),
+            note: deductedNote.trim(),
+            category: deductedCategory,
+            date: transaction.date,
+          }),
+        })
+        if (!adjRes.ok) {
+          setError(
+            `Repayment saved, but the deduction wasn’t: ${await readError(adjRes, "unknown error")}`
+          )
+          return
+        }
       }
       if (isShare && repeat) {
         const ruleRes = await fetch("/api/owed/rules", {
@@ -213,6 +238,59 @@ export function OwedEditor({
         </div>
       )}
 
+      {!isShare && !existing && (
+        <div className="space-y-2">
+          <label className="flex min-h-6 cursor-pointer items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={deducted}
+              onChange={(e) => setDeducted(e.target.checked)}
+              className="size-4 accent-blue-600"
+            />
+            They took off something they paid for you
+          </label>
+          {deducted && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="space-y-1 text-xs text-zinc-400">
+                <span>What</span>
+                <input
+                  name="deductedNote"
+                  autoComplete="off"
+                  value={deductedNote}
+                  onChange={(e) => setDeductedNote(e.target.value)}
+                  placeholder="Groceries…"
+                  className={inputClass}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                <span>Amount taken off</span>
+                <input
+                  name="deductedAmount"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={deductedAmount}
+                  onChange={(e) => setDeductedAmount(e.target.value)}
+                  placeholder="200…"
+                  className={`${inputClass} font-mono tabular-nums`}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                <span>Category</span>
+                <CategorySelect
+                  value={deductedCategory}
+                  onChange={setDeductedCategory}
+                />
+              </label>
+              <p className="sm:col-span-3 text-xs text-zinc-500">
+                Counts as your spending and lowers what they owe, on top of the
+                amount repaid.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <p
           role="alert"
@@ -259,5 +337,29 @@ export function OwedEditor({
         </Button>
       </div>
     </form>
+  )
+}
+
+/** Native select so it sits inside a <label>; explicit colours for Windows. */
+export function CategorySelect({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <select
+      name="category"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${inputClass} bg-zinc-800 text-zinc-100`}
+    >
+      {SPEND_CATEGORIES.map((c) => (
+        <option key={c} value={c}>
+          {c === "Paid by Others" ? "Paid by Others (no category)" : c}
+        </option>
+      ))}
+    </select>
   )
 }

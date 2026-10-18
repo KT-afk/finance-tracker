@@ -7,8 +7,11 @@ import {
 } from "./parsers/paynow"
 import { getDeterministicCategory } from "./cash-flow"
 
-// Repayment is only ever set by the owner, together with who paid it back.
-const ASSIGNABLE_CATEGORIES = CATEGORIES.filter((c) => c !== "Repayment")
+// Repayment and Paid by Others are only ever set by the owner, together with
+// who paid.
+const ASSIGNABLE_CATEGORIES = CATEGORIES.filter(
+  (c) => c !== "Repayment" && c !== "Paid by Others"
+)
 const CATEGORY_LIST = ASSIGNABLE_CATEGORIES.join(", ")
 
 let anthropicClient: Anthropic | null = null

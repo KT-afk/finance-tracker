@@ -10,6 +10,12 @@ export const BANKS = [
 ] as const
 export type Bank = (typeof BANKS)[number]
 
+// Marks transactions that never went through the owner's accounts: something
+// another person paid for them, or an owed amount they let go. They count in
+// "All" but under no bank.
+export const OFF_BANK = "off_bank" as const
+const TRANSACTION_BANKS = [...BANKS, OFF_BANK] as const
+
 export const CATEGORIES = [
   "Food & Drink",
   "Groceries",
@@ -25,6 +31,7 @@ export const CATEGORIES = [
   "Reimbursement",
   "Repayment",
   "Credit Card Payment",
+  "Paid by Others",
   "Travel",
   "Personal",
   "Income",
@@ -41,12 +48,16 @@ export const EXCLUDED_FROM_SPEND: readonly string[] = [
   "Income",
 ]
 
+export const SPEND_CATEGORIES = CATEGORIES.filter(
+  (c) => !EXCLUDED_FROM_SPEND.includes(c)
+)
+
 export const transactions = sqliteTable("transactions", {
   id: text("id").primaryKey(),
   date: text("date").notNull(), // ISO date string YYYY-MM-DD
   description: text("description").notNull(),
   amount: real("amount").notNull(), // negative = expense, positive = income
-  bank: text("bank", { enum: BANKS }).notNull(),
+  bank: text("bank", { enum: TRANSACTION_BANKS }).notNull(),
   category: text("category").notNull().default("Others"),
   is_corrected: integer("is_corrected", { mode: "boolean" })
     .notNull()
@@ -62,10 +73,17 @@ export const categoryRules = sqliteTable("category_rules", {
   created_at: text("created_at").notNull(),
 })
 
-// Money someone owes the owner: a "share" is the part of an outgoing payment
-// they should cover; a "repayment" is an incoming transfer that pays it back.
-// Balance per person = sum of shares - sum of repayments.
-export const OWED_ENTRY_KINDS = ["share", "repayment"] as const
+// Money someone owes the owner. A "share" is the part of an outgoing payment
+// they should cover and adds to what they owe. These take it down:
+// - "repayment": an incoming transfer from them
+// - "covered": something they paid for the owner (an OFF_BANK expense)
+// - "forgiven": an amount the owner let go (an OFF_BANK expense)
+export const OWED_ENTRY_KINDS = [
+  "share",
+  "repayment",
+  "covered",
+  "forgiven",
+] as const
 export type OwedEntryKind = (typeof OWED_ENTRY_KINDS)[number]
 
 export const owedEntries = sqliteTable("owed_entries", {
