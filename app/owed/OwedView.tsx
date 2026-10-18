@@ -162,7 +162,10 @@ function Totals({
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {data.balances.map((b) => (
-          <Card key={b.person} className="bg-zinc-900 border-zinc-800 py-0 gap-0">
+          <Card
+            key={b.person}
+            className="bg-zinc-900 border-zinc-800 py-0 gap-0"
+          >
             <CardContent className="p-4">
               <p className="text-xs text-zinc-400 truncate">
                 {owedBalanceLabel(b)}
@@ -520,7 +523,10 @@ function History({
       )}
 
       {byMonth.map((group) => (
-        <Card key={group.month} className="bg-zinc-900 border-zinc-800 py-0 gap-0">
+        <Card
+          key={group.month}
+          className="bg-zinc-900 border-zinc-800 py-0 gap-0"
+        >
           <CardContent className="p-3">
             <h3 className="px-1 pb-1 text-xs font-medium text-zinc-400">
               {formatOwedMonth(group.month)}

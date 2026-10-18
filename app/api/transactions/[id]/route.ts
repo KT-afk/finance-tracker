@@ -5,7 +5,7 @@ import { and, eq, ne } from "drizzle-orm"
 import { saveRule } from "@/lib/rules"
 import { CATEGORIES, OFF_BANK, SPEND_CATEGORIES } from "@/lib/schema"
 import { requireAuth } from "@/lib/auth-middleware"
-import { dropRepayment } from "@/lib/owed"
+import { dropRepayment, forgetTransaction } from "@/lib/owed"
 
 export async function PATCH(
   req: NextRequest,
@@ -161,6 +161,7 @@ export async function DELETE(
     }
 
     await db.delete(transactions).where(eq(transactions.id, id))
+    await forgetTransaction(id)
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error"

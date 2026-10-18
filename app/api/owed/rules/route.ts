@@ -8,7 +8,13 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      )
+    }
     const result = await createOwedRule(body)
     return NextResponse.json(result, { status: 201 })
   } catch (e: unknown) {

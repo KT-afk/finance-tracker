@@ -78,22 +78,55 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-function cleanPerson(person: unknown): string {
-  const value = typeof person === "string" ? person.trim() : ""
+/**
+ * Trims and collapses spaces, and reuses an existing name regardless of
+ * case so "jane" and "Jane" stay one person.
+ */
+async function cleanPerson(person: unknown): Promise<string> {
+  const value =
+    typeof person === "string" ? person.replace(/\s+/g, " ").trim() : ""
   if (!value) throw new OwedError("Say who owes this")
   if (value.length > 60) throw new OwedError("Name is too long")
-  return value
+  const known = [
+    ...(await db
+      .selectDistinct({ person: owedEntries.person })
+      .from(owedEntries)),
+    ...(await db.selectDistinct({ person: owedRules.person }).from(owedRules)),
+  ].map((row) => row.person)
+  return known.find((p) => p.toLowerCase() === value.toLowerCase()) ?? value
 }
 
-function cleanAmount(amount: unknown, max: number): number {
+// Far above any real shared bill; catches typos like an extra few zeros
+const MAX_AMOUNT = 1_000_000
+
+function cleanAmount(
+  amount: unknown,
+  max = MAX_AMOUNT,
+  tooMuch = "Amount can't be more than the payment"
+): number {
+  if (typeof amount !== "number" && typeof amount !== "string") {
+    throw new OwedError("Amount must be more than 0")
+  }
+  if (Number(amount) > MAX_AMOUNT) throw new OwedError("Amount is too large")
   const value = roundMoney(Number(amount))
   if (!Number.isFinite(value) || value <= 0) {
     throw new OwedError("Amount must be more than 0")
   }
-  if (value > roundMoney(max)) {
-    throw new OwedError("Amount can't be more than the payment")
-  }
+  if (value > roundMoney(max)) throw new OwedError(tooMuch)
   return value
+}
+
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+  const [year, month, day] = value.split("-").map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
 }
 
 async function getTransaction(id: string) {
@@ -152,7 +185,7 @@ export async function setOwedShare(
   if (transaction.amount >= 0) {
     throw new OwedError("Only money you paid out can be split")
   }
-  const person = cleanPerson(input.person)
+  const person = await cleanPerson(input.person)
   const amount = cleanAmount(input.amount, Math.abs(transaction.amount))
   await db
     .insert(owedEntries)
@@ -171,20 +204,21 @@ export async function setOwedShare(
   return { person, amount }
 }
 
+/**
+ * The whole transfer is the repayment: a part left over would count as
+ * nothing. Anything she took off goes in as a "covered" entry instead.
+ */
 export async function markRepayment(
   transactionId: string,
-  input: { person: unknown; amount?: unknown }
+  input: { person: unknown }
 ) {
   await ensureOwedTables()
   const transaction = await getBankTransaction(transactionId)
   if (transaction.amount <= 0) {
     throw new OwedError("Only money you received can be a repayment")
   }
-  const person = cleanPerson(input.person)
-  const amount = cleanAmount(
-    input.amount ?? transaction.amount,
-    transaction.amount
-  )
+  const person = await cleanPerson(input.person)
+  const amount = roundMoney(transaction.amount)
   await db
     .insert(owedEntries)
     .values({
@@ -245,9 +279,9 @@ export async function addOwedAdjustment(input: {
   await ensureOwedTables()
   const kind = input.kind as AdjustmentKind
   if (!ADJUSTMENT_KINDS.includes(kind)) throw new OwedError("Invalid kind")
-  const person = cleanPerson(input.person)
-  const date = typeof input.date === "string" ? input.date : ""
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new OwedError("Pick a date")
+  const person = await cleanPerson(input.person)
+  const date = input.date
+  if (!isValidIsoDate(date)) throw new OwedError("Pick a date")
   const category =
     typeof input.category === "string" && input.category
       ? input.category
@@ -263,15 +297,9 @@ export async function addOwedAdjustment(input: {
   if (kind === "forgiven") {
     const owed = await balanceOf(person)
     if (owed <= 0) throw new OwedError(`${person} doesn’t owe you anything`)
-    amount = roundMoney(Number(input.amount))
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new OwedError("Amount must be more than 0")
-    }
-    if (amount > owed) {
-      throw new OwedError("That’s more than they owe you")
-    }
+    amount = cleanAmount(input.amount, owed, "That’s more than they owe you")
   } else {
-    amount = cleanAmount(input.amount, Number.MAX_SAFE_INTEGER)
+    amount = cleanAmount(input.amount)
   }
 
   const description =
@@ -326,6 +354,17 @@ export async function removeOwedEntry(transactionId: string) {
       )
   }
   return entry ?? null
+}
+
+/** Called when a transaction is deleted, so nothing points at it. */
+export async function forgetTransaction(transactionId: string) {
+  await ensureOwedTables()
+  await db
+    .delete(owedEntries)
+    .where(eq(owedEntries.transaction_id, transactionId))
+  await db
+    .delete(owedDismissed)
+    .where(eq(owedDismissed.transaction_id, transactionId))
 }
 
 /** Called when a category is changed by hand away from Repayment. */
@@ -413,13 +452,15 @@ export async function createOwedRule(input: {
   if (keyword.length < 3) {
     throw new OwedError("Matching text needs at least 3 characters")
   }
-  const startsOn = typeof input.startsOn === "string" ? input.startsOn : ""
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) {
-    throw new OwedError("Pick a start date")
-  }
-  const person = cleanPerson(input.person)
-  const amount = cleanAmount(input.amount, Number.MAX_SAFE_INTEGER)
+  const startsOn = input.startsOn
+  if (!isValidIsoDate(startsOn)) throw new OwedError("Pick a start date")
+  const person = await cleanPerson(input.person)
+  const amount = cleanAmount(input.amount)
 
+  const [existing] = await db
+    .select({ id: owedRules.id })
+    .from(owedRules)
+    .where(eq(owedRules.keyword, keyword))
   const [rule] = await db
     .insert(owedRules)
     .values({
@@ -435,6 +476,10 @@ export async function createOwedRule(input: {
       set: { person, amount, starts_on: startsOn },
     })
     .returning()
+
+  // Updating a rule only changes future splits, so a split removed by hand
+  // isn't brought back
+  if (existing) return { rule, applied: 0 }
 
   // Backfill payments already imported since the start date
   const candidates = await db
@@ -528,7 +573,10 @@ export async function getToSort(since = daysAgo(TO_SORT_DAYS)): Promise<{
     }
     if (row.amount > 0) {
       const known = senders.get(senderKey(row.description)) ?? null
-      const toReview = classifyCashFlow(row).isUnclassifiedTransfer
+      const classification = classifyCashFlow(row)
+      const toReview =
+        classification.isUnclassifiedTransfer ||
+        (classification.category === "Reimbursement" && !row.is_corrected)
       if (known || toReview) incoming.push({ ...item, suggestedPerson: known })
     } else {
       const rule = rules.find((r) =>

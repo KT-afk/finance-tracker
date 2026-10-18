@@ -126,7 +126,13 @@ export async function POST(req: NextRequest) {
             description: t.description,
             amount: t.amount,
             bank: t.bank as Bank,
-            category: t.category,
+            // Both are only set with who paid, never from an import
+            category:
+              t.category === "Repayment"
+                ? "Transfer"
+                : t.category === "Paid by Others"
+                  ? "Others"
+                  : t.category,
             is_corrected: t.is_corrected,
             hash: t.hash,
             uploaded_at: t.uploaded_at,

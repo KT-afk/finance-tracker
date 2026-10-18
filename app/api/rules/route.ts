@@ -31,7 +31,12 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!(CATEGORIES as readonly string[]).includes(category)) {
+    // Repayment and Paid by Others always need to know who paid
+    if (
+      !(CATEGORIES as readonly string[]).includes(category) ||
+      category === 'Repayment' ||
+      category === 'Paid by Others'
+    ) {
       return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
     }
 

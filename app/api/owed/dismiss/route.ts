@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   try {
-    const { transactionId } = await req.json()
+    const body = await req.json().catch(() => null)
+    const transactionId = body?.transactionId
     if (typeof transactionId !== "string" || !transactionId) {
       return NextResponse.json(
         { error: "Invalid transaction" },

@@ -9,7 +9,13 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      )
+    }
     const adjustment = await addOwedAdjustment(body)
     return NextResponse.json({ adjustment }, { status: 201 })
   } catch (e: unknown) {

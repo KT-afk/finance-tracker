@@ -37,7 +37,10 @@ export function owedEntryLabel(e: OwedLedgerEntry): string {
     case "repayment":
       return `${e.person} paid you back`
     case "covered":
-      return `${e.person} paid for ${title}`
+      // No note given: the description is just "Paid by <person>"
+      return title === `Paid by ${e.person}`
+        ? `${e.person} paid for something`
+        : `${e.person} paid for ${title}`
     case "forgiven":
       return `You let ${e.person} off`
   }

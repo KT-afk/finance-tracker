@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
       await db
         .select({
           id: transactions.id,
+          bank: transactions.bank,
           amount: transactions.amount,
           category: transactions.category,
           description: transactions.description,

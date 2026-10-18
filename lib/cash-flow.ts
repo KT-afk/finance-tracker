@@ -1,4 +1,4 @@
-import type { Category } from "./schema"
+import { OFF_BANK, type Category } from "./schema"
 
 export type CashFlowTransaction = {
   description: string
@@ -6,6 +6,7 @@ export type CashFlowTransaction = {
   category: string
   // Part of an outgoing payment someone else owes back; not the owner's spend.
   owedShare?: number
+  bank?: string
 }
 
 export type CashFlowClassification = {
@@ -105,19 +106,21 @@ function asCategory(category: string): Category {
 export function classifyCashFlow(
   transaction: CashFlowTransaction
 ): CashFlowClassification {
-  const deterministic = categoryFromDescription(
-    transaction.description,
-    transaction.amount
-  )
-  // Incoming transfers default to "Transfer" for review; a Reimbursement or
-  // Repayment tag can only come from the user (categorize() never assigns
-  // either to these).
+  // Off-bank rows carry the owner's own note, not bank text: the category
+  // they picked stands
+  const deterministic =
+    transaction.bank === OFF_BANK
+      ? null
+      : categoryFromDescription(transaction.description, transaction.amount)
+  // Repayment is only ever set together with who repaid, so it always wins.
+  // Incoming transfers otherwise default to "Transfer" for review; a
+  // Reimbursement tag on those can only come from the user.
   const category =
-    deterministic === "Transfer" &&
-    (transaction.category === "Reimbursement" ||
-      transaction.category === "Repayment")
-      ? asCategory(transaction.category)
-      : (deterministic ?? asCategory(transaction.category))
+    transaction.category === "Repayment"
+      ? "Repayment"
+      : deterministic === "Transfer" && transaction.category === "Reimbursement"
+        ? "Reimbursement"
+        : (deterministic ?? asCategory(transaction.category))
   const effectiveAmount =
     transaction.amount < 0 && transaction.owedShare
       ? Math.min(0, transaction.amount + transaction.owedShare)

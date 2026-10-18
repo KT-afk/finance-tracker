@@ -67,6 +67,7 @@ async function main() {
     const categories = await import("../app/api/categories/route")
     const confirm = await import("../app/api/upload/confirm/route")
     const patch = await import("../app/api/transactions/[id]/route")
+    const manual = await import("../app/api/transactions/route")
     const { querySpending } = await import("../lib/agent/query-spending")
 
     const month = async (m: string) =>
@@ -279,6 +280,151 @@ async function main() {
     toSort = await owed.getToSort("2026-06-20")
     assert.deepEqual(toSort.outgoing, [])
     await assert.rejects(owed.dismissToSort("missing"), /not found/)
+
+    // --- Regressions from QA ---
+    const addManual = async (body: object) =>
+      (
+        await json(
+          await manual.POST(
+            new Request("http://localhost/api/transactions", {
+              method: "POST",
+              body: JSON.stringify(body),
+            }) as never
+          )
+        )
+      ).transaction.id as string
+
+    // A repayment whose bank text says "share" is still only a repayment,
+    // not also a reimbursement
+    const shareText = await addManual({
+      date: "2026-11-02",
+      description: "PAYMENT/TRANSFER OTHR from JANE TAN rent share",
+      amount: 500,
+      bank: "dbs",
+      category: "Transfer",
+    })
+    await owed.markRepayment(shareText, { person: "Jane" })
+    const nov = await month("2026-11")
+    assert.equal(nov.totalReimbursements, 0)
+    assert.equal(nov.netCashFlow, 0)
+
+    // Off-bank notes aren't read as bank text
+    await owed.addOwedAdjustment({
+      kind: "covered",
+      person: "Jane",
+      amount: 40,
+      note: "Jane paid credit card payment for my groceries at rent house",
+      category: "Groceries",
+      date: "2026-11-03",
+    })
+    assert.deepEqual((await month("2026-11")).topCategories, [
+      { category: "Groceries", amount: 40 },
+    ])
+
+    // Saving an existing rule again doesn't bring back a removed split
+    const resaved = await owed.createOwedRule({
+      keyword: "landlord lim",
+      person: "Jane",
+      amount: 1200,
+      startsOn: "2026-07-01",
+    })
+    assert.equal(resaved.applied, 0)
+    assert.equal((await owed.loadOwedEntriesFor(["oct"])).size, 0)
+
+    // Names: same person whatever the case or spacing
+    const lower = await owed.addOwedAdjustment({
+      kind: "covered",
+      person: "  jane ",
+      amount: 1,
+      note: "",
+      category: "",
+      date: "2026-11-04",
+    })
+    assert.equal(lower.person, "Jane")
+
+    // Impossible dates and silly amounts
+    await assert.rejects(
+      owed.addOwedAdjustment({
+        kind: "covered",
+        person: "Jane",
+        amount: 1,
+        note: "",
+        category: "",
+        date: "2026-13-45",
+      }),
+      /Pick a date/
+    )
+    await assert.rejects(
+      owed.createOwedRule({
+        keyword: "something",
+        person: "Jane",
+        amount: 1,
+        startsOn: "2026-02-30",
+      }),
+      /start date/
+    )
+    for (const amount of [1e15, [5], null]) {
+      await assert.rejects(
+        owed.addOwedAdjustment({
+          kind: "covered",
+          person: "Jane",
+          amount,
+          note: "",
+          category: "",
+          date: "2026-11-04",
+        })
+      )
+    }
+
+    // Deleting a manual transaction takes its split with it
+    const grab = await addManual({
+      date: "2026-11-05",
+      description: "GRAB FOOD",
+      amount: -50,
+      bank: "dbs",
+      category: "Food & Drink",
+    })
+    await owed.setOwedShare(grab, { person: "Bob", amount: 25 })
+    await patch.DELETE(
+      new Request(`http://localhost/api/transactions/${grab}`, {
+        method: "DELETE",
+      }) as never,
+      { params: Promise.resolve({ id: grab }) }
+    )
+    assert.equal((await owed.loadOwedEntriesFor([grab])).size, 0)
+
+    // Imports can't smuggle in owner-only categories
+    await confirm.POST(
+      new Request("http://localhost/api/upload/confirm", {
+        method: "POST",
+        body: JSON.stringify({
+          transactions: [
+            {
+              id: "smuggled",
+              date: "2026-11-06",
+              description: "PAYMENT/TRANSFER from SOMEONE",
+              amount: 10,
+              bank: "dbs",
+              category: "Repayment",
+              is_corrected: false,
+              hash: "h-smuggled",
+              uploaded_at: "x",
+            },
+          ],
+        }),
+      }) as never
+    )
+    const smuggled = await json(
+      await manual.GET(
+        new Request(
+          "http://localhost/api/transactions?month=2026-11&category=Repayment"
+        ) as never
+      )
+    )
+    assert.deepEqual(
+      smuggled.transactions.map((t: { id: string }) => t.id),
+      [shareText]
+    )
 
     // Validation
     await assert.rejects(

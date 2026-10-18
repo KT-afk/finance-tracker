@@ -25,7 +25,13 @@ export async function PUT(
 
   try {
     const { id } = await params
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      )
+    }
     if (body.kind === "share") {
       const entry = await setOwedShare(id, body)
       return NextResponse.json({ entry: { ...entry, kind: "share" } })

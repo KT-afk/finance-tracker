@@ -3,6 +3,7 @@
 import { useId, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { describeTransaction } from "@/lib/describe-transaction"
+import { formatSGD } from "@/lib/display"
 import { SPEND_CATEGORIES, type OwedEntryKind } from "@/lib/schema"
 
 export interface OwedInfo {
@@ -83,7 +84,7 @@ export function OwedEditor({
         body: JSON.stringify({
           kind: isShare ? "share" : "repayment",
           person: trimmedPerson,
-          amount: Number(amount.trim()),
+          ...(isShare && { amount: Number(amount.trim()) }),
         }),
       })
       if (!res.ok) {
@@ -186,19 +187,29 @@ export function OwedEditor({
             ))}
           </datalist>
         </label>
-        <label className="space-y-1 text-xs text-zinc-400">
-          <span>{isShare ? "Amount they owe" : "Amount repaid"}</span>
-          <input
-            name="amount"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="1000…"
-            className={`${inputClass} font-mono tabular-nums`}
-          />
-        </label>
+        {isShare ? (
+          <label className="space-y-1 text-xs text-zinc-400">
+            <span>Amount they owe</span>
+            <input
+              name="amount"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="1000…"
+              className={`${inputClass} font-mono tabular-nums`}
+            />
+          </label>
+        ) : (
+          // The whole transfer counts; deductions are recorded separately
+          <div className="space-y-1 text-xs text-zinc-400">
+            <span>Amount repaid</span>
+            <p className="flex h-10 items-center font-mono text-sm tabular-nums text-zinc-100">
+              {formatSGD(transaction.amount)}
+            </p>
+          </div>
+        )}
       </div>
 
       {isShare && (
