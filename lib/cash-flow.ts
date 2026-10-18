@@ -78,7 +78,12 @@ function categoryFromDescription(
   if (CC_PAYMENT_PATTERNS.some((pattern) => pattern.test(description))) {
     return "Credit Card Payment"
   }
-  if (isSelfTransfer(description) || isAccountHolderLabel(description)) {
+  if (
+    isSelfTransfer(description) ||
+    isAccountHolderLabel(description) ||
+    // Top-ups to the user's own Chocolate Finance spending account
+    /\bchocfin\b/i.test(description)
+  ) {
     return "Self Transfer"
   }
   if (SALARY_INCOME_PATTERN.test(description)) return "Income"

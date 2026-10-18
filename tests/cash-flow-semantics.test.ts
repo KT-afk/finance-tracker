@@ -82,6 +82,19 @@ for (const description of [
   assert.equal(outgoing.category, "Self Transfer", description)
   assert.equal(outgoing.countsAsSpend, false, description)
 }
+// Top-ups to Chocolate Finance are moving own money; the spending is imported
+// from the Chocolate statement itself.
+for (const description of [
+  "COLLECTION/TRANSFER COLL Chocfin Pte Lt 408fd3977ac2496bba3 Choc OngKongTat 0913072528461",
+  "FAST PAYMENT via PayNow-UEN to CHOCFIN PTE. L OTHR-OTHR",
+]) {
+  assert.equal(
+    classifyCashFlow({ description, amount: -250, category: "Transfer" })
+      .category,
+    "Self Transfer",
+    description
+  )
+}
 // Card statement text that merely contains the name is still spending.
 assert.equal(
   classifyCashFlow({

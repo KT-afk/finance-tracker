@@ -38,6 +38,7 @@ const BANK_LABELS: Record<string, string> = {
   uob: "UOB",
   trust: "Trust Bank",
   wise: "Wise",
+  chocolate: "Chocolate Finance",
 }
 
 export default function AccountsPage() {
