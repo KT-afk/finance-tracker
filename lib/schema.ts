@@ -134,6 +134,14 @@ export const aiMemory = sqliteTable("ai_memory", {
   created_at: text("created_at").notNull(),
 })
 
+// The last dashboard insight, reused until its input changes or it expires
+export const insightCache = sqliteTable("insight_cache", {
+  key: text("key").primaryKey(),
+  input_hash: text("input_hash").notNull(),
+  text: text("text").notNull(),
+  created_at: text("created_at").notNull(),
+})
+
 export const ACCOUNT_TYPES = ["savings", "credit_card"] as const
 export type AccountType = (typeof ACCOUNT_TYPES)[number]
 

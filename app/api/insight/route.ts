@@ -1,40 +1,47 @@
-import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import { db } from '@/lib/db'
-import { transactions, aiMemory } from '@/lib/schema'
-import { sql, and, gte, lt } from 'drizzle-orm'
-import { loadOwedShares } from '@/lib/owed'
+import { NextResponse } from "next/server"
+import Anthropic from "@anthropic-ai/sdk"
+import { db } from "@/lib/db"
+import { transactions, aiMemory } from "@/lib/schema"
+import { sql, and, gte, lt } from "drizzle-orm"
+import { loadOwedShares } from "@/lib/owed"
+import {
+  getCachedInsight,
+  hashInsightInput,
+  saveInsight,
+} from "@/lib/insight-cache"
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = "claude-sonnet-4-6"
 
 function getClient(): Anthropic {
   const key = process.env.ANTHROPIC_API_KEY
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set')
+  if (!key) throw new Error("ANTHROPIC_API_KEY not set")
   return new Anthropic({ apiKey: key })
 }
 
 function getMonthRange(date: Date) {
   const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const m = String(date.getMonth() + 1).padStart(2, "0")
   const start = `${y}-${m}-01`
   const nextMonth = new Date(y, date.getMonth() + 1, 1)
   const ny = nextMonth.getFullYear()
-  const nm = String(nextMonth.getMonth() + 1).padStart(2, '0')
+  const nm = String(nextMonth.getMonth() + 1).padStart(2, "0")
   const end = `${ny}-${nm}-01`
   return { start, end }
 }
 
-function getPastMonthRanges(monthsBack: number): Array<{ label: string; start: string; end: string }> {
+function getPastMonthRanges(
+  monthsBack: number
+): Array<{ label: string; start: string; end: string }> {
   const ranges = []
   for (let i = 1; i <= monthsBack; i++) {
     const d = new Date()
     d.setMonth(d.getMonth() - i)
     const y = d.getFullYear()
     const m = d.getMonth()
-    const start = `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const start = `${y}-${String(m + 1).padStart(2, "0")}-01`
     const nextD = new Date(y, m + 1, 1)
-    const end = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}-01`
-    const label = d.toLocaleString('en-SG', { month: 'long', year: 'numeric' })
+    const end = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, "0")}-01`
+    const label = d.toLocaleString("en-SG", { month: "long", year: "numeric" })
     ranges.push({ label, start, end })
   }
   return ranges
@@ -62,11 +69,14 @@ export async function POST() {
       )
 
     if (currentTxs.length === 0) {
-      return NextResponse.json({ text: 'No transactions yet this month.' })
+      return NextResponse.json({ text: "No transactions yet this month." })
     }
 
     // Build full monthly summaries for current + 5 prior months
-    async function buildMonthSummary(start: string, end: string): Promise<string> {
+    async function buildMonthSummary(
+      start: string,
+      end: string
+    ): Promise<string> {
       const rows = await db
         .select({
           id: transactions.id,
@@ -75,17 +85,27 @@ export async function POST() {
           amount: transactions.amount,
         })
         .from(transactions)
-        .where(and(gte(transactions.date, start), lt(transactions.date, end), sql`${transactions.amount} < 0`))
+        .where(
+          and(
+            gte(transactions.date, start),
+            lt(transactions.date, end),
+            sql`${transactions.amount} < 0`
+          )
+        )
 
-      if (rows.length === 0) return '  (no data)'
+      if (rows.length === 0) return "  (no data)"
 
-      const catMap: Record<string, { total: number; merchants: Record<string, number> }> = {}
+      const catMap: Record<
+        string,
+        { total: number; merchants: Record<string, number> }
+      > = {}
       const owedShares = await loadOwedShares()
       for (const tx of rows) {
         // Only the owner's part of a split payment is their spend
         const spend = Math.abs(tx.amount) - (owedShares.get(tx.id) ?? 0)
         if (spend <= 0) continue
-        if (!catMap[tx.category]) catMap[tx.category] = { total: 0, merchants: {} }
+        if (!catMap[tx.category])
+          catMap[tx.category] = { total: 0, merchants: {} }
         catMap[tx.category].total += spend
         catMap[tx.category].merchants[tx.description] =
           (catMap[tx.category].merchants[tx.description] ?? 0) + spend
@@ -98,26 +118,41 @@ export async function POST() {
             .sort(([, a], [, b]) => b - a)
             .slice(0, 3)
             .map(([desc, amt]) => `    - ${desc}: $${amt.toFixed(2)}`)
-            .join('\n')
+            .join("\n")
           return `  ${cat}: $${total.toFixed(2)}\n${topMerchants}`
         })
-        .join('\n')
+        .join("\n")
     }
 
     // All 6 months: current + 5 prior
-    const allMonthRanges = [{ label: now.toLocaleString('en-SG', { month: 'long', year: 'numeric' }), start: monthStart, end: monthEnd }, ...getPastMonthRanges(5)]
-    const monthSections = (await Promise.all(allMonthRanges.map(async ({ label, start, end }) =>
-      `### ${label}\n${await buildMonthSummary(start, end)}`
-    ))).join('\n\n')
+    const allMonthRanges = [
+      {
+        label: now.toLocaleString("en-SG", { month: "long", year: "numeric" }),
+        start: monthStart,
+        end: monthEnd,
+      },
+      ...getPastMonthRanges(5),
+    ]
+    const monthSections = (
+      await Promise.all(
+        allMonthRanges.map(
+          async ({ label, start, end }) =>
+            `### ${label}\n${await buildMonthSummary(start, end)}`
+        )
+      )
+    ).join("\n\n")
 
     // Memory
     const memories = await db.select().from(aiMemory)
     const memoryBlock =
       memories.length > 0
-        ? memories.map(m => `- [${m.source}] ${m.key}: ${m.value}`).join('\n')
-        : '(none)'
+        ? memories.map((m) => `- [${m.source}] ${m.key}: ${m.value}`).join("\n")
+        : "(none)"
 
-    const currentMonthLabel = now.toLocaleString('en-SG', { month: 'long', year: 'numeric' })
+    const currentMonthLabel = now.toLocaleString("en-SG", {
+      month: "long",
+      year: "numeric",
+    })
 
     const systemPrompt = `You are a personal finance analyst for a Singapore resident. You have 6 months of spending data. Generate a concise, plain-English insight.
 
@@ -139,18 +174,25 @@ ${memoryBlock}
 
 Generate a spending insight for ${currentMonthLabel}.`
 
+    // Same input within a week gets the saved insight instead of a new call
+    const inputHash = hashInsightInput(MODEL, systemPrompt, userPrompt)
+    const cached = await getCachedInsight(inputHash)
+    if (cached) return NextResponse.json({ text: cached })
+
     const client = getClient()
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: 400,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      messages: [{ role: "user", content: userPrompt }],
     })
 
-    const text = (message.content[0] as { type: string; text: string }).text?.trim() ?? ''
+    const text =
+      (message.content[0] as { type: string; text: string }).text?.trim() ?? ""
+    if (text) await saveInsight(inputHash, text)
     return NextResponse.json({ text })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
+    const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
