@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { CATEGORY_COLORS, formatSGD } from "@/lib/display"
 import { CATEGORIES, BANKS } from "@/lib/schema"
+import { describeTransaction } from "@/lib/describe-transaction"
 import Link from "next/link"
 
 interface Transaction {
@@ -70,6 +71,16 @@ function TransactionsView() {
     searchParams.get("review") === "transfers" ? "transfers" : null
   )
   const [page, setPage] = useState(1)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -567,6 +578,8 @@ function TransactionsView() {
             )}
             {data.transactions.map((t) => {
               const color = CATEGORY_COLORS[t.category] ?? "#94A3B8"
+              const summary = describeTransaction(t.description)
+              const expanded = expandedIds.has(t.id)
               return (
                 <Card key={t.id} className="bg-zinc-900 border-zinc-800">
                   <CardContent className="py-3 px-3 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
@@ -587,12 +600,36 @@ function TransactionsView() {
 
                     {/* Description */}
                     <div className="min-w-0 flex-1 sm:order-2">
-                      <p
-                        className="text-sm text-zinc-100 sm:truncate leading-snug"
-                        title={t.description}
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(t.id)}
+                        aria-expanded={expanded}
+                        title={expanded ? undefined : t.description}
+                        className="block w-full min-w-0 min-h-6 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                       >
-                        {t.description}
-                      </p>
+                        <span
+                          className={`block text-sm text-zinc-100 leading-snug ${expanded ? "break-words" : "break-words sm:truncate"}`}
+                        >
+                          {summary.title || t.description}
+                        </span>
+                        {summary.detail && (
+                          <span
+                            className={`block text-xs text-zinc-400 leading-snug mt-0.5 ${expanded ? "break-words" : "truncate"}`}
+                          >
+                            {summary.detail}
+                          </span>
+                        )}
+                        {expanded && (
+                          <span className="block text-xs text-zinc-500 leading-snug mt-1 break-words font-mono">
+                            {t.description}
+                          </span>
+                        )}
+                        <span className="sr-only">
+                          {expanded
+                            ? "Hide full description"
+                            : "Show full description"}
+                        </span>
+                      </button>
                       <div className="flex items-center gap-1.5 mt-1">
                         <Badge
                           className="text-[10px] px-1 py-0 font-normal border-0 h-4"

@@ -27,6 +27,7 @@ run_test "login-attempt-store"     "$ROOT/tests/login-attempt-store.test.ts"
 run_test "upload-fails-without-ai" "$ROOT/tests/upload-fails-without-ai.test.ts"
 run_test "pdf-parser-may"          "$ROOT/tests/pdf-parser-may.test.ts"
 run_test "trust-pdf"               "$ROOT/tests/trust-pdf.test.ts"
+run_test "describe-transaction"    "$ROOT/tests/describe-transaction.test.ts"
 run_test "balances-api-schema-compat" "$ROOT/tests/balances-api-schema-compat.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \
   "UOB_MAY_PDF=${UOB_MAY_PDF:-}" \
