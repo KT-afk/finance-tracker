@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import { db } from "@/lib/db"
-import { BANKS, CATEGORIES, transactions } from "@/lib/schema"
+import { BANKS, CATEGORIES, transactions, type Bank } from "@/lib/schema"
 import { and, eq, gte, lte, desc } from "drizzle-orm"
 import { classifyCashFlow } from "@/lib/cash-flow"
 
@@ -39,9 +39,7 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(transactions.category, category))
     }
     if (bank && bank !== "all") {
-      conditions.push(
-        eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")
-      )
+      conditions.push(eq(transactions.bank, bank as Bank))
     }
 
     const matchingTxns = await db

@@ -12,6 +12,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Self Transfer": "#94A3B8",
   Reimbursement: "#14B8A6",
   "Credit Card Payment": "#A78BFA",
+  Travel: "#34D399",
   Personal: "#818CF8",
   Income: "#22C55E",
   Others: "#FBBF24",

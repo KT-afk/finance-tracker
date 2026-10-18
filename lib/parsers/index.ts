@@ -1,30 +1,33 @@
-import { Bank } from '../schema'
-import { RawTransaction, ParseResult } from './types'
-import { parseOCBC } from './ocbc'
-import { parseDBS } from './dbs'
-import { parseUOB } from './uob'
-import { parseTrust } from './trust'
-import { extractTextFromPDF } from './pdf'
-import { parseUOBCreditCardPDF } from './uob-pdf'
-import { parseOCBCPDF } from './ocbc-pdf'
-import { parseTrustPDF } from './trust-pdf'
+import { Bank } from "../schema"
+import { RawTransaction, ParseResult } from "./types"
+import { parseOCBC } from "./ocbc"
+import { parseDBS } from "./dbs"
+import { parseUOB } from "./uob"
+import { parseTrust } from "./trust"
+import { parseWise } from "./wise"
+import { extractTextFromPDF } from "./pdf"
+import { parseUOBCreditCardPDF } from "./uob-pdf"
+import { parseOCBCPDF } from "./ocbc-pdf"
+import { parseTrustPDF } from "./trust-pdf"
 
-export type { RawTransaction } from './types'
-export type { ParseResult } from './types'
+export type { RawTransaction } from "./types"
+export type { ParseResult } from "./types"
 
 /**
  * Route a CSV string to the correct parser based on the bank name.
  */
 export function parseCSV(csv: string, bank: Bank): ParseResult {
   switch (bank) {
-    case 'ocbc':
+    case "ocbc":
       return parseOCBC(csv)
-    case 'dbs':
+    case "dbs":
       return parseDBS(csv)
-    case 'uob':
+    case "uob":
       return parseUOB(csv)
-    case 'trust':
+    case "trust":
       return parseTrust(csv)
+    case "wise":
+      return parseWise(csv)
     default:
       throw new Error(`Unsupported bank: ${bank}`)
   }
@@ -39,24 +42,26 @@ export async function parseFile(
   filename: string,
   bank: Bank
 ): Promise<ParseResult> {
-  const isPDF = filename.toLowerCase().endsWith('.pdf')
+  const isPDF = filename.toLowerCase().endsWith(".pdf")
 
   if (isPDF) {
     const text = await extractTextFromPDF(buffer)
 
-    if (bank === 'uob') {
+    if (bank === "uob") {
       return parseUOBCreditCardPDF(text)
     }
-    if (bank === 'ocbc') {
+    if (bank === "ocbc") {
       return parseOCBCPDF(text)
     }
-    if (bank === 'trust') {
+    if (bank === "trust") {
       return parseTrustPDF(text)
     }
-    throw new Error(`PDF upload is not supported for ${bank}. Please upload a CSV file.`)
+    throw new Error(
+      `PDF upload is not supported for ${bank}. Please upload a CSV file.`
+    )
   }
 
   // CSV path (existing)
-  const csv = Buffer.from(buffer).toString('utf-8')
+  const csv = Buffer.from(buffer).toString("utf-8")
   return parseCSV(csv, bank)
 }

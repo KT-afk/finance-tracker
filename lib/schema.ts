@@ -1,6 +1,6 @@
 import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core"
 
-export const BANKS = ["ocbc", "dbs", "uob", "trust"] as const
+export const BANKS = ["ocbc", "dbs", "uob", "trust", "wise"] as const
 export type Bank = (typeof BANKS)[number]
 
 export const CATEGORIES = [
@@ -17,6 +17,7 @@ export const CATEGORIES = [
   "Self Transfer",
   "Reimbursement",
   "Credit Card Payment",
+  "Travel",
   "Personal",
   "Income",
   "Others",

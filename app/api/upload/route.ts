@@ -74,14 +74,19 @@ export async function POST(req: NextRequest) {
     )
     const skippedCount = normalized.length - newTransactions.length
 
-    // Categorize new transactions
+    // Categorize new transactions; use the source's own category when it has one
+    const hintByHash = new Map(
+      raws.map((raw, i) => [normalized[i].hash, raw.categoryHint])
+    )
     const categorized = await Promise.all(
       newTransactions.map(async (t) => ({
         ...t,
-        category: await categorize(t.description, {
-          requireAi: true,
-          amount: t.amount,
-        }),
+        category:
+          hintByHash.get(t.hash) ??
+          (await categorize(t.description, {
+            requireAi: true,
+            amount: t.amount,
+          })),
       }))
     )
 

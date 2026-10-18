@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { transactions } from "@/lib/schema"
+import { transactions, type Bank } from "@/lib/schema"
 import { classifyCashFlow } from "@/lib/cash-flow"
 import { and, asc, eq, gte, lte } from "drizzle-orm"
 
@@ -34,9 +34,7 @@ export async function GET(req: NextRequest) {
     const bank = searchParams.get("bank")
 
     const bankCondition =
-      bank && bank !== "all"
-        ? [eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")]
-        : []
+      bank && bank !== "all" ? [eq(transactions.bank, bank as Bank)] : []
 
     // Fetch last 6 months of data
     const sixMonthsAgo = getMonthRange(5)

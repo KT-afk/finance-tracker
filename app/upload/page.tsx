@@ -20,6 +20,7 @@ const BANK_LABELS: Record<string, string> = {
   ocbc: "OCBC",
   uob: "UOB",
   trust: "Trust",
+  wise: "Wise",
 }
 
 function formatUploadedAt(iso: string) {

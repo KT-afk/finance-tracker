@@ -1,6 +1,6 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from "react"
 import {
   AreaChart,
   Area,
@@ -8,10 +8,10 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-} from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatSGD, relativeDate } from '@/lib/display'
-import { BANKS } from '@/lib/schema'
+} from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatSGD, relativeDate } from "@/lib/display"
+import { BANKS } from "@/lib/schema"
 
 interface BankBalance {
   bank: string
@@ -33,10 +33,11 @@ interface TrendPoint {
 }
 
 const BANK_LABELS: Record<string, string> = {
-  ocbc: 'OCBC',
-  dbs: 'DBS/POSB',
-  uob: 'UOB',
-  trust: 'Trust Bank',
+  ocbc: "OCBC",
+  dbs: "DBS/POSB",
+  uob: "UOB",
+  trust: "Trust Bank",
+  wise: "Wise",
 }
 
 export default function AccountsPage() {
@@ -44,17 +45,18 @@ export default function AccountsPage() {
   const [trend, setTrend] = useState<TrendPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [editingBank, setEditingBank] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+  const [editValue, setEditValue] = useState("")
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function fetchData() {
     Promise.all([
-      fetch('/api/balances').then(r => r.json()),
-      fetch('/api/balances/history').then(r => r.json()),
+      fetch("/api/balances").then((r) => r.json()),
+      fetch("/api/balances/history").then((r) => r.json()),
     ])
       .then(([balData, trendData]) => {
-        if (balData && !balData.error && Array.isArray(balData.balances)) setData(balData)
+        if (balData && !balData.error && Array.isArray(balData.balances))
+          setData(balData)
         setTrend(trendData.trend ?? [])
       })
       .catch(() => {})
@@ -74,12 +76,12 @@ export default function AccountsPage() {
 
   function startEdit(bank: string, currentBalance: number | null) {
     setEditingBank(bank)
-    setEditValue(currentBalance !== null ? currentBalance.toFixed(2) : '')
+    setEditValue(currentBalance !== null ? currentBalance.toFixed(2) : "")
   }
 
   function cancelEdit() {
     setEditingBank(null)
-    setEditValue('')
+    setEditValue("")
   }
 
   async function saveBalance(bank: string) {
@@ -88,14 +90,14 @@ export default function AccountsPage() {
 
     setSaving(true)
     try {
-      const res = await fetch('/api/balances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/balances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bank, balance }),
       })
       if (res.ok) {
         setEditingBank(null)
-        setEditValue('')
+        setEditValue("")
         setLoading(true)
         fetchData()
       }
@@ -104,13 +106,15 @@ export default function AccountsPage() {
     }
   }
 
-  const savingsBalances = (data?.balances ?? []).filter(b => b.account_type !== 'credit_card')
-  const balanceMap = new Map((data?.balances ?? []).map(b => [b.bank, b]))
+  const savingsBalances = (data?.balances ?? []).filter(
+    (b) => b.account_type !== "credit_card"
+  )
+  const balanceMap = new Map((data?.balances ?? []).map((b) => [b.bank, b]))
 
   const bankCount = savingsBalances.length
   const hasBalances = (data?.balances.length ?? 0) > 0
 
-  const trendFiltered = trend.filter(p => p.total !== null)
+  const trendFiltered = trend.filter((p) => p.total !== null)
 
   return (
     <div className="space-y-5 p-4 max-w-2xl mx-auto">
@@ -119,8 +123,12 @@ export default function AccountsPage() {
       {/* Loading */}
       {loading && (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="rounded-xl bg-zinc-900 border border-zinc-800 animate-pulse" style={{ height: i === 1 ? '80px' : '64px' }} />
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="rounded-xl bg-zinc-900 border border-zinc-800 animate-pulse"
+              style={{ height: i === 1 ? "80px" : "64px" }}
+            />
           ))}
         </div>
       )}
@@ -131,7 +139,9 @@ export default function AccountsPage() {
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Net worth</CardTitle>
+                <CardTitle className="text-sm text-zinc-400 font-normal">
+                  Net worth
+                </CardTitle>
                 {hasBalances && (
                   <span className="text-xs text-zinc-500">
                     Updated {relativeDate(data!.lastUpdated)}
@@ -146,7 +156,8 @@ export default function AccountsPage() {
                     {formatSGD(data!.total)}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
-                    across {bankCount} savings {bankCount === 1 ? 'account' : 'accounts'}
+                    across {bankCount} savings{" "}
+                    {bankCount === 1 ? "account" : "accounts"}
                   </p>
                   {(data!.totalCC ?? 0) > 0 && (
                     <p className="text-xs text-amber-500 mt-1">
@@ -155,7 +166,9 @@ export default function AccountsPage() {
                   )}
                 </>
               ) : (
-                <p className="text-sm text-zinc-500">No balances set yet. Add your first balance below.</p>
+                <p className="text-sm text-zinc-500">
+                  No balances set yet. Add your first balance below.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -164,7 +177,9 @@ export default function AccountsPage() {
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Bank Accounts</CardTitle>
+                <CardTitle className="text-sm text-zinc-400 font-normal">
+                  Bank Accounts
+                </CardTitle>
                 {hasBalances && (
                   <button
                     onClick={fetchData}
@@ -177,26 +192,30 @@ export default function AccountsPage() {
               </div>
             </CardHeader>
             <CardContent className="divide-y divide-zinc-800">
-              {BANKS.map(bank => {
+              {BANKS.map((bank) => {
                 const entry = balanceMap.get(bank)
-                if (entry?.account_type === 'credit_card') return null
+                if (entry?.account_type === "credit_card") return null
                 const isEditing = editingBank === bank
 
                 if (isEditing) {
                   return (
                     <div key={bank} className="py-3 space-y-2">
-                      <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                      <p className="text-sm font-medium text-zinc-200">
+                        {BANK_LABELS[bank]}
+                      </p>
                       <div className="grid grid-cols-[auto_1fr] sm:flex gap-2 items-center">
-                        <span className="text-sm text-zinc-400 self-center">$</span>
+                        <span className="text-sm text-zinc-400 self-center">
+                          $
+                        </span>
                         <input
                           ref={inputRef}
                           type="text"
                           inputMode="decimal"
                           value={editValue}
-                          onChange={e => setEditValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveBalance(bank)
-                            if (e.key === 'Escape') cancelEdit()
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveBalance(bank)
+                            if (e.key === "Escape") cancelEdit()
                           }}
                           className="flex-1 bg-zinc-800 border border-zinc-600 rounded-md px-3 py-1.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500 transition-colors"
                           disabled={saving}
@@ -220,24 +239,35 @@ export default function AccountsPage() {
                 }
 
                 return (
-                  <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
+                  <div
+                    key={bank}
+                    className="flex items-center justify-between gap-3 py-3 group"
+                  >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                      <p className="text-sm font-medium text-zinc-200">
+                        {BANK_LABELS[bank]}
+                      </p>
                       {entry ? (
-                        <p className="text-xs text-zinc-500 mt-0.5">Updated {relativeDate(entry.recorded_at)}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          Updated {relativeDate(entry.recorded_at)}
+                        </p>
                       ) : (
-                        <p className="text-xs text-zinc-600 mt-0.5">No balance set</p>
+                        <p className="text-xs text-zinc-600 mt-0.5">
+                          No balance set
+                        </p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       {entry && (
-                        <span className="font-mono text-sm text-white text-right">{formatSGD(entry.balance)}</span>
+                        <span className="font-mono text-sm text-white text-right">
+                          {formatSGD(entry.balance)}
+                        </span>
                       )}
                       <button
                         onClick={() => startEdit(bank, entry?.balance ?? null)}
                         className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-blue-400 hover:border-zinc-700 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100"
                       >
-                        {entry ? 'Edit' : 'Set balance'}
+                        {entry ? "Edit" : "Set balance"}
                       </button>
                     </div>
                   </div>
@@ -245,8 +275,12 @@ export default function AccountsPage() {
               })}
               {savingsBalances.length > 1 && (
                 <div className="flex items-center justify-between py-3">
-                  <span className="text-sm font-medium text-zinc-300">Total</span>
-                  <span className="font-mono text-sm font-semibold text-white">{formatSGD(data!.total)}</span>
+                  <span className="text-sm font-medium text-zinc-300">
+                    Total
+                  </span>
+                  <span className="font-mono text-sm font-semibold text-white">
+                    {formatSGD(data!.total)}
+                  </span>
                 </div>
               )}
             </CardContent>
@@ -256,52 +290,80 @@ export default function AccountsPage() {
           {(data?.totalCC ?? 0) > 0 && (
             <Card className="bg-zinc-900 border-amber-900/40">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-amber-500/80 font-normal">Credit Cards</CardTitle>
+                <CardTitle className="text-sm text-amber-500/80 font-normal">
+                  Credit Cards
+                </CardTitle>
               </CardHeader>
               <CardContent className="divide-y divide-zinc-800">
-                {BANKS.map(bank => {
+                {BANKS.map((bank) => {
                   const entry = balanceMap.get(bank)
-                  if (entry?.account_type !== 'credit_card') return null
+                  if (entry?.account_type !== "credit_card") return null
                   const isEditing = editingBank === `cc-${bank}`
 
                   if (isEditing) {
                     return (
                       <div key={bank} className="py-3 space-y-2">
-                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]}</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {BANK_LABELS[bank]}
+                        </p>
                         <div className="grid grid-cols-[auto_1fr] sm:flex gap-2 items-center">
-                          <span className="text-sm text-zinc-400 self-center">$</span>
+                          <span className="text-sm text-zinc-400 self-center">
+                            $
+                          </span>
                           <input
                             ref={inputRef}
                             type="text"
                             inputMode="decimal"
                             value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') saveBalance(bank)
-                              if (e.key === 'Escape') cancelEdit()
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveBalance(bank)
+                              if (e.key === "Escape") cancelEdit()
                             }}
                             className="flex-1 bg-zinc-800 border border-zinc-600 rounded-md px-3 py-1.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500 transition-colors"
                             disabled={saving}
                           />
-                          <button onClick={() => saveBalance(bank)} disabled={saving} className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-md transition-colors cursor-pointer">Save</button>
-                          <button onClick={cancelEdit} className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-md transition-colors cursor-pointer">Cancel</button>
+                          <button
+                            onClick={() => saveBalance(bank)}
+                            disabled={saving}
+                            className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-md transition-colors cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="col-start-1 col-span-2 sm:col-auto px-3 py-2 sm:py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-md transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </div>
                     )
                   }
 
                   return (
-                    <div key={bank} className="flex items-center justify-between gap-3 py-3 group">
+                    <div
+                      key={bank}
+                      className="flex items-center justify-between gap-3 py-3 group"
+                    >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-200">{BANK_LABELS[bank]} Card</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {BANK_LABELS[bank]} Card
+                        </p>
                         {entry && (
-                          <p className="text-xs text-zinc-500 mt-0.5">Updated {relativeDate(entry.recorded_at)}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Updated {relativeDate(entry.recorded_at)}
+                          </p>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        <span className="font-mono text-sm text-amber-400 text-right">{formatSGD(entry!.balance)}</span>
+                        <span className="font-mono text-sm text-amber-400 text-right">
+                          {formatSGD(entry!.balance)}
+                        </span>
                         <button
-                          onClick={() => startEdit(`cc-${bank}`, entry?.balance ?? null)}
+                          onClick={() =>
+                            startEdit(`cc-${bank}`, entry?.balance ?? null)
+                          }
                           className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-blue-400 hover:border-zinc-700 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100"
                         >
                           Edit
@@ -312,7 +374,9 @@ export default function AccountsPage() {
                 })}
                 <div className="flex items-center justify-between py-3">
                   <span className="text-sm text-zinc-400">Outstanding</span>
-                  <span className="font-mono text-sm font-semibold text-amber-400">{formatSGD(data!.totalCC)}</span>
+                  <span className="font-mono text-sm font-semibold text-amber-400">
+                    {formatSGD(data!.totalCC)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -322,49 +386,76 @@ export default function AccountsPage() {
           {trendFiltered.length > 1 && (
             <Card className="bg-zinc-900 border-zinc-800">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-zinc-400 font-normal">Net worth trend</CardTitle>
+                <CardTitle className="text-sm text-zinc-400 font-normal">
+                  Net worth trend
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={trendFiltered} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <AreaChart
+                    data={trendFiltered}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
                     <defs>
-                      <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.25} />
-                        <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                      <linearGradient
+                        id="netWorthGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#22c55e"
+                          stopOpacity={0.25}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#22c55e"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
                     <XAxis
                       dataKey="month"
-                      tick={{ fill: '#71717a', fontSize: 11 }}
-                      tickFormatter={m => {
-                        const [y, mo] = m.split('-')
+                      tick={{ fill: "#71717a", fontSize: 11 }}
+                      tickFormatter={(m) => {
+                        const [y, mo] = m.split("-")
                         const d = new Date(parseInt(y), parseInt(mo) - 1, 1)
-                        return d.toLocaleString('en-SG', { month: 'short' })
+                        return d.toLocaleString("en-SG", { month: "short" })
                       }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fill: '#71717a', fontSize: 10 }}
+                      tick={{ fill: "#71717a", fontSize: 10 }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={v => `$${Math.round(v / 1000)}k`}
+                      tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
                       width={48}
-                      domain={['auto', 'auto']}
+                      domain={["auto", "auto"]}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#18181b',
-                        border: '1px solid #27272a',
+                        backgroundColor: "#18181b",
+                        border: "1px solid #27272a",
                         borderRadius: 8,
                         fontSize: 12,
                       }}
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      formatter={(value: any) => [typeof value === 'number' ? formatSGD(value) : '', 'Net worth'] as [string, string]}
-                      labelFormatter={m => {
-                        const [y, mo] = m.split('-')
+                      formatter={(value: any) =>
+                        [
+                          typeof value === "number" ? formatSGD(value) : "",
+                          "Net worth",
+                        ] as [string, string]
+                      }
+                      labelFormatter={(m) => {
+                        const [y, mo] = m.split("-")
                         const d = new Date(parseInt(y), parseInt(mo) - 1, 1)
-                        return d.toLocaleString('en-SG', { month: 'long', year: 'numeric' })
+                        return d.toLocaleString("en-SG", {
+                          month: "long",
+                          year: "numeric",
+                        })
                       }}
                     />
                     <Area
@@ -373,8 +464,8 @@ export default function AccountsPage() {
                       stroke="#22c55e"
                       strokeWidth={2}
                       fill="url(#netWorthGradient)"
-                      dot={{ fill: '#22c55e', r: 3, strokeWidth: 0 }}
-                      activeDot={{ fill: '#22c55e', r: 5, strokeWidth: 0 }}
+                      dot={{ fill: "#22c55e", r: 3, strokeWidth: 0 }}
+                      activeDot={{ fill: "#22c55e", r: 5, strokeWidth: 0 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

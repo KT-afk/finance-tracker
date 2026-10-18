@@ -62,7 +62,7 @@ const individualTransactionSchema: ValidationSchema = {
   bank: {
     type: "string",
     required: true,
-    enum: ["ocbc", "dbs", "uob", "trust"],
+    enum: [...BANKS],
   },
   category: { type: "string", required: true, min: 1, max: 100 },
   is_corrected: { type: "boolean", required: true },
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
             date: t.date,
             description: t.description,
             amount: t.amount,
-            bank: t.bank as "ocbc" | "dbs" | "uob" | "trust",
+            bank: t.bank as Bank,
             category: t.category,
             is_corrected: t.is_corrected,
             hash: t.hash,

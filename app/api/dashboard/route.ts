@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { transactions } from "@/lib/schema"
+import { transactions, type Bank } from "@/lib/schema"
 import { classifyCashFlow, summarizeCashFlow } from "@/lib/cash-flow"
 import { and, eq, gte, lte, lt, desc } from "drizzle-orm"
 
@@ -36,9 +36,7 @@ export async function GET(req: NextRequest) {
       lte(transactions.date, monthEnd),
     ]
     if (bank && bank !== "all") {
-      whereConditions.push(
-        eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")
-      )
+      whereConditions.push(eq(transactions.bank, bank as Bank))
     }
 
     const monthTxns = await db
@@ -77,9 +75,7 @@ export async function GET(req: NextRequest) {
 
     // 5 most recent transactions
     const recentWhereConditions =
-      bank && bank !== "all"
-        ? [eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")]
-        : []
+      bank && bank !== "all" ? [eq(transactions.bank, bank as Bank)] : []
 
     const recentTxns = await db
       .select()
@@ -106,9 +102,7 @@ export async function GET(req: NextRequest) {
       lt(transactions.date, priorEnd),
     ]
     if (bank && bank !== "all") {
-      priorWhereConditions.push(
-        eq(transactions.bank, bank as "ocbc" | "dbs" | "uob" | "trust")
-      )
+      priorWhereConditions.push(eq(transactions.bank, bank as Bank))
     }
 
     const priorTxns = await db

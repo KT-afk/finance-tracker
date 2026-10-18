@@ -1,10 +1,12 @@
-import { Bank } from "../schema"
+import { Bank, Category } from "../schema"
 
 export interface RawTransaction {
   date: string // ISO date string YYYY-MM-DD
   description: string
   amount: number // negative = expense, positive = income
   bank: Bank
+  externalId?: string // Bank's own transaction ID; used for dedupe when present
+  categoryHint?: Category // Category the source already knows (skips AI)
 }
 
 export interface ParseResult {

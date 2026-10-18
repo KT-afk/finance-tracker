@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'crypto'
-import { RawTransaction } from './types'
+import { createHash, randomUUID } from "crypto"
+import { RawTransaction } from "./types"
 
 export interface NormalizedTransaction {
   id: string
@@ -18,8 +18,10 @@ export interface NormalizedTransaction {
  * Hash is based on: date + description + amount + bank
  */
 export function computeHash(raw: RawTransaction): string {
-  const input = `${raw.date}|${raw.description}|${raw.amount.toFixed(2)}|${raw.bank}`
-  return createHash('sha256').update(input).digest('hex')
+  const input = raw.externalId
+    ? `${raw.bank}|${raw.externalId}`
+    : `${raw.date}|${raw.description}|${raw.amount.toFixed(2)}|${raw.bank}`
+  return createHash("sha256").update(input).digest("hex")
 }
 
 /**
@@ -28,13 +30,13 @@ export function computeHash(raw: RawTransaction): string {
  */
 export function normalize(raws: RawTransaction[]): NormalizedTransaction[] {
   const now = new Date().toISOString()
-  return raws.map(raw => ({
+  return raws.map((raw) => ({
     id: randomUUID(),
     date: raw.date,
     description: raw.description,
     amount: raw.amount,
     bank: raw.bank,
-    category: 'Others',
+    category: "Others",
     is_corrected: false,
     hash: computeHash(raw),
     uploaded_at: now,
