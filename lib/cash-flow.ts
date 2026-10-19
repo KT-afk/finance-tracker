@@ -7,6 +7,8 @@ export type CashFlowTransaction = {
   // Part of an outgoing payment someone else owes back; not the owner's spend.
   owedShare?: number
   bank?: string
+  // Set when the owner picked the category themselves
+  is_corrected?: boolean
 }
 
 export type CashFlowClassification = {
@@ -120,7 +122,9 @@ export function classifyCashFlow(
       ? "Repayment"
       : deterministic === "Transfer" && transaction.category === "Reimbursement"
         ? "Reimbursement"
-        : (deterministic ?? asCategory(transaction.category))
+        : deterministic === "Transfer" && transaction.is_corrected
+          ? asCategory(transaction.category)
+          : (deterministic ?? asCategory(transaction.category))
   const effectiveAmount =
     transaction.amount < 0 && transaction.owedShare
       ? Math.min(0, transaction.amount + transaction.owedShare)

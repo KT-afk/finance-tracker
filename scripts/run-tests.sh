@@ -31,6 +31,7 @@ run_test "describe-transaction"    "$ROOT/tests/describe-transaction.test.ts"
 run_test "paynow"                  "$ROOT/tests/paynow.test.ts"
 run_test "wise-csv"                "$ROOT/tests/wise-csv.test.ts"
 run_test "chocolate-pdf"           "$ROOT/tests/chocolate-pdf.test.ts"
+run_test "incoming-transfer-recategorize" "$ROOT/tests/incoming-transfer-recategorize.test.ts"
 run_test "balances-api-schema-compat" "$ROOT/tests/balances-api-schema-compat.test.ts"
 run_test "owed"                    "$ROOT/tests/owed.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \

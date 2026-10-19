@@ -6,6 +6,7 @@ import { saveRule } from "@/lib/rules"
 import { CATEGORIES, OFF_BANK, SPEND_CATEGORIES } from "@/lib/schema"
 import { requireAuth } from "@/lib/auth-middleware"
 import { dropRepayment, forgetTransaction } from "@/lib/owed"
+import { getDeterministicCategory } from "@/lib/cash-flow"
 
 export async function PATCH(
   req: NextRequest,
@@ -70,6 +71,17 @@ export async function PATCH(
       .update(transactions)
       .set({ category, is_corrected: true })
       .where(eq(transactions.id, id))
+
+    // Money from a person: one sender sends different kinds of money (rent
+    // share, repayment, gift), so the choice applies to this row only
+    const isIncomingFromPerson =
+      existing.amount > 0 &&
+      ["Transfer", "Reimbursement"].includes(
+        getDeterministicCategory(existing.description, existing.amount) ?? ""
+      )
+    if (isIncomingFromPerson) {
+      return NextResponse.json({ success: true, siblingsUpdated: 0 })
+    }
 
     // Save a keyword rule so future uploads get the right category automatically
     const transferSender = existing.description.match(
