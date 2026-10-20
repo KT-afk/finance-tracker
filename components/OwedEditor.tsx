@@ -248,8 +248,8 @@ export function OwedEditor({
               </label>
               <p className="sm:col-span-2 text-xs text-zinc-500">
                 Payments already imported from this date are split too. If a
-                rule for this text already exists, only its amount and who
-                change, for new payments.
+                rule for this text already exists, its amount and who change for
+                new payments; an earlier date also splits older ones.
               </p>
             </div>
           )}

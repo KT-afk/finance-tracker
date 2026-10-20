@@ -331,6 +331,18 @@ async function main() {
     assert.equal(resaved.applied, 0)
     assert.equal((await owed.loadOwedEntriesFor(["oct"])).size, 0)
 
+    // Moving the start earlier splits the older payments, still not the
+    // one removed by hand
+    const earlier = await owed.createOwedRule({
+      keyword: "landlord lim",
+      person: "Jane",
+      amount: 1200,
+      startsOn: "2026-06-01",
+    })
+    assert.equal(earlier.applied, 1)
+    assert.equal((await month("2026-06")).totalSpend, 1800)
+    assert.equal((await owed.loadOwedEntriesFor(["oct"])).size, 0)
+
     // Names: same person whatever the case or spacing
     const lower = await owed.addOwedAdjustment({
       kind: "covered",

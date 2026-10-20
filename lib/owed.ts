@@ -465,7 +465,7 @@ export async function createOwedRule(input: {
   const amount = cleanAmount(input.amount)
 
   const [existing] = await db
-    .select({ id: owedRules.id })
+    .select({ id: owedRules.id, starts_on: owedRules.starts_on })
     .from(owedRules)
     .where(eq(owedRules.keyword, keyword))
   const [rule] = await db
@@ -484,9 +484,10 @@ export async function createOwedRule(input: {
     })
     .returning()
 
-  // Updating a rule only changes future splits, so a split removed by hand
-  // isn't brought back
-  if (existing) return { rule, applied: 0 }
+  // Updating a rule doesn't touch payments it already covered, so a split
+  // removed by hand isn't brought back. Moving the start earlier does
+  // backfill the newly covered range.
+  if (existing && startsOn >= existing.starts_on) return { rule, applied: 0 }
 
   // Backfill payments already imported since the start date
   const candidates = await db
@@ -497,7 +498,13 @@ export async function createOwedRule(input: {
       date: transactions.date,
     })
     .from(transactions)
-    .where(and(lt(transactions.amount, 0), gte(transactions.date, startsOn)))
+    .where(
+      and(
+        lt(transactions.amount, 0),
+        gte(transactions.date, startsOn),
+        ...(existing ? [lt(transactions.date, existing.starts_on)] : [])
+      )
+    )
   const applied = await applyRules([rule], candidates)
   return { rule, applied }
 }
