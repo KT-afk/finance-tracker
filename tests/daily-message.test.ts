@@ -87,7 +87,16 @@ async function main() {
 
     const text = formatDailyMessage(s, "https://example.test")
     assert.match(text, /^⚠ 1 bank email I couldn't read/)
-    assert.match(text, /Since last night: \$44/)
+    assert.match(text, /Since last night: \$44.00\n/)
+    // One line per payment, with the Payee and category
+    assert.match(text, /^• \$12.00  NETS QR CAFE · Food & Drink$/m)
+    assert.match(text, /^• \$2.00  BUS · Transport$/m)
+    assert.match(text, /^• \$30.00  .* · ❓ Unlabelled$/m)
+    // Unusual spending sits with the month, not since last night
+    assert.match(
+      text,
+      /Oct so far: .*\n  ⚠ \$128.00  NETS QR FANCY PLACE on 10 Oct: big for Food & Drink, usually ~\$10\n/
+    )
     assert.match(
       text,
       /Oct so far: \$1,372 \(rent \$1,200 · unusual \$128 · day-to-day \$44\)/

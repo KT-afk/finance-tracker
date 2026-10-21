@@ -17,10 +17,28 @@ export type DailySummary = {
   monthLabel: string
   daysElapsed: number
   daysInMonth: number
-  sinceLastNight: { total: number; byCategory: [string, number][] }
+  sinceLastNight: {
+    total: number
+    byCategory: [string, number][]
+    payments: {
+      date: string
+      time: string | null
+      amount: number
+      payee: string
+      memo: string | null
+      category: string
+    }[]
+  }
   monthTotal: number
   rent: number
-  unusual: { payee: string; amount: number; category: string; usual: number }[]
+  unusual: {
+    date: string
+    payee: string
+    memo: string | null
+    amount: number
+    category: string
+    usual: number
+  }[]
   dayToDay: number
   averagePerDay: number
   salary: number | null
@@ -78,6 +96,7 @@ export async function buildDailySummary(
       )
     : []
   const byCategory = new Map<string, number>()
+  const payments: DailySummary["sinceLastNight"]["payments"] = []
   let sinceTotal = 0
   for (const row of recentRows) {
     const c = classifyCashFlow(row)
@@ -85,7 +104,18 @@ export async function buildDailySummary(
     const amount = Math.abs(c.effectiveAmount)
     sinceTotal += amount
     byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + amount)
+    payments.push({
+      date: row.date,
+      time: row.time,
+      amount,
+      payee: payeeOf(row),
+      memo: row.memo,
+      category: c.category,
+    })
   }
+  payments.sort((a, b) =>
+    `${a.date} ${a.time ?? ""}`.localeCompare(`${b.date} ${b.time ?? ""}`)
+  )
   const unread = recentEmails.filter((e) => e.status === "unrecognised").length
   if (unread > 0) {
     warnings.push(
@@ -138,13 +168,18 @@ export async function buildDailySummary(
       rent += amount
       continue
     }
+    // An Unlabelled payment could be anything, so there is no "usual" to
+    // compare it with; it already has its own line
+    if (c.isUnlabelled) continue
     // Unusual: at least $50 and five times the category's median payment,
     // judged only once there are enough past payments to know what's normal
     const past = usual.get(c.category) ?? []
     const typical = past.length >= 5 ? median(past) : null
     if (typical !== null && amount >= 50 && amount >= typical * 5) {
       unusual.push({
+        date: row.date,
         payee: payeeOf(row),
+        memo: row.memo,
         amount,
         category: c.category,
         usual: typical,
@@ -190,6 +225,7 @@ export async function buildDailySummary(
     sinceLastNight: {
       total: sinceTotal,
       byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
+      payments,
     },
     monthTotal: summary.spend,
     rent,
@@ -209,6 +245,19 @@ const sgd = new Intl.NumberFormat("en-SG", {
   maximumFractionDigits: 0,
 })
 
+const sgdCents = new Intl.NumberFormat("en-SG", {
+  style: "currency",
+  currency: "SGD",
+})
+
+function dayLabel(date: string): string {
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`))
+}
+
 export function formatDailyMessage(
   s: DailySummary,
   appUrl: string | null
@@ -217,17 +266,12 @@ export function formatDailyMessage(
   for (const warning of s.warnings) lines.push(`⚠ ${warning}`)
   if (s.warnings.length) lines.push("")
 
-  lines.push(`Since last night: ${sgd.format(s.sinceLastNight.total)}`)
-  if (s.sinceLastNight.byCategory.length) {
+  lines.push(`Since last night: ${sgdCents.format(s.sinceLastNight.total)}`)
+  for (const p of s.sinceLastNight.payments) {
+    const memo = p.memo ? ` “${p.memo}”` : ""
+    const category = p.category === "Unlabelled" ? "❓ Unlabelled" : p.category
     lines.push(
-      `Went on: ${s.sinceLastNight.byCategory
-        .map(([category, amount]) => `${category} ${sgd.format(amount)}`)
-        .join(" · ")}`
-    )
-  }
-  for (const u of s.unusual) {
-    lines.push(
-      `  ⚠ ${sgd.format(u.amount)} at ${u.payee}: unusual for ${u.category} (normally ~${sgd.format(u.usual)})`
+      `• ${sgdCents.format(p.amount)}  ${p.payee}${memo} · ${category}`
     )
   }
 
@@ -242,6 +286,11 @@ export function formatDailyMessage(
   lines.push(
     `${s.monthLabel} so far: ${sgd.format(s.monthTotal)} (${parts.join(" · ")})`
   )
+  for (const u of s.unusual) {
+    lines.push(
+      `  ⚠ ${sgdCents.format(u.amount)}  ${u.payee}${u.memo ? ` “${u.memo}”` : ""} on ${dayLabel(u.date)}: big for ${u.category}, usually ~${sgd.format(u.usual)}`
+    )
+  }
   lines.push(
     `Avg/day (day-to-day): ${sgd.format(s.averagePerDay)}` +
       (s.salary

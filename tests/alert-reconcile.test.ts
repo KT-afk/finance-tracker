@@ -74,7 +74,17 @@ async function main() {
     const { ingestPaymentAlerts } = await import("../lib/payment-alerts/ingest")
     const { POST } = await import("../app/api/upload/confirm/route")
     const { db } = await import("../lib/db")
-    const { transactions } = await import("../lib/schema")
+    const { transactions, owedRules, owedEntries } =
+      await import("../lib/schema")
+    // Owed rules apply to alerts as they do to uploads
+    await db.insert(owedRules).values({
+      id: "rule1",
+      keyword: "made up noodles",
+      person: "Partner",
+      amount: 3,
+      starts_on: "2026-10-01",
+      created_at: "x",
+    })
 
     await ingestPaymentAlerts({
       since: new Date("2026-10-01"),
@@ -87,6 +97,9 @@ async function main() {
       ],
     })
     assert.equal((await db.select().from(transactions)).length, 4)
+    const shares = await db.select().from(owedEntries)
+    assert.equal(shares.length, 1)
+    assert.equal(shares[0].amount, 3)
 
     const statement = [
       // Card purchase posted two days after the alert
