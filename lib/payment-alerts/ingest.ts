@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import { and, eq, gte, inArray, lte } from "drizzle-orm"
 import { categorize } from "../categorize"
 import { db } from "../db"
+import { applyOwedRulesTo } from "../owed"
 import { computeHash } from "../parsers/normalizer"
 import { alertEmails, transactions, type Category } from "../schema"
 import { fetchAlertEmails, type InboxEmail } from "./outlook"
@@ -284,5 +285,7 @@ export async function ingestPaymentAlerts({
     }
     result.outcomes.push(outcome)
   }
+  // e.g. split this month's rent with the partner's share, as uploads do
+  if (!dryRun) await applyOwedRulesTo(savedThisRun.map((tx) => tx.id))
   return result
 }
