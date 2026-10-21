@@ -1,25 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server"
 import {
   AUTH_COOKIE_NAME,
   getAppPassword,
   requiresAppPassword,
   verifySessionToken,
-} from './lib/auth'
+} from "./lib/auth"
 
 const PUBLIC_PATHS = [
-  '/login',
-  '/api/login',
-  '/api/logout',
-  '/api/config',
-  '/favicon.ico',
-  '/manifest.webmanifest',
+  "/login",
+  "/api/login",
+  "/api/logout",
+  "/api/config",
+  // Checks CRON_SECRET itself; Vercel Cron has no session cookie
+  "/api/cron/daily",
+  "/favicon.ico",
+  "/manifest.webmanifest",
 ]
 
 function isPublicPath(pathname: string): boolean {
   return (
     PUBLIC_PATHS.includes(pathname) ||
-    pathname.startsWith('/_next/') ||
-    pathname.startsWith('/static/')
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/static/")
   )
 }
 
@@ -32,7 +34,7 @@ export async function proxy(req: NextRequest) {
   if (!password) {
     if (requiresAppPassword()) {
       return NextResponse.json(
-        { error: 'APP_PASSWORD is required for hosted deployments' },
+        { error: "APP_PASSWORD is required for hosted deployments" },
         { status: 503 }
       )
     }
@@ -44,15 +46,18 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
-  if (req.nextUrl.pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    )
   }
 
-  const loginUrl = new URL('/login', req.url)
-  loginUrl.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
+  const loginUrl = new URL("/login", req.url)
+  loginUrl.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search)
   return NextResponse.redirect(loginUrl)
 }
 
 export const config = {
-  matcher: ['/((?!_next/image|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)'],
+  matcher: ["/((?!_next/image|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)"],
 }
