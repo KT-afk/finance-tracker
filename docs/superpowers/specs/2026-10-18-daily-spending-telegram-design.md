@@ -7,10 +7,10 @@ Glossary: terms in **bold** follow `CONTEXT.md`. Read it first.
 
 - **Design:** brainstormed and grilled with the owner. All decisions below are agreed unless marked "(My call)", which the owner has not specifically confirmed.
 - **Not yet done:** the owner's final approval of this document. Then a build plan (`superpowers:writing-plans`), then subagent-driven build.
-- **Open items, in order:**
-  1. **UOB card purchase alerts.** The owner has not yet found an email for an individual purchase on their UOB credit card (only the bill-payment alert, below). They need to check their inbox, and if none exist, turn on email alerts for every card purchase ($0 limit) in the UOB app. Without these, card spending is invisible until month-end. Do not build the UOB card parser before a real sample exists.
-  2. **Confirm `TURSO_DATABASE_URL`** is set in the Vercel project (the owner's work laptop blocks the Vercel CLI; check from the dashboard).
-  3. **Owner's own numbers** for Self Transfer detection: PayNow mobile and account endings. These go in an environment variable, never in this public repo.
+- **Open items:** none. Resolved 2026-10-21:
+  1. **UOB card purchase alerts** exist; an SGD sample is recorded below. A foreign-currency one has not been seen yet; save one when it happens.
+  2. **`TURSO_DATABASE_URL`** is set in Vercel Production (added 23 Jun) and the live data persists, so production runs on Turso.
+  3. **Owner's own numbers** are known to the owner and go in the Vercel environment variable `FINANCE_OWN_PAYNOW_NUMBERS` (comma-separated mobile and account endings), never in this repo. (Variable name: my call.)
 - **The repo is public.** Never commit real account numbers, phone numbers, names, reference numbers, or `.env.local` contents. Test fixtures use made-up values in the real formats.
 
 ## Why
@@ -80,7 +80,8 @@ Agreed in the grilling. These apply to the dashboard, insights, and the message 
   - **OCBC NETS QR to a Merchant:** "The following NETS QR payment has been made:", same fields plus `To : THE COFFEE EDITION`, `NETS merchant ID`, `NETS Stan ID`. Time format differs (`01:48pm SGT`).
   - **UOB PayNow to a Person (bank account):** one sentence, "You made a PayNow transfer of SGD 200.00 to {MASKED NAME} (Mobile ending NNNN) on your a/c ending NNNN at 5:33PM SGT, 18 Sep 26." No Memo. (This sample was a Self Transfer to the owner's own mobile.)
   - **UOB card bill payment (bank account):** sender `unialerts@uobgroup.com`, subject "UOB Personal Internet Banking Notification Alerts". "You made/scheduled a bill payment(s) of SGD 357.76 to UOB Cards on your a/c ending NNNN at 3:23PM SGT, 13 Sep 26. Bill ref: ending NNNN." → Credit Card Payment, never spending.
-  - **Not yet seen:** UOB card purchase alert (open item 1), OCBC card alert, PayNow to a UEN.
+  - **UOB card purchase:** sender `unialerts@uobgroup.com` (same as the bill payment, so tell them apart by subject/wording), subject "UOB - Transaction Alert". "A transaction of SGD 3.00 was made with your UOB Card ending NNNN on 20/10/26 at MERCHANT NAME. If unauthorised, call 24/7 Fraud Hotline now", then a long disclaimer. No time, no Memo. Date is DD/MM/YY, unlike the bill-payment alert's "13 Sep 26". The merchant name is cut off by the bank (e.g. a street name ending "HENDERSO").
+  - **Not yet seen:** UOB card purchase in a foreign currency, OCBC card alert, PayNow to a UEN.
 - Any OCBC/UOB email in a format not yet seen is recorded as unread and surfaced, never dropped.
 - Each alert becomes a Transaction carrying the alert's Payee, Memo where present, amount (and foreign amount/currency where present), account, date and time. The full alert text is kept as the **Bank Description**.
 - New Transactions are categorised the same way uploads are today (Category Rules, then AI). A Category Rule created from an AI guess is shown to the owner on the day it is created; the daily message is the place for this.
