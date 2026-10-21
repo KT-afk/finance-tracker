@@ -37,6 +37,7 @@ run_test "owed"                    "$ROOT/tests/owed.test.ts"
 run_test "insight-cache"           "$ROOT/tests/insight-cache.test.ts"
 run_test "payment-alerts"          "$ROOT/tests/payment-alerts.test.ts"
 run_test "payment-alert-ingest"    "$ROOT/tests/payment-alert-ingest.test.ts"
+run_test "alert-reconcile"         "$ROOT/tests/alert-reconcile.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \
   "UOB_MAY_PDF=${UOB_MAY_PDF:-}" \
   "OCBC_MAY_PDF=${OCBC_MAY_PDF:-}"

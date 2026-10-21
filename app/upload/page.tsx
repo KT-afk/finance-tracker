@@ -82,6 +82,10 @@ export default function UploadPage() {
   const [pendingTransactions, setPendingTransactions] = useState<unknown[]>([])
   const [confirming, setConfirming] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [confirmResult, setConfirmResult] = useState<{
+    inserted: number
+    matched: number
+  } | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [hasAnthropicKey, setHasAnthropicKey] = useState<boolean | null>(null)
   const [uploadHistory, setUploadHistory] = useState<BankUploadHistory[]>([])
@@ -217,9 +221,13 @@ export default function UploadPage() {
         return
       }
 
+      setConfirmResult({
+        inserted: data.inserted ?? 0,
+        matched: data.matched ?? 0,
+      })
       setConfirmed(true)
       refreshHistory()
-      setTimeout(() => router.push("/"), 1500)
+      setTimeout(() => router.push("/"), 2500)
     } catch {
       setError("Network error — please try again")
     } finally {
@@ -468,6 +476,13 @@ export default function UploadPage() {
         <Card className="bg-zinc-900 border-zinc-800">
           <CardContent className="py-10 text-center space-y-2">
             <p className="text-2xl">Done</p>
+            {confirmResult && (
+              <p className="text-sm text-zinc-300 tabular-nums">
+                {confirmResult.inserted} added
+                {confirmResult.matched > 0 &&
+                  `, ${confirmResult.matched} already known from bank alerts`}
+              </p>
+            )}
             <p className="text-sm text-zinc-400">Redirecting to home…</p>
           </CardContent>
         </Card>
