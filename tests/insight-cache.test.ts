@@ -21,7 +21,7 @@ function seed(dbPath: string) {
   const db = new DatabaseSync(dbPath)
   db.exec(`
     ${migratedSchemaSql()};
-    INSERT INTO transactions VALUES
+    INSERT INTO transactions (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at) VALUES
       ('a', '${today()}', 'FAIRPRICE FINEST', -100, 'dbs', 'Groceries', 0, 'h0', 'x');
   `)
   db.close()
@@ -73,7 +73,7 @@ async function main() {
 
     // New transaction changes the input, so it is made again
     await db.run(sql`
-      INSERT INTO transactions VALUES
+      INSERT INTO transactions (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at) VALUES
         ('b', ${today()}, 'GRAB', -20, 'dbs', 'Transport', 0, 'h1', 'x')
     `)
     assert.equal(await ask(), "insight 2", "new data makes a new insight")

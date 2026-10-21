@@ -26,7 +26,7 @@ async function main() {
   const seed = new DatabaseSync(dbPath)
   seed.exec(`
     ${migratedSchemaSql()};
-    INSERT INTO transactions VALUES
+    INSERT INTO transactions (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at) VALUES
       ('gift', '2026-09-10', '${GIFT}', 200, 'ocbc', 'Transfer', 0, 'h1', 'x'),
       ('later', '2026-09-20', '${GIFT}', 50, 'ocbc', 'Transfer', 0, 'h2', 'x'),
       ('shop', '2026-09-11', 'FAIRPRICE FINEST', -20, 'ocbc', 'Others', 0, 'h3', 'x'),
