@@ -13,6 +13,7 @@ const SGT_OFFSET_MS = 8 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export type DailySummary = {
+  today: string // YYYY-MM-DD, Singapore
   month: string // YYYY-MM
   monthLabel: string
   daysElapsed: number
@@ -215,6 +216,7 @@ export async function buildDailySummary(
   })
 
   return {
+    today,
     month,
     monthLabel: new Intl.DateTimeFormat("en-SG", {
       month: "short",
@@ -266,6 +268,14 @@ export function formatDailyMessage(
   for (const warning of s.warnings) lines.push(`⚠ ${warning}`)
   if (s.warnings.length) lines.push("")
 
+  lines.push(
+    `📅 ${new Intl.DateTimeFormat("en-SG", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    }).format(new Date(`${s.today}T00:00:00Z`))}`
+  )
   lines.push(`Since last night: ${sgdCents.format(s.sinceLastNight.total)}`)
   for (const p of s.sinceLastNight.payments) {
     const memo = p.memo ? ` “${p.memo}”` : ""
