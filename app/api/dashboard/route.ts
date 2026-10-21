@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
       reimbursements: totalReimbursements,
       netCashFlow,
       unclassifiedTransfers,
+      unlabelled,
     } = cashFlow
 
     // Top 5 categories by total spend
@@ -143,6 +144,7 @@ export async function GET(req: NextRequest) {
       totalReimbursements,
       netCashFlow,
       unclassifiedTransfers,
+      unlabelled,
       daysElapsed,
       month: `${year}-${month}`,
       isEmpty,

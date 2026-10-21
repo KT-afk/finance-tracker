@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get("month") // YYYY-MM
     const category = searchParams.get("category")
     const bank = searchParams.get("bank")
-    // 'transfers' = the dashboard's "Transfers to review" set
+    // 'transfers' = the dashboard's "Transfers to review" set;
+    // 'unlabelled' = outgoing payments nobody has labelled yet
     const review = searchParams.get("review")
     const page = parseInt(searchParams.get("page") ?? "1", 10)
     const pageSize = parseInt(searchParams.get("pageSize") ?? "50", 10)
@@ -53,7 +54,9 @@ export async function GET(req: NextRequest) {
         ? matchingTxns.filter(
             (tx) => classifyCashFlow(tx).isUnclassifiedTransfer
           )
-        : matchingTxns
+        : review === "unlabelled"
+          ? matchingTxns.filter((tx) => classifyCashFlow(tx).isUnlabelled)
+          : matchingTxns
 
     const total = allTxns.length
     const offset = (page - 1) * pageSize

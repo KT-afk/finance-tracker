@@ -8,9 +8,9 @@ import {
 import { getDeterministicCategory } from "./cash-flow"
 
 // Repayment and Paid by Others are only ever set by the owner, together with
-// who paid.
+// who paid. Unlabelled is the absence of a decision, never a pick.
 const ASSIGNABLE_CATEGORIES = CATEGORIES.filter(
-  (c) => c !== "Repayment" && c !== "Paid by Others"
+  (c) => c !== "Repayment" && c !== "Paid by Others" && c !== "Unlabelled"
 )
 const CATEGORY_LIST = ASSIGNABLE_CATEGORIES.join(", ")
 
@@ -161,7 +161,7 @@ export function getKnownCategory(
  * 1. Deterministic CC payment pattern match (no DB/AI needed)
  * 2. Keyword rules (fast, DB lookup) — checked against memo, then recipient, then raw description
  * 3. Claude Haiku fallback (AI, only if no rule match) with structured PayNow fields
- * 4. "Others" fallback (if Claude fails or key is missing)
+ * 4. "Unlabelled" fallback (if Claude fails or key is missing)
  */
 export async function categorize(
   description: string,
@@ -204,7 +204,7 @@ export async function categorize(
         "ANTHROPIC_API_KEY is not configured."
       )
     }
-    return "Others"
+    return "Unlabelled"
   }
 
   try {
@@ -241,7 +241,7 @@ export async function categorize(
       return matched
     }
 
-    return "Others"
+    return "Unlabelled"
   } catch (error) {
     if (options.requireAi) {
       const message =
@@ -251,7 +251,7 @@ export async function categorize(
       )
     }
     // Claude API error — fall back silently
-    return "Others"
+    return "Unlabelled"
   }
 }
 

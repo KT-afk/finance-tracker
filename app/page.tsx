@@ -35,6 +35,7 @@ interface DashboardData {
   totalReimbursements: number
   netCashFlow: number
   unclassifiedTransfers: number
+  unlabelled: number
   daysElapsed: number
   month: string
   isEmpty: boolean
@@ -411,6 +412,25 @@ export default function HomePage() {
                   </p>
                 </div>
               </div>
+
+              {data.unlabelled > 0 && (
+                <Link
+                  href={`/transactions?${new URLSearchParams({
+                    month: selectedMonth,
+                    review: "unlabelled",
+                    ...(selectedBank !== "all" ? { bank: selectedBank } : {}),
+                  })}`}
+                  className="flex items-center justify-between p-3 rounded-lg bg-amber-950/20 border border-amber-800/30 hover:bg-amber-950/40 hover:border-amber-700/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                >
+                  <span className="text-sm text-amber-200">
+                    Unlabelled spending
+                  </span>
+                  <span className="flex items-center gap-2 font-mono text-sm tabular-nums text-amber-300">
+                    {formatSGD(data.unlabelled)}
+                    <span aria-hidden="true">→</span>
+                  </span>
+                </Link>
+              )}
 
               {data.unclassifiedTransfers > 0 && (
                 <Link

@@ -179,6 +179,7 @@ assert.deepEqual(summary, {
   spend: 2400,
   netCashFlow: 4833.55,
   unclassifiedTransfers: 40,
+  unlabelled: 0,
 })
 
 // A split payment: only the owner's part is spend
@@ -211,5 +212,35 @@ assert.equal(repayment.countsAsIncome, false)
 assert.equal(repayment.countsAsReimbursement, false)
 assert.equal(repayment.isUnclassifiedTransfer, false)
 assert.equal(repayment.countsAsSpend, false)
+
+// An outgoing transfer nobody labelled counts as spending, on its own line
+const unlabelledPayNow = classifyCashFlow({
+  description: "FAST PAYMENT via PayNow-Mobile to JXXX TXX OTHR-OTHR",
+  amount: -45,
+  category: "Transfer",
+})
+assert.equal(unlabelledPayNow.category, "Unlabelled")
+assert.equal(unlabelledPayNow.countsAsSpend, true)
+assert.equal(unlabelledPayNow.isUnlabelled, true)
+
+// ...unless the owner chose Transfer themselves
+assert.equal(
+  classifyCashFlow({
+    description: "FAST PAYMENT via PayNow-Mobile to JXXX TXX OTHR-OTHR",
+    amount: -45,
+    category: "Transfer",
+    is_corrected: true,
+  }).countsAsSpend,
+  false
+)
+
+assert.equal(
+  summarizeCashFlow([
+    { description: "FAST PAYMENT to A", amount: -45, category: "Transfer" },
+    { description: "FAST PAYMENT to B", amount: -5, category: "Unlabelled" },
+    { description: "MADE UP CAFE", amount: -10, category: "Food & Drink" },
+  ]).unlabelled,
+  50
+)
 
 console.log("cash flow semantics test passed")

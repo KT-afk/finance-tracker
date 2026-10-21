@@ -35,6 +35,9 @@ export const CATEGORIES = [
   "Travel",
   "Personal",
   "Income",
+  // Nobody has decided yet. Counts as spending until labelled; distinct
+  // from "Others", which is a decision that it fits no category.
+  "Unlabelled",
   "Others",
 ] as const
 export type Category = (typeof CATEGORIES)[number]
