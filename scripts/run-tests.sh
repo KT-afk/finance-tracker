@@ -35,6 +35,7 @@ run_test "incoming-transfer-recategorize" "$ROOT/tests/incoming-transfer-recateg
 run_test "balances-api-schema-compat" "$ROOT/tests/balances-api-schema-compat.test.ts"
 run_test "owed"                    "$ROOT/tests/owed.test.ts"
 run_test "insight-cache"           "$ROOT/tests/insight-cache.test.ts"
+run_test "payment-alerts"          "$ROOT/tests/payment-alerts.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \
   "UOB_MAY_PDF=${UOB_MAY_PDF:-}" \
   "OCBC_MAY_PDF=${OCBC_MAY_PDF:-}"
