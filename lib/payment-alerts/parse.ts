@@ -9,9 +9,10 @@
 
 export type AlertBank = "ocbc" | "uob"
 
-export type AlertMethod = "paynow" | "nets-qr" | "card" | "bill-payment"
+export type AlertMethod =
+  "paynow" | "nets-qr" | "card" | "bill-payment" | "withdrawal"
 
-export type PayeeKind = "person" | "merchant" | "card-bill"
+export type PayeeKind = "person" | "merchant" | "card-bill" | "wallet" | "cash"
 
 export type PaymentAlert = {
   bank: AlertBank
@@ -27,6 +28,8 @@ export type PaymentAlert = {
   payeeKind: PayeeKind
   // Last digits of the Payee's PayNow mobile, as the bank shows them
   payeeMobileEnding?: string
+  // Last characters of the Payee's NRIC, for PayNow sent by NRIC
+  payeeNricEnding?: string
   // Last digits of the owner's account or card the money left from
   accountEnding?: string
   memo?: string
@@ -41,10 +44,33 @@ export type AlertEmail = {
   body: string
 }
 
+// A card charge the bank has cancelled
+export type Reversal = {
+  bank: AlertBank
+  date: string
+  amount: number // SGD, positive
+  payee: string
+  accountEnding: string
+}
+
 export type ParsedAlert =
   | { kind: "alert"; alert: PaymentAlert }
+  | { kind: "reversal"; reversal: Reversal }
+  // A bank email that is not money leaving (statement ready, card locked,
+  // money received): recorded so it is read once, never surfaced
+  | { kind: "ignored"; bank: AlertBank; reason: string }
   | { kind: "unrecognised"; bank: AlertBank; reason: string }
   | { kind: "not-an-alert" }
+
+// Subjects of bank emails that never describe money leaving
+const NOT_SPENDING_SUBJECTS = [
+  /e-?Statement/i,
+  /eAdvice/i,
+  /card (?:is|was) (?:still )?(?:locked|unlocked|declined)/i,
+  /card replacement/i,
+  /Wallet Removal/i,
+  /transfer received/i,
+]
 
 const MONTHS: Record<string, string> = {
   jan: "01",
@@ -102,7 +128,7 @@ function lastDigits(value: string): string | undefined {
 function labelledFields(body: string): Map<string, string> {
   const fields = new Map<string, string>()
   for (const line of body.split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z][A-Za-z ]*?)\s*:\s*(.+?)\s*$/)
+    const m = line.match(/^\s*([A-Za-z][A-Za-z ./]*?)\s*:\s*(.+?)\s*$/)
     if (m && !fields.has(m[1].toLowerCase())) {
       fields.set(m[1].toLowerCase(), m[2])
     }
@@ -119,11 +145,47 @@ function bankOf(email: AlertEmail): AlertBank | null {
 
 function parseOcbc(email: AlertEmail): ParsedAlert {
   const body = email.body
+
+  const withdrawal = body
+    .replace(/\s+/g, " ")
+    .match(
+      /A sum of SGD ([\d,]+\.\d{2}) was withdrawn from your account \(-?(\d+)\) at (\d{1,2}:\d{2}\s*[AP]M) on (\d{1,2} [A-Za-z]{3} \d{4})/i
+    )
+  if (withdrawal) {
+    const date = parseDayMonthYear(withdrawal[4])
+    const value = parseMoney(withdrawal[1])
+    if (!date || value === null) {
+      return { kind: "unrecognised", bank: "ocbc", reason: "bad withdrawal" }
+    }
+    return {
+      kind: "alert",
+      alert: {
+        bank: "ocbc",
+        method: "withdrawal",
+        date,
+        time: parseTime(withdrawal[3]) ?? undefined,
+        amount: -value,
+        payee: "Withdrawal",
+        payeeKind: "cash",
+        accountEnding: withdrawal[2],
+        bankDescription: body,
+      },
+    }
+  }
+
   const fields = labelledFields(body)
   const date = parseDayMonthYear(
-    (fields.get("date") ?? "").replace(/\s+SGT$/i, "")
+    (fields.get("date") ?? fields.get("date of transfer") ?? "").replace(
+      /\s+SGT$/i,
+      ""
+    )
   )
-  const time = parseTime((fields.get("time") ?? "").replace(/\s*SGT$/i, ""))
+  const time = parseTime(
+    (fields.get("time") ?? fields.get("time of transfer") ?? "").replace(
+      /\s*SGT$/i,
+      ""
+    )
+  )
   const amountMatch = (fields.get("amount") ?? "").match(
     /^SGD\s*([\d,]+\.\d{2})$/i
   )
@@ -136,7 +198,14 @@ function parseOcbc(email: AlertEmail): ParsedAlert {
       reason: "missing date or amount",
     }
   }
-  const memo = fields.get("description")?.trim() || undefined
+  // "OTHR" and bare reference codes come from the bank, not the owner
+  const description = fields.get("description")?.trim()
+  const memo =
+    description &&
+    description.toUpperCase() !== "OTHR" &&
+    !/^[A-Za-z0-9]{12,}$/.test(description)
+      ? description
+      : undefined
   const reference = fields.get("reference number")?.trim() || undefined
   const common = {
     bank: "ocbc" as const,
@@ -165,6 +234,56 @@ function parseOcbc(email: AlertEmail): ParsedAlert {
     }
   }
 
+  const paynowNric = body.match(
+    /PayNow transfer has been made to\s+(.+?)\s+using\s+(?:his\/her\s+)?NRIC\s*\(-?([\dA-Z]{3,5})\)/i
+  )
+  if (paynowNric) {
+    return {
+      kind: "alert",
+      alert: {
+        ...common,
+        method: "paynow",
+        payee: paynowNric[1].trim(),
+        payeeKind: "person",
+        payeeNricEnding: paynowNric[2].toUpperCase(),
+      },
+    }
+  }
+
+  const paynowUen = body.match(
+    /PayNow transfer has been made to\s+(.+?)\s+using\s+(?:their\s+)?Unique Entity Number/i
+  )
+  if (paynowUen) {
+    return {
+      kind: "alert",
+      alert: {
+        ...common,
+        method: "paynow",
+        payee: paynowUen[1].trim(),
+        payeeKind: "merchant",
+      },
+    }
+  }
+
+  // PayNow to a Virtual Payment Address, e.g. topping up the owner's Wise
+  const vpa = body.match(
+    /we have sent money to\s+(.+?)\s+using Virtual Payment Address/i
+  )
+  if (vpa) {
+    const payee = vpa[1].trim()
+    return {
+      kind: "alert",
+      alert: {
+        ...common,
+        memo: undefined,
+        reference: fields.get("description/reference no.")?.trim(),
+        method: "paynow",
+        payee,
+        payeeKind: /^WISE\b/i.test(payee) ? "wallet" : "merchant",
+      },
+    }
+  }
+
   if (/NETS QR payment has been made/i.test(body)) {
     const payee = fields.get("to")?.trim()
     if (!payee) {
@@ -185,6 +304,30 @@ function parseOcbc(email: AlertEmail): ParsedAlert {
 
 function parseUob(email: AlertEmail): ParsedAlert {
   const body = email.body.replace(/\s+/g, " ")
+
+  const reversal = body.match(
+    /A transaction of ([\d,]+\.\d{2}) SGD made with your UOB card ending (\d+) on (\d{1,2} [A-Za-z]{3} \d{2,4}), [\d:]+\s*[AP]M at (.+?) has been reversed/i
+  )
+  if (reversal) {
+    const date = parseDayMonthYear(reversal[3])
+    const value = parseMoney(reversal[1])
+    if (!date || value === null) {
+      return { kind: "unrecognised", bank: "uob", reason: "bad reversal" }
+    }
+    return {
+      kind: "reversal",
+      reversal: {
+        bank: "uob",
+        date,
+        amount: value,
+        // Outlook sometimes rewrites the merchant name into a link
+        payee:
+          reversal[4].replace(/https?:\/\/\S+/g, "").trim() ||
+          "Unknown merchant",
+        accountEnding: reversal[2],
+      },
+    }
+  }
 
   const card = body.match(
     /A transaction of ([A-Z]{3}) ([\d,]+\.\d{2}) was made with your UOB Card ending (\d+) on (\d{1,2}\/\d{1,2}\/\d{2,4}) at (.+?)\.\s*If unauthorised/i
@@ -282,6 +425,9 @@ function parseUob(email: AlertEmail): ParsedAlert {
 
 export function parsePaymentAlert(email: AlertEmail): ParsedAlert {
   const bank = bankOf(email)
+  if (bank && NOT_SPENDING_SUBJECTS.some((p) => p.test(email.subject))) {
+    return { kind: "ignored", bank, reason: email.subject }
+  }
   if (bank === "ocbc") return parseOcbc(email)
   if (bank === "uob") return parseUob(email)
   return { kind: "not-an-alert" }

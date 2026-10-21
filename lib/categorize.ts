@@ -19,6 +19,8 @@ let anthropicClient: Anthropic | null = null
 type CategorizeOptions = {
   requireAi?: boolean
   amount?: number
+  // False for a dry run: use rules and AI but never save a new rule
+  learn?: boolean
 }
 
 export class CategorizationUnavailableError extends Error {
@@ -235,7 +237,7 @@ export async function categorize(
       // Only from CSV-era fields: statement-format fields would learn rules from
       // short memo words ("ring", "food") and all-caps personal names.
       const keyword = deriveKeyword(legacyFields.memo, legacyFields.recipient)
-      if (keyword.length >= 3) {
+      if (keyword.length >= 3 && options.learn !== false) {
         await saveRule(keyword, matched)
       }
       return matched

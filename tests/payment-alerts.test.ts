@@ -131,4 +131,95 @@ assert.equal(isSelfTransferAlert(uobPayNow, self), true)
 assert.equal(isSelfTransferAlert(ocbcPayNow, self), false)
 assert.equal(isSelfTransferAlert(ocbcNets, self), false)
 
+// OCBC PayNow by NRIC, with the bank placeholder instead of a Memo
+const ocbcNric = alertOf(
+  OCBC,
+  "PayNow transfer made",
+  `The following PayNow transfer has been made to OXX KXXX using his/her NRIC (-123A).
+
+Date\t: 05 Oct 2026
+Time\t: 09:15 PM SGT
+Amount\t: SGD 50.00
+From your account\t: 360 Account (-000111)
+Description\t: OTHR
+Reference number\t: 0000000000000001`
+)
+assert.equal(ocbcNric.payeeNricEnding, "123A")
+assert.equal(ocbcNric.memo, undefined)
+assert.equal(
+  isSelfTransferAlert(
+    ocbcNric,
+    selfAccountsFromEnv({ FINANCE_SELF_NRIC_ENDINGS: "s1234123a" })
+  ),
+  true
+)
+
+// OCBC PayNow to a business by UEN; a bare reference is not a Memo
+const ocbcUen = alertOf(
+  OCBC,
+  "PayNow transfer made",
+  `The following PayNow transfer has been made to MADE UP FOOD PTE LTD using their Unique Entity Number (UEN) 000000000A.
+Date\t: 07 Oct 2026
+Time\t: 02:13 AM SGT
+Amount\t: SGD 7.70
+From your account\t: 360 Account (-000111)
+Description\t: QL0abcDEF1230000004XYZ
+Reference number\t: 0000000000000002`
+)
+assert.equal(ocbcUen.payeeKind, "merchant")
+assert.equal(ocbcUen.payee, "MADE UP FOOD PTE LTD")
+assert.equal(ocbcUen.memo, undefined)
+
+// OCBC top-up of the owner's Wise is a Wallet Top-up
+const wise = alertOf(
+  OCBC,
+  "You have sent money to WISE ASIA-PACIFIC PTE LTD via PayNow-VPA UEN",
+  `As you requested, we have sent money to WISE ASIA-PACIFIC PTE LTD using Virtual Payment Address UEN number UEN000000000R#WISE. Here are the details of your transfer:
+Date of Transfer\t:\t08 Oct 2026
+Time of Transfer\t:\t06:09 AM SGT
+Amount\t:\tSGD 150.00
+From your account\t:\t360 Account (-000111)
+Description/reference no.\t:\tP00000000QR`
+)
+assert.equal(wise.payeeKind, "wallet")
+assert.equal(wise.date, "2026-10-08")
+assert.equal(wise.time, "06:09")
+assert.equal(wise.amount, -150)
+
+// OCBC withdrawal
+const cash = alertOf(
+  OCBC,
+  "OCBC Alert Withdrawal Made",
+  "A sum of SGD 100.00 was withdrawn from your account (-000111) at 7:42 AM on 14 Oct 2026."
+)
+assert.equal(cash.method, "withdrawal")
+assert.equal(cash.time, "07:42")
+assert.equal(cash.amount, -100)
+
+// UOB reversal of a card charge
+const reversed = parsePaymentAlert({
+  from: UOB,
+  subject: "Your transaction has been reversed",
+  body: "A transaction of 12.30 SGD made with your UOB card ending 2222 on 4 Oct 26, 1:10AM at MADE UP CABS has been reversed. UOB EMAIL DISCLAIMER",
+})
+assert.equal(reversed.kind, "reversal")
+if (reversed.kind === "reversal") {
+  assert.equal(reversed.reversal.amount, 12.3)
+  assert.equal(reversed.reversal.date, "2026-10-04")
+  assert.equal(reversed.reversal.payee, "MADE UP CABS")
+}
+
+// Bank emails that are not money leaving are skipped, not surfaced
+for (const subject of [
+  "Your eStatement/eAdvice is ready for viewing",
+  "Your card is locked",
+  "UOB-PayNow transfer received",
+]) {
+  assert.equal(
+    parsePaymentAlert({ from: UOB, subject, body: "" }).kind,
+    "ignored",
+    subject
+  )
+}
+
 console.log("payment alerts test passed")

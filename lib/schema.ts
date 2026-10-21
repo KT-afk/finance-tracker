@@ -177,7 +177,7 @@ export const alertEmails = sqliteTable("alert_emails", {
   bank: text("bank", { enum: ["ocbc", "uob"] }).notNull(),
   received_at: text("received_at").notNull(),
   status: text("status", {
-    enum: ["saved", "self-transfer", "unrecognised"],
+    enum: ["saved", "self-transfer", "reversed", "ignored", "unrecognised"],
   }).notNull(),
   reason: text("reason"),
   transaction_id: text("transaction_id"),
