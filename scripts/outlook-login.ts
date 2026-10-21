@@ -5,7 +5,11 @@
  *
  * Usage:
  *   OUTLOOK_CLIENT_ID=... npm run outlook:login
+ *
+ * Set OUTLOOK_TOKEN_FILE to write the token to that file instead of printing it.
  */
+
+import { writeFileSync } from "fs"
 
 const AUTHORITY = "https://login.microsoftonline.com/consumers/oauth2/v2.0"
 const SCOPE = "https://graph.microsoft.com/Mail.Read offline_access"
@@ -55,8 +59,16 @@ async function main() {
       device_code: code.device_code,
     })
     if (token.refresh_token) {
-      console.log("\nSigned in. Put this in Vercel as OUTLOOK_REFRESH_TOKEN:\n")
-      console.log(token.refresh_token)
+      const file = process.env.OUTLOOK_TOKEN_FILE
+      if (file) {
+        writeFileSync(file, token.refresh_token, { mode: 0o600 })
+        console.log(`\nSigned in. Refresh token saved to ${file}`)
+      } else {
+        console.log(
+          "\nSigned in. Put this in Vercel as OUTLOOK_REFRESH_TOKEN:\n"
+        )
+        console.log(token.refresh_token)
+      }
       return
     }
     if (token.error === "slow_down") interval += 5000
