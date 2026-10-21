@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createRequire } from "node:module"
+import { migratedSchemaSql } from "./migrated-schema"
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
   DatabaseSync: new (path: string) => {
     exec(sql: string): void
@@ -24,16 +25,7 @@ async function main() {
   const dbPath = path.join(tmpDir, "test.db")
   const seed = new DatabaseSync(dbPath)
   seed.exec(`
-    CREATE TABLE transactions (
-      id text PRIMARY KEY NOT NULL, date text NOT NULL, description text NOT NULL,
-      amount real NOT NULL, bank text NOT NULL, category text DEFAULT 'Others' NOT NULL,
-      is_corrected integer DEFAULT false NOT NULL, hash text NOT NULL UNIQUE,
-      uploaded_at text NOT NULL
-    );
-    CREATE TABLE category_rules (
-      id text PRIMARY KEY NOT NULL, keyword text NOT NULL UNIQUE,
-      category text NOT NULL, created_at text NOT NULL
-    );
+    ${migratedSchemaSql()};
     INSERT INTO transactions VALUES
       ('gift', '2026-09-10', '${GIFT}', 200, 'ocbc', 'Transfer', 0, 'h1', 'x'),
       ('later', '2026-09-20', '${GIFT}', 50, 'ocbc', 'Transfer', 0, 'h2', 'x'),
