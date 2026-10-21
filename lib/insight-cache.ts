@@ -1,35 +1,11 @@
 import { createHash } from "crypto"
-import { eq, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { db } from "./db"
 import { insightCache } from "./schema"
 
 export const INSIGHT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 const KEY = "dashboard"
-
-let ensured: Promise<void> | null = null
-
-// The drizzle journal is behind the schema (see balance-history.ts), so the
-// table is created in place on first use instead of by a migration.
-function ensureInsightCacheTable(): Promise<void> {
-  ensured ??= db
-    .run(
-      sql`
-      CREATE TABLE IF NOT EXISTS insight_cache (
-        key text PRIMARY KEY NOT NULL,
-        input_hash text NOT NULL,
-        text text NOT NULL,
-        created_at text NOT NULL
-      )
-    `
-    )
-    .then(() => undefined)
-    .catch((error) => {
-      ensured = null
-      throw error
-    })
-  return ensured
-}
 
 /**
  * Fingerprint of everything sent to the model. A new upload, an edited
@@ -45,7 +21,6 @@ export async function getCachedInsight(
   inputHash: string,
   now = Date.now()
 ): Promise<string | null> {
-  await ensureInsightCacheTable()
   const [row] = await db
     .select()
     .from(insightCache)
@@ -61,7 +36,6 @@ export async function saveInsight(
   text: string,
   now = Date.now()
 ): Promise<void> {
-  await ensureInsightCacheTable()
   const row = {
     key: KEY,
     input_hash: inputHash,

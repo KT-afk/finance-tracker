@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto"
-import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm"
+import { and, eq, gte, inArray, lt, ne } from "drizzle-orm"
 import { db } from "./db"
 import {
   OFF_BANK,
@@ -17,52 +17,6 @@ import {
   owedRuleMatches,
   type ToSortItem,
 } from "./owed-ledger"
-
-let ensured: Promise<void> | null = null
-
-// The drizzle journal is behind the schema (see balance-history.ts), so these
-// tables are created in place on first use instead of by a migration.
-export function ensureOwedTables(): Promise<void> {
-  ensured ??= (async () => {
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS owed_entries (
-        id text PRIMARY KEY NOT NULL,
-        transaction_id text NOT NULL UNIQUE,
-        person text NOT NULL,
-        kind text NOT NULL,
-        amount real NOT NULL,
-        created_at text NOT NULL
-      )
-    `)
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS owed_rules (
-        id text PRIMARY KEY NOT NULL,
-        keyword text NOT NULL UNIQUE,
-        person text NOT NULL,
-        amount real NOT NULL,
-        starts_on text NOT NULL,
-        created_at text NOT NULL
-      )
-    `)
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS owed_senders (
-        sender text PRIMARY KEY NOT NULL,
-        person text NOT NULL,
-        created_at text NOT NULL
-      )
-    `)
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS owed_dismissed (
-        transaction_id text PRIMARY KEY NOT NULL,
-        created_at text NOT NULL
-      )
-    `)
-  })().catch((error) => {
-    ensured = null
-    throw error
-  })
-  return ensured
-}
 
 export class OwedError extends Error {
   constructor(
@@ -157,7 +111,6 @@ async function getBankTransaction(id: string) {
 
 /** transaction id → amount owed back, for every split payment. */
 export async function loadOwedShares(): Promise<Map<string, number>> {
-  await ensureOwedTables()
   const rows = await db
     .select({ id: owedEntries.transaction_id, amount: owedEntries.amount })
     .from(owedEntries)
@@ -174,7 +127,6 @@ export async function withOwedShares<T extends { id: string }>(
 }
 
 export async function loadOwedEntriesFor(transactionIds: string[]) {
-  await ensureOwedTables()
   if (transactionIds.length === 0) return new Map()
   const rows = await db
     .select()
@@ -187,7 +139,6 @@ export async function setOwedShare(
   transactionId: string,
   input: { person: unknown; amount: unknown }
 ) {
-  await ensureOwedTables()
   const transaction = await getBankTransaction(transactionId)
   if (transaction.amount >= 0) {
     throw new OwedError("Only money you paid out can be split")
@@ -219,7 +170,6 @@ export async function markRepayment(
   transactionId: string,
   input: { person: unknown }
 ) {
-  await ensureOwedTables()
   const transaction = await getBankTransaction(transactionId)
   if (transaction.amount <= 0) {
     throw new OwedError("Only money you received can be a repayment")
@@ -283,7 +233,6 @@ export async function addOwedAdjustment(input: {
   category: unknown
   date: unknown
 }) {
-  await ensureOwedTables()
   const kind = input.kind as AdjustmentKind
   if (!ADJUSTMENT_KINDS.includes(kind)) throw new OwedError("Invalid kind")
   const person = await cleanPerson(input.person)
@@ -342,7 +291,6 @@ export async function addOwedAdjustment(input: {
  * with its OFF_BANK transaction.
  */
 export async function removeOwedEntry(transactionId: string) {
-  await ensureOwedTables()
   const [entry] = await db
     .delete(owedEntries)
     .where(eq(owedEntries.transaction_id, transactionId))
@@ -365,7 +313,6 @@ export async function removeOwedEntry(transactionId: string) {
 
 /** Called when a transaction is deleted, so nothing points at it. */
 export async function forgetTransaction(transactionId: string) {
-  await ensureOwedTables()
   await db
     .delete(owedEntries)
     .where(eq(owedEntries.transaction_id, transactionId))
@@ -376,7 +323,6 @@ export async function forgetTransaction(transactionId: string) {
 
 /** Called when a category is changed by hand away from Repayment. */
 export async function dropRepayment(transactionId: string) {
-  await ensureOwedTables()
   await db
     .delete(owedEntries)
     .where(
@@ -428,7 +374,6 @@ async function applyRules(
  */
 export async function applyOwedRulesTo(transactionIds: string[]) {
   if (transactionIds.length === 0) return 0
-  await ensureOwedTables()
   const rules = await db.select().from(owedRules)
   if (rules.length === 0) return 0
   const candidates = await db
@@ -451,7 +396,6 @@ export async function createOwedRule(input: {
   amount: unknown
   startsOn: unknown
 }) {
-  await ensureOwedTables()
   const keyword =
     typeof input.keyword === "string"
       ? input.keyword.replace(/\s+/g, " ").trim().toLowerCase()
@@ -503,13 +447,11 @@ export async function createOwedRule(input: {
 }
 
 export async function deleteOwedRule(id: string) {
-  await ensureOwedTables()
   // Splits it already made stay; they're real money owed.
   await db.delete(owedRules).where(eq(owedRules.id, id))
 }
 
 export async function getOwedSummary() {
-  await ensureOwedTables()
   const rows = await db
     .select({
       transaction_id: owedEntries.transaction_id,
@@ -551,7 +493,6 @@ export async function getToSort(since = daysAgo(TO_SORT_DAYS)): Promise<{
   incoming: ToSortItem[]
   outgoing: ToSortItem[]
 }> {
-  await ensureOwedTables()
   const rows = await db
     .select()
     .from(transactions)
@@ -608,7 +549,6 @@ export async function getToSort(since = daysAgo(TO_SORT_DAYS)): Promise<{
 
 /** "Not owed money": hide a transaction from To sort for good. */
 export async function dismissToSort(transactionId: string) {
-  await ensureOwedTables()
   await getBankTransaction(transactionId)
   await db
     .insert(owedDismissed)

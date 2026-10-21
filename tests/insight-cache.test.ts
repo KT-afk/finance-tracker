@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createRequire } from "node:module"
+import { migratedSchemaSql } from "./migrated-schema"
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
   DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void }
 }
@@ -19,24 +20,7 @@ function today() {
 function seed(dbPath: string) {
   const db = new DatabaseSync(dbPath)
   db.exec(`
-    CREATE TABLE transactions (
-      id text PRIMARY KEY NOT NULL,
-      date text NOT NULL,
-      description text NOT NULL,
-      amount real NOT NULL,
-      bank text NOT NULL,
-      category text DEFAULT 'Others' NOT NULL,
-      is_corrected integer DEFAULT false NOT NULL,
-      hash text NOT NULL UNIQUE,
-      uploaded_at text NOT NULL
-    );
-    CREATE TABLE ai_memory (
-      id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-      key text NOT NULL UNIQUE,
-      value text NOT NULL,
-      source text NOT NULL,
-      created_at text NOT NULL
-    );
+    ${migratedSchemaSql()};
     INSERT INTO transactions VALUES
       ('a', '${today()}', 'FAIRPRICE FINEST', -100, 'dbs', 'Groceries', 0, 'h0', 'x');
   `)
