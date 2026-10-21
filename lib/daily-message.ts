@@ -31,7 +31,14 @@ export type DailySummary = {
   }
   monthTotal: number
   rent: number
-  unusual: { payee: string; amount: number; category: string; usual: number }[]
+  unusual: {
+    date: string
+    payee: string
+    memo: string | null
+    amount: number
+    category: string
+    usual: number
+  }[]
   dayToDay: number
   averagePerDay: number
   salary: number | null
@@ -170,7 +177,9 @@ export async function buildDailySummary(
     const typical = past.length >= 5 ? median(past) : null
     if (typical !== null && amount >= 50 && amount >= typical * 5) {
       unusual.push({
+        date: row.date,
         payee: payeeOf(row),
+        memo: row.memo,
         amount,
         category: c.category,
         usual: typical,
@@ -241,6 +250,14 @@ const sgdCents = new Intl.NumberFormat("en-SG", {
   currency: "SGD",
 })
 
+function dayLabel(date: string): string {
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`))
+}
+
 export function formatDailyMessage(
   s: DailySummary,
   appUrl: string | null
@@ -271,7 +288,7 @@ export function formatDailyMessage(
   )
   for (const u of s.unusual) {
     lines.push(
-      `  ⚠ ${sgd.format(u.amount)} at ${u.payee}: unusual for ${u.category} (normally ~${sgd.format(u.usual)})`
+      `  ⚠ ${sgdCents.format(u.amount)}  ${u.payee}${u.memo ? ` “${u.memo}”` : ""} on ${dayLabel(u.date)}: big for ${u.category}, usually ~${sgd.format(u.usual)}`
     )
   }
   lines.push(

@@ -93,7 +93,10 @@ async function main() {
     assert.match(text, /^• \$2.00  BUS · Transport$/m)
     assert.match(text, /^• \$30.00  .* · ❓ Unlabelled$/m)
     // Unusual spending sits with the month, not since last night
-    assert.match(text, /Oct so far: .*\n  ⚠ \$128 at NETS QR FANCY PLACE/)
+    assert.match(
+      text,
+      /Oct so far: .*\n  ⚠ \$128.00  NETS QR FANCY PLACE on 10 Oct: big for Food & Drink, usually ~\$10\n/
+    )
     assert.match(
       text,
       /Oct so far: \$1,372 \(rent \$1,200 · unusual \$128 · day-to-day \$44\)/
