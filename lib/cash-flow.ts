@@ -18,6 +18,7 @@ export type CashFlowClassification = {
   countsAsReimbursement: boolean
   countsAsSpend: boolean
   isUnclassifiedTransfer: boolean
+  isUnlabelled: boolean
 }
 
 export type CashFlowSummary = {
@@ -26,6 +27,7 @@ export type CashFlowSummary = {
   spend: number
   netCashFlow: number
   unclassifiedTransfers: number
+  unlabelled: number
 }
 
 const CC_PAYMENT_PATTERNS = [
@@ -117,7 +119,7 @@ export function classifyCashFlow(
   // Repayment is only ever set together with who repaid, so it always wins.
   // Incoming transfers otherwise default to "Transfer" for review; a
   // Reimbursement tag on those can only come from the user.
-  const category =
+  const decided =
     transaction.category === "Repayment"
       ? "Repayment"
       : deterministic === "Transfer" && transaction.category === "Reimbursement"
@@ -129,6 +131,15 @@ export function classifyCashFlow(
     transaction.amount < 0 && transaction.owedShare
       ? Math.min(0, transaction.amount + transaction.owedShare)
       : transaction.amount
+  // An outgoing "Transfer" nobody picked is a payment whose purpose is
+  // unknown: it counts as spending until labelled, never silently dropped.
+  const category: Category =
+    decided === "Transfer" &&
+    transaction.amount < 0 &&
+    !transaction.is_corrected
+      ? "Unlabelled"
+      : decided
+  const isUnlabelled = category === "Unlabelled"
   const countsAsIncome = category === "Income" && effectiveAmount > 0
   const countsAsReimbursement =
     category === "Reimbursement" && effectiveAmount > 0
@@ -151,6 +162,7 @@ export function classifyCashFlow(
     countsAsReimbursement,
     countsAsSpend,
     isUnclassifiedTransfer,
+    isUnlabelled,
   }
 }
 
@@ -175,6 +187,7 @@ export function shouldRecategorizeTransaction(
   }
 
   return (
+    transaction.category === "Unlabelled" ||
     transaction.category === "Others" ||
     (transaction.category === "Credit Card Payment" &&
       deterministicCategory !== "Credit Card Payment")
@@ -190,6 +203,7 @@ export function summarizeCashFlow(
     spend: 0,
     netCashFlow: 0,
     unclassifiedTransfers: 0,
+    unlabelled: 0,
   }
 
   for (const transaction of transactions) {
@@ -202,6 +216,9 @@ export function summarizeCashFlow(
       summary.spend += Math.abs(classification.effectiveAmount)
     if (classification.isUnclassifiedTransfer) {
       summary.unclassifiedTransfers += Math.abs(classification.effectiveAmount)
+    }
+    if (classification.isUnlabelled && classification.countsAsSpend) {
+      summary.unlabelled += Math.abs(classification.effectiveAmount)
     }
   }
 

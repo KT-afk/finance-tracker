@@ -1,12 +1,12 @@
-import { createClient } from '@libsql/client'
-import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
+import { createClient } from "@libsql/client"
+import assert from "node:assert/strict"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 
 async function main() {
-  const dbDir = mkdtempSync(path.join(tmpdir(), 'finance-upload-ai-'))
-  const dbPath = path.join(dbDir, 'finance.db')
+  const dbDir = mkdtempSync(path.join(tmpdir(), "finance-upload-ai-"))
+  const dbPath = path.join(dbDir, "finance.db")
   process.env.FINANCE_DB_PATH = dbPath
   delete process.env.TURSO_DATABASE_URL
   delete process.env.DATABASE_URL
@@ -37,28 +37,30 @@ async function main() {
     )
   `)
 
-  const { POST } = await import('../app/api/upload/route')
+  const { POST } = await import("../app/api/upload/route")
   const csv = [
-    'Transaction date,Value date,Description,Withdrawals(SGD),Deposits(SGD)',
-    '01/06/2026,01/06/2026,NETS QR PURCHASE PU TIAN,12.30,',
-  ].join('\n')
+    "Transaction date,Value date,Description,Withdrawals(SGD),Deposits(SGD)",
+    "01/06/2026,01/06/2026,NETS QR PURCHASE PU TIAN,12.30,",
+  ].join("\n")
   const formData = new FormData()
-  formData.set('bank', 'ocbc')
-  formData.set('file', new File([csv], 'ocbc.csv', { type: 'text/csv' }))
+  formData.set("bank", "ocbc")
+  formData.set("file", new File([csv], "ocbc.csv", { type: "text/csv" }))
 
-  const res = await POST(new Request('http://localhost/api/upload', {
-    method: 'POST',
-    body: formData,
-  }) as never)
+  const res = await POST(
+    new Request("http://localhost/api/upload", {
+      method: "POST",
+      body: formData,
+    }) as never
+  )
   const body = await res.json()
 
   assert.equal(res.status, 500)
   assert.match(body.error, /ANTHROPIC_API_KEY is not configured/)
 
-  console.log('upload fails without AI test passed')
+  console.log("upload fails without AI test passed")
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error)
   process.exit(1)
 })

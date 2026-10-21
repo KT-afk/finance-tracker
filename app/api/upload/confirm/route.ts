@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
@@ -8,6 +9,7 @@ import {
 } from "@/lib/auth-middleware"
 import { saveBalanceHistory } from "@/lib/balance-history"
 import { applyOwedRulesTo } from "@/lib/owed"
+import { confirmMatchingAlert } from "@/lib/payment-alerts/reconcile"
 import { AccountType, Bank, BANKS } from "@/lib/schema"
 
 interface TransactionPayload {
@@ -103,6 +105,9 @@ export async function POST(req: NextRequest) {
 
     let inserted = 0
     let skipped = 0
+    // Statement Lines that confirmed a Payment Alert instead of being added
+    let matched = 0
+    const confirmedAlerts = new Set<string>()
     const insertedIds: string[] = []
     const validationErrors: string[] = []
 
@@ -117,6 +122,28 @@ export async function POST(req: NextRequest) {
       }
 
       try {
+        // Already imported from this Statement before
+        const [existing] = await db
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(eq(transactions.hash, t.hash))
+        if (existing) {
+          skipped++
+          continue
+        }
+
+        // The same payment, already known from a Payment Alert
+        if (
+          t.amount < 0 &&
+          (await confirmMatchingAlert(
+            { date: t.date, amount: t.amount, bank: t.bank, hash: t.hash },
+            confirmedAlerts
+          ))
+        ) {
+          matched++
+          continue
+        }
+
         // INSERT OR IGNORE based on unique hash constraint
         const result = await db
           .insert(transactions)
@@ -167,6 +194,7 @@ export async function POST(req: NextRequest) {
         {
           inserted,
           skipped,
+          matched,
           validationErrors,
           error: "Some transactions failed validation",
         },
@@ -174,7 +202,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ inserted, skipped })
+    return NextResponse.json({ inserted, skipped, matched })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json({ error: msg }, { status: 500 })

@@ -35,6 +35,9 @@ export const CATEGORIES = [
   "Travel",
   "Personal",
   "Income",
+  // Nobody has decided yet. Counts as spending until labelled; distinct
+  // from "Others", which is a decision that it fits no category.
+  "Unlabelled",
   "Others",
 ] as const
 export type Category = (typeof CATEGORIES)[number]
@@ -64,6 +67,18 @@ export const transactions = sqliteTable("transactions", {
     .default(false),
   hash: text("hash").notNull().unique(),
   uploaded_at: text("uploaded_at").notNull(),
+  // Where the Transaction is known from: a Statement upload or a Payment Alert
+  source: text("source", { enum: ["statement", "alert"] })
+    .notNull()
+    .default("statement"),
+  // Payment Alert details; null for Statement-only rows
+  time: text("time"), // HH:MM, Singapore time
+  payee: text("payee"),
+  memo: text("memo"),
+  foreign_amount: real("foreign_amount"),
+  currency: text("currency"),
+  // Set when a Statement Line has matched this alert (Confirmed Transaction)
+  confirmed_at: text("confirmed_at"),
 })
 
 export const categoryRules = sqliteTable("category_rules", {
@@ -153,4 +168,26 @@ export const balanceHistory = sqliteTable("balance_history", {
     .notNull()
     .default("savings"),
   recorded_at: text("recorded_at").notNull(),
+})
+
+// Every bank email the alert reader has looked at, so each is processed once.
+// "unrecognised" ones are surfaced to the owner, never dropped.
+export const alertEmails = sqliteTable("alert_emails", {
+  message_id: text("message_id").primaryKey(),
+  bank: text("bank", { enum: ["ocbc", "uob"] }).notNull(),
+  received_at: text("received_at").notNull(),
+  status: text("status", {
+    enum: ["saved", "self-transfer", "reversed", "ignored", "unrecognised"],
+  }).notNull(),
+  reason: text("reason"),
+  transaction_id: text("transaction_id"),
+  processed_at: text("processed_at").notNull(),
+})
+
+// Credentials the app must update itself, such as the Outlook refresh
+// token, which Microsoft replaces when it is used.
+export const integrationTokens = sqliteTable("integration_tokens", {
+  name: text("name").primaryKey(),
+  value: text("value").notNull(),
+  updated_at: text("updated_at").notNull(),
 })
