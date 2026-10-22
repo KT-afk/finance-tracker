@@ -12,7 +12,7 @@ export type AlertBank = "ocbc" | "uob" | "trust"
 export type AlertMethod =
   "paynow" | "nets-qr" | "card" | "bill-payment" | "withdrawal"
 
-export type PayeeKind = "person" | "merchant" | "card-bill" | "wallet" | "cash"
+export type PayeeKind = "person" | "merchant" | "card-bill" | "wallet"
 
 export type PaymentAlert = {
   bank: AlertBank
@@ -286,8 +286,10 @@ function parseOcbc(email: AlertEmail): ParsedAlert {
         date,
         time: parseTime(withdrawal[3]) ?? undefined,
         amount: -value,
-        payee: "Withdrawal",
-        payeeKind: "cash",
+        // OCBC sends this when Chocolate Finance pulls a top-up by direct
+        // debit; the Statement shows it as "COLLECTION/TRANSFER Chocfin"
+        payee: "Chocolate top-up",
+        payeeKind: "wallet",
         accountEnding: withdrawal[2],
         bankDescription: body,
       },

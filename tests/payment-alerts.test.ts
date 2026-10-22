@@ -186,13 +186,14 @@ assert.equal(wise.date, "2026-10-08")
 assert.equal(wise.time, "06:09")
 assert.equal(wise.amount, -150)
 
-// OCBC withdrawal
+// OCBC "withdrawal" is Chocolate pulling a top-up: a Wallet Top-up
 const cash = alertOf(
   OCBC,
   "OCBC Alert Withdrawal Made",
   "A sum of SGD 100.00 was withdrawn from your account (-000111) at 7:42 AM on 14 Oct 2026."
 )
 assert.equal(cash.method, "withdrawal")
+assert.equal(cash.payeeKind, "wallet")
 assert.equal(cash.time, "07:42")
 assert.equal(cash.amount, -100)
 

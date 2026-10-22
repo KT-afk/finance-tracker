@@ -55,7 +55,8 @@ export function alertDescription(alert: PaymentAlert): string {
     case "bill-payment":
       return `BILL PAYMENT ${alert.payee}`
     case "withdrawal":
-      return "CASH WITHDRAWAL"
+      // Worded like the Statement line, so it is recognised as a Self Transfer
+      return "COLLECTION/TRANSFER COLL Chocfin top-up"
     case "card":
       return alert.payee
   }
@@ -71,7 +72,6 @@ async function categoryFor(
   // payments are the spending
   if (selfTransfer || alert.payeeKind === "wallet") return "Self Transfer"
   if (alert.method === "bill-payment") return "Credit Card Payment"
-  if (alert.method === "withdrawal") return "Unlabelled"
   return categorize(description, { amount: alert.amount ?? undefined, learn })
 }
 
