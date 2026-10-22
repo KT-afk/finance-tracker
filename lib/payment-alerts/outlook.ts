@@ -10,7 +10,7 @@ const TOKEN_NAME = "outlook_refresh_token"
 // Not a secret: the public client registered for this app
 const DEFAULT_CLIENT_ID = "2312b33c-bbaf-471b-b336-1a1d4da91e9f"
 // Payment Alert senders; anything else in the inbox is never fetched
-const ALERT_SENDER_DOMAINS = ["ocbc.com", "uobgroup.com"]
+const ALERT_SENDER_DOMAINS = ["ocbc.com", "uobgroup.com", "trustbank.sg"]
 
 export class OutlookAuthError extends Error {
   constructor(message: string) {

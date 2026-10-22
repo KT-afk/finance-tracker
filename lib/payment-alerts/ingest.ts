@@ -6,14 +6,19 @@ import { applyOwedRulesTo } from "../owed"
 import { computeHash } from "../parsers/normalizer"
 import { alertEmails, transactions, type Category } from "../schema"
 import { fetchAlertEmails, type InboxEmail } from "./outlook"
-import { parsePaymentAlert, type PaymentAlert, type Reversal } from "./parse"
+import {
+  parsePaymentAlert,
+  type AlertBank,
+  type PaymentAlert,
+  type Reversal,
+} from "./parse"
 import { isSelfTransferAlert, selfAccountsFromEnv } from "./self-accounts"
 
 type AlertTransaction = {
   id: string
   date: string
   time: string | null
-  bank: "ocbc" | "uob"
+  bank: AlertBank
   amount: number
   payee: string
   memo: string | null
@@ -94,7 +99,7 @@ async function findReversedCharge(
   reversal: Reversal,
   thisRun: AlertTransaction[]
 ): Promise<AlertTransaction | null> {
-  const from = shiftDate(reversal.date, -3)
+  const from = shiftDate(reversal.date, -(reversal.daysBack ?? 3))
   const to = shiftDate(reversal.date, 3)
   const matches = (t: { amount: number; payee: string | null; date: string }) =>
     Math.abs(t.amount + reversal.amount) < 0.005 &&
@@ -177,7 +182,7 @@ export async function ingestPaymentAlerts({
 
     const base = { messageId: email.id, receivedAt: email.receivedAt }
     let outcome: IngestOutcome
-    let bank: "ocbc" | "uob"
+    let bank: AlertBank
 
     if (parsed.kind === "ignored" || parsed.kind === "unrecognised") {
       bank = parsed.bank

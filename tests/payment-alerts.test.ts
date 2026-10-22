@@ -222,4 +222,101 @@ for (const subject of [
   )
 }
 
+// Trust card spending, local: date before the card
+const TRUST = "notification@trustbank.sg"
+const trustCard = alertOf(
+  TRUST,
+  "Yay! Transaction successful 😁",
+  "Didn't do this? Please contact us via your Trust App.\nYou've spent SGD 4.50 at MADE UP KOPITIAM 12345678 SG on 22 Oct 2026 13:05SGT with Trust Link card. Not you? Alert us via Trust App."
+)
+assert.equal(trustCard.bank, "trust")
+assert.equal(trustCard.method, "card")
+assert.equal(trustCard.payee, "MADE UP KOPITIAM")
+assert.equal(trustCard.date, "2026-10-22")
+assert.equal(trustCard.time, "13:05")
+assert.equal(trustCard.amount, -4.5)
+
+// Trust overseas: card before the date, SGD amount already converted
+const trustOverseas = alertOf(
+  TRUST,
+  "Yay! Overseas transaction successful 😁",
+  "1% FX fees! You've spent SGD 28.90 at MADE UP SUB +14155550000 US with Freedom credit card on 03 Oct 2026 09:12SGT. You'll receive estimated S$0.29 cashback*."
+)
+assert.equal(trustOverseas.payee, "MADE UP SUB")
+assert.equal(trustOverseas.amount, -28.9)
+assert.equal(trustOverseas.date, "2026-10-03")
+
+// Trust sometimes writes the time as GMT+08:00
+const trustGmt = alertOf(
+  TRUST,
+  "Yay! Transaction successful 😁",
+  "You've spent SGD 1.20 at MADE UP CLOUD +6500000000 SG on 2 Oct 2026 06:42GMT+08:00 with Trust Link card."
+)
+assert.equal(trustGmt.payee, "MADE UP CLOUD")
+assert.equal(trustGmt.date, "2026-10-02")
+assert.equal(trustGmt.time, "06:42")
+
+// A foreign charge without an SGD amount waits for the Statement
+const trustUsd = alertOf(
+  TRUST,
+  "Yay! Overseas transaction successful 😁",
+  "1% FX fees! You've spent USD 5.00 using Trust Link card at MADE UP HOSTING +14150000000 US on 8 Oct 2026 21:40SGT."
+)
+assert.equal(trustUsd.amount, null)
+assert.equal(trustUsd.foreignAmount, -5)
+assert.equal(trustUsd.currency, "USD")
+assert.equal(trustUsd.payee, "MADE UP HOSTING")
+
+// Digits stuck to the merchant name are a terminal number
+assert.equal(
+  alertOf(
+    TRUST,
+    "Yay! Transaction successful 😁",
+    "You've spent SGD 13.46 at MADE UP App Paymen63805858 SG on 16 Oct 2026 17:16SGT with Trust Link card."
+  ).payee,
+  "MADE UP App Paymen"
+)
+
+// Trust PayNow out
+const trustPayNow = alertOf(
+  TRUST,
+  "Yay! Your Paynow transfer's a success.",
+  "Your PayNow transfer of SGD 1,200.00 from A/C ending 9999 to OXX KXXX on 05 Oct 2026 10:00 SGT is successful."
+)
+assert.equal(trustPayNow.method, "paynow")
+assert.equal(trustPayNow.payee, "OXX KXXX")
+assert.equal(trustPayNow.amount, -1200)
+assert.equal(trustPayNow.accountEnding, "9999")
+
+// Trust cancelled charge and refund are reversals; a refund can be weeks later
+const cancelled = parsePaymentAlert({
+  from: TRUST,
+  subject: "Transaction cancelled 💳",
+  body: "We've cancelled your purchase of SGD 12.40 at MADE UP RIDES Singapore SG on 10 Oct 2026 08:00SGT with Trust Link card.",
+})
+assert.equal(cancelled.kind, "reversal")
+const refunded = parsePaymentAlert({
+  from: TRUST,
+  subject: "Ta-da! Transaction refunded 🙂",
+  body: "We've refunded SGD 2.99 from MADE UP MEMBERSHIP SINGAPORE 12345 SG to your Trust card on 4 Oct 2026 07:30SGT. Tap to view your account.",
+})
+assert.equal(refunded.kind, "reversal")
+if (refunded.kind === "reversal") {
+  assert.equal(refunded.reversal.amount, 2.99)
+  assert.equal(refunded.reversal.daysBack, 60)
+}
+
+// Trust emails that are not money leaving
+for (const subject of [
+  "Oh no! Transaction declined 😔",
+  "Yay! You've received a PayNow transfer.",
+  "Your credit card statement is in 😁",
+]) {
+  assert.equal(
+    parsePaymentAlert({ from: TRUST, subject, body: "" }).kind,
+    "ignored",
+    subject
+  )
+}
+
 console.log("payment alerts test passed")

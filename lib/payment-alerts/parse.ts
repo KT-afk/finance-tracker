@@ -7,7 +7,7 @@
  * never dropped: the caller records it as unread and surfaces it.
  */
 
-export type AlertBank = "ocbc" | "uob"
+export type AlertBank = "ocbc" | "uob" | "trust"
 
 export type AlertMethod =
   "paynow" | "nets-qr" | "card" | "bill-payment" | "withdrawal"
@@ -51,6 +51,8 @@ export type Reversal = {
   amount: number // SGD, positive
   payee: string
   accountEnding: string
+  // How far back the charge it cancels may be (refunds take weeks)
+  daysBack?: number
 }
 
 export type ParsedAlert =
@@ -70,6 +72,14 @@ const NOT_SPENDING_SUBJECTS = [
   /card replacement/i,
   /Wallet Removal/i,
   /transfer received/i,
+  /received a PayNow transfer/i,
+  /Transaction declined/i,
+  /statement is (?:in|ready)/i,
+  /cashback summary/i,
+  /registered for PayNow|unregistered PayNow/i,
+  /Upcoming auto payment/i,
+  /Scheduled transfer unsuccessful/i,
+  /Mutual Funds|TrustInvest|Diversify/i,
 ]
 
 const MONTHS: Record<string, string> = {
@@ -140,7 +150,118 @@ function bankOf(email: AlertEmail): AlertBank | null {
   const from = email.from.toLowerCase()
   if (from.includes("ocbc")) return "ocbc"
   if (from.includes("uobgroup") || from.includes("uob.com")) return "uob"
+  if (from.includes("trustbank.sg")) return "trust"
   return null
+}
+
+// "KOPITIAM FP APP PAYMENTS 12345678 SG" → "KOPITIAM FP APP PAYMENTS"
+function cleanTrustMerchant(raw: string): string {
+  return (
+    raw
+      .replace(/\s+[A-Z]{2}$/, "") // country code
+      .replace(/(?:\s*\+?\d{5,})+$/, "") // terminal or phone number
+      .trim() || raw.trim()
+  )
+}
+
+// Singapore time, written "SGT" or "GMT+08:00"
+const SG_TIME = String.raw`(\d{1,2} [A-Za-z]{3} \d{4}) (\d{1,2}):(\d{2})\s*(?:SGT|GMT\+0?8:?00)`
+
+// "22 Oct 2026 13:05SGT", "22 Oct 2026 13:05 SGT", "2 Oct 2026 06:42GMT+08:00"
+function parseTrustWhen(value: string): { date: string; time: string } | null {
+  const m = value.match(new RegExp(SG_TIME))
+  const date = m && parseDayMonthYear(m[1])
+  if (!m || !date) return null
+  return { date, time: `${m[2].padStart(2, "0")}:${m[3]}` }
+}
+
+function parseTrust(email: AlertEmail): ParsedAlert {
+  const body = email.body.replace(/\s+/g, " ")
+
+  // Card spending, local or overseas. Trust words these in several orders
+  // ("at X on DATE with Y card", "at X with Y card on DATE", "using Y card
+  // at X on DATE"), so each part is found on its own.
+  const spent = body.match(/You've spent ([A-Z]{3}) ([\d,]+\.\d{2})/)
+  if (spent) {
+    const merchant = body.match(
+      new RegExp(String.raw`\bat (.+?) (?:on ${SG_TIME}|with .+? card)`)
+    )
+    const when = parseTrustWhen(body)
+    const value = parseMoney(spent[2])
+    if (!merchant || !when || value === null) {
+      return { kind: "unrecognised", bank: "trust", reason: "bad card alert" }
+    }
+    const foreign = spent[1] !== "SGD"
+    return {
+      kind: "alert",
+      alert: {
+        bank: "trust",
+        method: "card",
+        date: when.date,
+        time: when.time,
+        // A foreign charge's SGD amount is only known from the Statement
+        amount: foreign ? null : -value,
+        ...(foreign ? { foreignAmount: -value, currency: spent[1] } : {}),
+        payee: cleanTrustMerchant(merchant[1]),
+        payeeKind: "merchant",
+        bankDescription: email.body,
+      },
+    }
+  }
+
+  const paynow = body.match(
+    /Your PayNow transfer of SGD ([\d,]+\.\d{2}) from A\/C ending (\d+) to (.+?) on (\d{1,2} [A-Za-z]{3} \d{4} \d{1,2}:\d{2}\s*SGT) is successful/i
+  )
+  if (paynow) {
+    const when = parseTrustWhen(paynow[4])
+    const value = parseMoney(paynow[1])
+    if (!when || value === null) {
+      return { kind: "unrecognised", bank: "trust", reason: "bad PayNow alert" }
+    }
+    return {
+      kind: "alert",
+      alert: {
+        bank: "trust",
+        method: "paynow",
+        date: when.date,
+        time: when.time,
+        amount: -value,
+        payee: paynow[3].trim(),
+        payeeKind: "person",
+        accountEnding: paynow[2],
+        bankDescription: email.body,
+      },
+    }
+  }
+
+  // A cancelled charge comes within days; a refund can take weeks
+  const undone =
+    body.match(
+      /We've cancelled your purchase of SGD ([\d,]+\.\d{2}) at (.+?) on (\d{1,2} [A-Za-z]{3} \d{4} \d{1,2}:\d{2}\s*SGT)/i
+    ) ??
+    body.match(
+      /We've refunded SGD ([\d,]+\.\d{2}) from (.+?) to your Trust card on (\d{1,2} [A-Za-z]{3} \d{4} \d{1,2}:\d{2}\s*SGT)/i
+    )
+  if (undone) {
+    const when = parseTrustWhen(undone[3])
+    const value = parseMoney(undone[1])
+    if (!when || value === null) {
+      return { kind: "unrecognised", bank: "trust", reason: "bad refund alert" }
+    }
+    return {
+      kind: "reversal",
+      reversal: {
+        bank: "trust",
+        date: when.date,
+        amount: value,
+        payee: cleanTrustMerchant(undone[2]),
+        accountEnding: "",
+        daysBack: /refunded/i.test(body) ? 60 : 3,
+      },
+    }
+  }
+
+  return { kind: "unrecognised", bank: "trust", reason: "unknown Trust format" }
 }
 
 function parseOcbc(email: AlertEmail): ParsedAlert {
@@ -430,5 +551,6 @@ export function parsePaymentAlert(email: AlertEmail): ParsedAlert {
   }
   if (bank === "ocbc") return parseOcbc(email)
   if (bank === "uob") return parseUob(email)
+  if (bank === "trust") return parseTrust(email)
   return { kind: "not-an-alert" }
 }

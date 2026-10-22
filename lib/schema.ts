@@ -174,7 +174,7 @@ export const balanceHistory = sqliteTable("balance_history", {
 // "unrecognised" ones are surfaced to the owner, never dropped.
 export const alertEmails = sqliteTable("alert_emails", {
   message_id: text("message_id").primaryKey(),
-  bank: text("bank", { enum: ["ocbc", "uob"] }).notNull(),
+  bank: text("bank", { enum: ["ocbc", "uob", "trust"] }).notNull(),
   received_at: text("received_at").notNull(),
   status: text("status", {
     enum: ["saved", "self-transfer", "reversed", "ignored", "unrecognised"],

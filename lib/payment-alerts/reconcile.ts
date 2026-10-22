@@ -38,7 +38,8 @@ export async function confirmMatchingAlert(
   line: StatementLine,
   taken: Set<string>
 ): Promise<string | null> {
-  if (line.bank !== "ocbc" && line.bank !== "uob") return null
+  const bank = line.bank
+  if (bank !== "ocbc" && bank !== "uob" && bank !== "trust") return null
 
   const candidates = await db
     .select({ id: transactions.id, date: transactions.date })
@@ -47,7 +48,7 @@ export async function confirmMatchingAlert(
       and(
         eq(transactions.source, "alert"),
         isNull(transactions.confirmed_at),
-        eq(transactions.bank, line.bank),
+        eq(transactions.bank, bank),
         gte(transactions.amount, line.amount - 0.005),
         lte(transactions.amount, line.amount + 0.005),
         // An alert dated up to DAYS_AFTER before the line, or a day after
