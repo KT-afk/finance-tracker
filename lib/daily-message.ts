@@ -10,7 +10,7 @@ import { withOwedShares } from "./owed"
 import { alertEmails, transactions } from "./schema"
 
 // How SPayLater bills appear in alerts and on Statements
-const LATER_BILL_PATTERN = /\bSPAYLATER\b|\bSHOPEEPAY SG SPL\b/i
+export const LATER_BILL_PATTERN = /\bSPAYLATER\b|\bSHOPEEPAY SG SPL\b/i
 
 const SGT_OFFSET_MS = 8 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -58,19 +58,22 @@ function sgtDate(instant: Date): string {
   return new Date(instant.getTime() + SGT_OFFSET_MS).toISOString().slice(0, 10)
 }
 
-function median(values: number[]): number {
+export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-function shiftDate(date: string, days: number): string {
+export function shiftDate(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
 
-function payeeOf(row: { payee: string | null; description: string }): string {
+export function payeeOf(row: {
+  payee: string | null
+  description: string
+}): string {
   return row.payee ?? row.description.slice(0, 40)
 }
 

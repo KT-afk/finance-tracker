@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { buildDailySummary, formatDailyMessage } from "@/lib/daily-message"
+import { buildMonthlyRecap, formatMonthlyRecap } from "@/lib/monthly-recap"
 import { ingestPaymentAlerts } from "@/lib/payment-alerts/ingest"
 import { OutlookAuthError } from "@/lib/payment-alerts/outlook"
 import { sendTelegram } from "@/lib/telegram"
@@ -28,6 +29,7 @@ function appUrl(): string | null {
  * The daily job: read new Payment Alerts, then send the 10pm message.
  * Vercel Cron calls it with `Authorization: Bearer $CRON_SECRET`.
  * `?dryRun=1` reads mail and builds the message without saving or sending.
+ * On the 1st it also sends the recap of the month before (`?recap=1` forces it).
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim()
@@ -68,5 +70,18 @@ export async function GET(req: NextRequest) {
   const message = formatDailyMessage(summary, appUrl())
   if (!dryRun) await sendTelegram(message)
 
-  return NextResponse.json({ ingested, sent: !dryRun, message })
+  // On the 1st, also recap the month that just ended
+  let recap: string | null = null
+  const sgt = new Date(now.getTime() + SGT_OFFSET_MS)
+  if (sgt.getUTCDate() === 1 || req.nextUrl.searchParams.get("recap") === "1") {
+    const last = new Date(
+      Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth() - 1, 1)
+    )
+    recap = formatMonthlyRecap(
+      await buildMonthlyRecap(last.toISOString().slice(0, 7))
+    )
+    if (!dryRun) await sendTelegram(recap)
+  }
+
+  return NextResponse.json({ ingested, sent: !dryRun, message, recap })
 }
