@@ -22,6 +22,10 @@ _Avoid_: Split, portion
 A share the owner decided not to collect; it becomes the owner's spending again.
 _Avoid_: Written off, waived
 
+**Budget**:
+The owner's monthly spending limit for one category, measured on spending. Unspent amounts do not carry over to the next month.
+_Avoid_: Cap, allowance
+
 ### Finance agent
 
 **Finance agent**:
