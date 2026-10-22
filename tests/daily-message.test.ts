@@ -35,6 +35,7 @@ function seed(dbPath: string) {
       ('rent', '2026-10-03', 'FAST PAYMENT OTHR-rent to LANDLORD via PayNow-Mobile', -1200, 'ocbc', 'Housing', 0, 'r1', 'x', 'alert'),
       ('dinner', '2026-10-10', 'NETS QR FANCY PLACE', -128, 'ocbc', 'Food & Drink', 0, 'd1', 'x', 'alert'),
       ('lunch', '2026-10-21', 'NETS QR CAFE', -12, 'ocbc', 'Food & Drink', 0, 'l1', 'x', 'alert'),
+      ('later', '2026-10-09', 'SPAYLATER SG', -580, 'uob', 'Shopping', 1, 'sl1', 'x', 'alert'),
       ('bus', '2026-10-21', 'BUS', -2, 'uob', 'Transport', 0, 'b1', 'x', 'alert'),
       ('friend', '2026-10-21', 'FAST PAYMENT OTHR-OTHR to JXXX via PayNow-Mobile', -30, 'ocbc', 'Unlabelled', 0, 'f1', 'x', 'alert'),
       ('wise', '2026-10-21', 'FAST PAYMENT to WISE', -100, 'ocbc', 'Self Transfer', 0, 'w1', 'x', 'alert');
@@ -71,7 +72,9 @@ async function main() {
       ["Transport", 2],
     ])
     // Month: rent 1200 + dinner 128 + 44, Self Transfer excluded
-    assert.equal(s.monthTotal, 1372)
+    // SPayLater's $580 bill counts in the month but is not day-to-day or unusual
+    assert.equal(s.monthTotal, 1952)
+    assert.equal(s.laterBills, 580)
     assert.equal(s.rent, 1200)
     assert.deepEqual(
       s.unusual.map((u) => [u.payee, u.amount]),
@@ -81,7 +84,7 @@ async function main() {
     assert.equal(s.daysElapsed, 21)
     assert.equal(s.averagePerDay, 44 / 21)
     assert.equal(s.salary, 4500)
-    assert.equal(s.pace, 1200 + 128 + (44 / 21) * 31)
+    assert.equal(s.pace, 1200 + 580 + 128 + (44 / 21) * 31)
     assert.deepEqual(s.unlabelled, { count: 1, total: 30 })
     assert.equal(s.warnings.length, 1)
 
@@ -100,7 +103,7 @@ async function main() {
     )
     assert.match(
       text,
-      /Oct so far: \$1,372 \(rent \$1,200 · unusual \$128 · day-to-day \$44\)/
+      /Oct so far: \$1,952 \(rent \$1,200 · SPayLater bill \$580 · unusual \$128 · day-to-day \$44\)/
     )
     assert.match(text, /of \$4,500 salary/)
     assert.match(
