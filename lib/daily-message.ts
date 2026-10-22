@@ -9,6 +9,9 @@ import { db } from "./db"
 import { withOwedShares } from "./owed"
 import { alertEmails, transactions } from "./schema"
 
+// How SPayLater bills appear in alerts and on Statements
+const LATER_BILL_PATTERN = /\bSPAYLATER\b|\bSHOPEEPAY SG SPL\b/i
+
 const SGT_OFFSET_MS = 8 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -32,6 +35,8 @@ export type DailySummary = {
   }
   monthTotal: number
   rent: number
+  // Buy-now-pay-later bills: last month's purchases, paid this month
+  laterBills: number
   unusual: {
     date: string
     payee: string
@@ -154,12 +159,14 @@ export async function buildDailySummary(
   for (const row of history) {
     const c = classifyCashFlow(row)
     if (!c.countsAsSpend) continue
+    if (LATER_BILL_PATTERN.test(row.description)) continue
     const list = usual.get(c.category) ?? []
     list.push(Math.abs(c.effectiveAmount))
     usual.set(c.category, list)
   }
 
   let rent = 0
+  let laterBills = 0
   const unusual: DailySummary["unusual"] = []
   for (const row of monthRows) {
     const c = classifyCashFlow(row)
@@ -167,6 +174,12 @@ export async function buildDailySummary(
     const amount = Math.abs(c.effectiveAmount)
     if (c.category === "Housing") {
       rent += amount
+      continue
+    }
+    // A SPayLater bill is earlier purchases billed now: real money out this
+    // month, but neither unusual nor day-to-day spending
+    if (LATER_BILL_PATTERN.test(row.description)) {
+      laterBills += amount
       continue
     }
     // An Unlabelled payment could be anything, so there is no "usual" to
@@ -188,7 +201,7 @@ export async function buildDailySummary(
     }
   }
   const unusualTotal = unusual.reduce((sum, u) => sum + u.amount, 0)
-  const dayToDay = Math.max(0, summary.spend - rent - unusualTotal)
+  const dayToDay = Math.max(0, summary.spend - rent - laterBills - unusualTotal)
   const averagePerDay = daysElapsed > 0 ? dayToDay / daysElapsed : 0
 
   // Salary: the latest income credit in the last two months that is not
@@ -231,11 +244,12 @@ export async function buildDailySummary(
     },
     monthTotal: summary.spend,
     rent,
+    laterBills,
     unusual,
     dayToDay,
     averagePerDay,
     salary: salaryRow ? salaryRow.amount : null,
-    pace: rent + unusualTotal + averagePerDay * daysInMonth,
+    pace: rent + laterBills + unusualTotal + averagePerDay * daysInMonth,
     unlabelled: { count: unlabelledRows.length, total: summary.unlabelled },
     warnings,
   }
@@ -288,6 +302,7 @@ export function formatDailyMessage(
   lines.push("")
   const parts = [
     s.rent > 0 ? `rent ${sgd.format(s.rent)}` : null,
+    s.laterBills > 0 ? `SPayLater bill ${sgd.format(s.laterBills)}` : null,
     s.unusual.length
       ? `unusual ${sgd.format(s.unusual.reduce((sum, u) => sum + u.amount, 0))}`
       : null,
