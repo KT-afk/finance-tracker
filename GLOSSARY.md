@@ -15,8 +15,12 @@ The full amount of outgoing payments, before taking out other people's shares.
 _Avoid_: Total spend, raw spending
 
 **Share**:
-The part of an outgoing payment that another person should cover.
+The part of an outgoing payment that another person should cover. It counts as theirs from the moment the owner pays, whether or not it has been repaid, until the owner forgives it.
 _Avoid_: Split, portion
+
+**Forgiven share**:
+A share the owner decided not to collect; it becomes the owner's spending again.
+_Avoid_: Written off, waived
 
 ### Finance agent
 
@@ -25,11 +29,11 @@ The assistant that answers the owner's questions about their money and can make 
 _Avoid_: Bot, AI, assistant
 
 **Change log**:
-The record of every change the finance agent made to the owner's data, which the owner can ask the agent about.
+The permanent record of every change the finance agent made to the owner's data: what changed, from what to what, when, and which request caused it. Any entry can be undone, and the undo is itself recorded.
 _Avoid_: Audit trail, history
 
 **Memory**:
-A fact about the owner that the finance agent keeps and uses when answering, such as an expected recurring payment.
+A fact about the owner that the finance agent keeps and uses when answering, such as an expected recurring payment. The agent may suggest one, but only the owner's confirmation saves it.
 _Avoid_: Notes, preferences
 
 **Topic**:
