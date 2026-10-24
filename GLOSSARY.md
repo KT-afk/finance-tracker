@@ -22,6 +22,18 @@ _Avoid_: Split, portion
 A share the owner decided not to collect; it becomes the owner's spending again.
 _Avoid_: Written off, waived
 
+**Income**:
+Money coming into the owner's accounts that is earned, not a transfer between their own accounts or a repayment of a share.
+_Avoid_: Earnings, inflow
+
+**Savings**:
+Income minus spending for a period.
+_Avoid_: Net, surplus
+
+**Balance**:
+The amount in one of the owner's accounts as of a statement date; never a live figure.
+_Avoid_: Current balance, funds
+
 **Budget**:
 The owner's monthly spending limit for one category, measured on spending. Unspent amounts do not carry over to the next month.
 _Avoid_: Cap, allowance
@@ -29,11 +41,11 @@ _Avoid_: Cap, allowance
 ### Finance agent
 
 **Finance agent**:
-The assistant that answers the owner's questions about their money and can make changes on their behalf.
+The assistant that answers the owner's questions about their money and can make changes on their behalf once the owner confirms each one.
 _Avoid_: Bot, AI, assistant
 
 **Change log**:
-The permanent record of every change the finance agent made to the owner's data: what changed, from what to what, when, and which request caused it. Any entry can be undone, and the undo is itself recorded.
+The permanent record of every confirmed change the finance agent made to the owner's data: what changed, from what to what, when, and which request caused it. Any entry can be undone, and the undo is itself recorded.
 _Avoid_: Audit trail, history
 
 **Memory**:
