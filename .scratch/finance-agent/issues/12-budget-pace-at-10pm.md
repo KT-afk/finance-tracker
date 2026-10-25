@@ -6,7 +6,7 @@
 
 **Blocked by:** 11
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Pace lines appear for categories with a budget only
 - [ ] Warning lines appear at the top at 80% and at 100%
@@ -14,3 +14,7 @@
 - [ ] Daily message tests cover pace and both warning levels
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

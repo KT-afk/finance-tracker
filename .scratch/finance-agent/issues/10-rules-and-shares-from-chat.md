@@ -6,7 +6,7 @@
 
 **Blocked by:** 07
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Category rule create and edit go through proposals and the change log
 - [ ] Setting a share goes through proposals and the change log and changes spending accordingly
@@ -14,3 +14,7 @@
 - [ ] Delete, amount, date and upload changes are refused with an explanation
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

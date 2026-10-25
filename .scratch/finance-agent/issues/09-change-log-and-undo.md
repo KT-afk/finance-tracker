@@ -6,7 +6,7 @@
 
 **Blocked by:** 07
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Asking for recent changes lists change log entries with before and after
 - [ ] Undo restores the before value without confirmation
@@ -15,3 +15,7 @@
 - [ ] Change log entries are never edited or deleted
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

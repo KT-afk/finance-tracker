@@ -6,7 +6,7 @@
 
 **Blocked by:** 01, 07
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Setting or changing a budget is a confirmed, logged, undoable change
 - [ ] Budget status compares spending (the owner's share) with the limit
@@ -15,3 +15,7 @@
 - [ ] Months are calendar months in Singapore time
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): ready for agent with calendar months in Singapore time, as written. The spec marks this as provisional pending a pay-cycle decision; keep the month boundary in one function so it is easy to change.

@@ -6,7 +6,7 @@
 
 **Blocked by:** 02, 05
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] The agent never changes data without a confirmed proposal and never claims it did
 - [ ] Proposals name the exact transaction and the before and after category
@@ -17,3 +17,7 @@
 - [ ] Agent and Telegram handler tests cover propose, confirm, reject, expiry and conflict
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

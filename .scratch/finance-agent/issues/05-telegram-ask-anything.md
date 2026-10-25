@@ -6,7 +6,7 @@
 
 **Blocked by:** 03
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Requests without the correct secret token are rejected
 - [ ] Messages from anyone but the owner, or from other chats, are ignored
@@ -18,3 +18,7 @@
 - [ ] Telegram handler tests use a fake agent and fake sender
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): ready for agent; ticket 03 is resolved so this is unblocked. The agent builds the handler, webhook route and setup script with tests. The owner must create the bot, the group and its two topics, set the new secrets and run the setup script; the agent should list those steps in the ticket when done.

@@ -6,7 +6,7 @@
 
 **Blocked by:** 05
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] The daily message goes to the Daily insights topic
 - [ ] A reply to a daily message is answered with that message as context
@@ -14,3 +14,7 @@
 - [ ] Telegram handler tests cover reply routing
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

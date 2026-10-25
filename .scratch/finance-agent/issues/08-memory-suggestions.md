@@ -6,7 +6,7 @@
 
 **Blocked by:** 04, 07
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] "Remember that…" produces a memory proposal with confirm and reject
 - [ ] Agent-suggested memories also need confirmation
@@ -14,3 +14,7 @@
 - [ ] Saved memories appear in the change log and are used in later answers
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

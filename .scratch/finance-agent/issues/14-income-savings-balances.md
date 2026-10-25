@@ -6,7 +6,7 @@
 
 **Blocked by:** 01
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Income excludes transfers between the owner's own accounts and share repayments
 - [ ] Savings equals income minus spending for the period
@@ -15,3 +15,7 @@
 - [ ] Agent tests cover income, savings, dated balances and affordability
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): ready for agent and unblocked (01 resolved). Can run in parallel with the Telegram work.

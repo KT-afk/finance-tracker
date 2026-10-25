@@ -8,7 +8,11 @@
 
 **Blocked by:** 07
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] The "read-only" wording is gone
 - [ ] The instructions state the spec's rules for proposals and forbidden changes
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.

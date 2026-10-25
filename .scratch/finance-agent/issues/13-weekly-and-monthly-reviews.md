@@ -6,7 +6,7 @@
 
 **Blocked by:** 06, 11
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] Sunday sends a weekly review instead of the daily message
 - [ ] The 1st sends a monthly review instead of the daily message (monthly wins if both)
@@ -15,3 +15,7 @@
 - [ ] Daily message tests cover date selection and review contents
 
 Spec: `.scratch/finance-agent/spec.md`
+
+## Comments
+
+Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.
