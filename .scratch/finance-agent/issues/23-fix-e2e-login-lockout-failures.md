@@ -15,3 +15,10 @@ Note for this environment: the project pins Playwright 1.61.1, so the pre-instal
 - [ ] Lockout tests reset or isolate the lockout so later tests can log in
 - [ ] Dashboard and insights failures are fixed or the tests updated to match the demo data
 - [ ] The full e2e suite passes on a fresh demo database
+
+## Comments
+
+Security check (2026-10-25). Of the four security failures, only the missing headers is a real gap; it is now ticket 24 (P1). The other three are broken tests, not missing features:
+
+- **Login lockout works.** After 5 wrong passwords `/api/login` returns 429 with "Too many login attempts. Try again later." The test looks for the text "too many failed attempts", so it never matches. Fix the test's text. This lockout is also what locks out the 10 tests that run after it. The login route already supports an `x-finance-tracker-test-client` header (outside production) that gives each test its own attempt count; the lockout tests should send it.
+- **Rate limiting works.** `/api/transactions/recategorize` allows 10 requests a minute. But the tests send requests without logging in, so `proxy.ts` answers 401 before the rate limit is reached. The tests must log in first.
