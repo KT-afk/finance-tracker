@@ -148,3 +148,26 @@ Concise rules for building accessible, fast, delightful UIs. Use MUST/SHOULD/NEV
 - MUST: Increase contrast on `:hover`/`:active`/`:focus`
 - SHOULD: Match browser UI to bg
 - SHOULD: Avoid dark color gradient banding (use background images when needed)
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Project book
+
+`docs/book/` records how the project is built, in simple English.
+
+- MUST: Read `docs/book/03-lessons.md` before running database, build or test commands
+- MUST: After resolving a ticket, add a short section to `docs/book/02-the-finance-agent.md` (or the matching chapter)
+- MUST: Add any mistake or surprise to `docs/book/03-lessons.md`
+- MUST: Start by reading `docs/book/04-where-we-are.md`; update it before ending a working session
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

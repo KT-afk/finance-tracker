@@ -1,0 +1,42 @@
+# Chapter 4: Where we are
+
+This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
+
+Last updated: 2026-10-25, at the end of a cloud session on branch `ccr-f84f8aa4-x0x6n3`.
+
+## Done
+
+- Finance agent tickets 01, 02, 03, 04 and 15 (see chapter 2).
+- Safety tickets 22 (test setup can't touch the live database) and 24 (security headers).
+- All tickets triaged. Review findings filed as backlog tickets with priorities.
+- Four pstack skills added: `/create-verification-skill`, `/maintain-verification-skill`, `/correct`, `/reflect` (see chapter 1).
+- Code-review plugins enabled on the owner's account: Anthropic `code-review`, `codex-review`, `codex-dispatch`. The Codex ones need the `codex` CLI and a login.
+- Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
+
+## Next, in order
+
+1. **Merge the branch.** Open a pull request from `ccr-f84f8aa4-x0x6n3` into `main`, review it, and merge.
+2. **Ticket 14:** income, savings and balances. Ready, not blocked, needs no setup.
+3. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
+4. **Ticket 23:** fix the 17 failing browser tests. Try `/create-verification-skill` first; a reliable way to drive the app makes this easier.
+5. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
+
+Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
+
+## Open questions for the owner
+
+- Ticket 11 (budgets) uses calendar months. Change it if you would rather use pay cycles.
+- Ticket 19 defaults: remove the unused `/api/agent` route, and widen "Topic" in `GLOSSARY.md`. Overrule before it is picked up if you disagree.
+- A card payment to Railway ($6.37 on 2026-05-06) appears in a bank statement used by a test. Check for an old Railway plan still charging you.
+
+## Starting on your own computer
+
+```bash
+git fetch origin
+git checkout ccr-f84f8aa4-x0x6n3   # or main, once merged
+npm install
+```
+
+Then start Claude Code and say: "Read `docs/book/` and carry on from chapter 4."
+
+Before running any database command, check `.env.local`. If it sets `TURSO_DATABASE_URL`, you are pointing at the live database (chapter 3, lesson 1).
