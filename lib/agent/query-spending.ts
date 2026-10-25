@@ -1,10 +1,13 @@
 import { db } from "../db"
-import { transactions, EXCLUDED_FROM_SPEND, CATEGORIES } from "../schema"
-import { and, eq, gte, lte, lt, notInArray } from "drizzle-orm"
-import { loadOwedShares } from "../owed"
+import { transactions, CATEGORIES } from "../schema"
+import { and, gte, lte } from "drizzle-orm"
+import { classifyCashFlow } from "../cash-flow"
+import { withOwedShares } from "../owed"
 import type Anthropic from "@anthropic-ai/sdk"
 
 export type GroupBy = "category" | "month" | "none"
+// "spending" is the owner's part; "gross" is what left their accounts
+export type Measure = "spending" | "gross"
 
 export type QuerySpendingResult = {
   rows: Array<{ group: string; total: number; count: number }>
@@ -12,54 +15,46 @@ export type QuerySpendingResult = {
   count: number
 }
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 export async function querySpending(
   category?: string,
   dateFrom?: string,
   dateTo?: string,
-  groupBy: GroupBy = "none"
+  groupBy: GroupBy = "none",
+  measure: Measure = "spending"
 ): Promise<QuerySpendingResult> {
-  const conditions = [
-    lt(transactions.amount, 0),
-    notInArray(transactions.category, [...EXCLUDED_FROM_SPEND]),
-  ]
+  const conditions = []
+  if (dateFrom) conditions.push(gte(transactions.date, dateFrom))
+  if (dateTo) conditions.push(lte(transactions.date, dateTo))
 
-  if (category) {
-    conditions.push(eq(transactions.category, category))
-  }
-
-  if (dateFrom) {
-    conditions.push(gte(transactions.date, dateFrom))
-  }
-
-  if (dateTo) {
-    conditions.push(lte(transactions.date, dateTo))
-  }
-
-  const rows = await db
-    .select({
-      id: transactions.id,
-      category: transactions.category,
-      amount: transactions.amount,
-      date: transactions.date,
-    })
-    .from(transactions)
-    .where(and(...conditions))
-  const owedShares = await loadOwedShares()
+  // Same classification as the dashboard, so the agent agrees with it
+  const rows = await withOwedShares(
+    await db
+      .select()
+      .from(transactions)
+      .where(and(...conditions))
+  )
 
   const map = new Map<string, { total: number; count: number }>()
   let total = 0
   let count = 0
 
   for (const row of rows) {
-    // Only the owner's part of a split payment is their spend
-    const spend = Math.abs(row.amount) - (owedShares.get(row.id) ?? 0)
-    if (spend <= 0) continue
+    const classification = classifyCashFlow(
+      measure === "gross" ? { ...row, owedShare: 0 } : row
+    )
+    if (!classification.countsAsSpend) continue
+    if (category && classification.category !== category) continue
+    const spend = Math.abs(classification.effectiveAmount)
     count++
     const key =
       groupBy === "month"
         ? row.date.slice(0, 7)
         : groupBy === "category"
-          ? row.category
+          ? classification.category
           : "all"
 
     const current = map.get(key) ?? { total: 0, count: 0 }
@@ -69,9 +64,13 @@ export async function querySpending(
 
   return {
     rows: [...map]
-      .map(([group, v]) => ({ group, total: v.total, count: v.count }))
+      .map(([group, v]) => ({
+        group,
+        total: roundMoney(v.total),
+        count: v.count,
+      }))
       .sort((a, b) => b.total - a.total),
-    total,
+    total: roundMoney(total),
     count,
   }
 }
@@ -79,7 +78,8 @@ export async function querySpending(
 export const querySpendingTool = {
   name: "query_spending",
   strict: true,
-  description: "Query spending data with optional filters",
+  description:
+    "Total spending with optional filters. By default amounts are the owner's spending: each payment minus the shares other people should cover (forgiven shares count again). Set measure to gross only when the owner asks for gross spending or what left their accounts.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -98,6 +98,10 @@ export const querySpendingTool = {
       group_by: {
         type: "string",
         enum: ["category", "month", "none"],
+      },
+      measure: {
+        type: "string",
+        enum: ["spending", "gross"],
       },
     },
     additionalProperties: false,

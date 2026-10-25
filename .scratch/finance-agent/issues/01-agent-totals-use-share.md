@@ -6,12 +6,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Asking "how much on Food this month?" with a $120 dinner carrying an $80 share counts $40
-- [ ] A forgiven share counts as the owner's spending again
-- [ ] Asking for gross spending returns the full payment amounts
-- [ ] Agent totals match the dashboard's spending figures for the same period
-- [ ] Agent tests seed shares and forgiven shares and check both spending and gross answers
+- [x] Asking "how much on Food this month?" with a $120 dinner carrying an $80 share counts $40
+- [x] A forgiven share counts as the owner's spending again
+- [x] Asking for gross spending returns the full payment amounts
+- [x] Agent totals match the dashboard's spending figures for the same period
+- [x] Agent tests seed shares and forgiven shares and check both spending and gross answers
 
 Spec: `.scratch/finance-agent/spec.md`

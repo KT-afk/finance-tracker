@@ -7,6 +7,7 @@ type QueryInput = {
   date_from?: string
   date_to?: string
   group_by?: "category" | "month" | "none"
+  measure?: "spending" | "gross"
 }
 
 function parseToolInput(input: unknown): QueryInput {
@@ -14,7 +15,9 @@ function parseToolInput(input: unknown): QueryInput {
     throw new Error("Tool input must be an object")
   const values = input as Record<string, unknown>
   for (const key of Object.keys(values)) {
-    if (!["category", "date_from", "date_to", "group_by"].includes(key))
+    if (
+      !["category", "date_from", "date_to", "group_by", "measure"].includes(key)
+    )
       throw new Error("Unknown filter")
     if (typeof values[key] !== "string")
       throw new Error(key + " must be a string")
@@ -30,6 +33,11 @@ function parseToolInput(input: unknown): QueryInput {
     !["category", "month", "none"].includes(filters.group_by)
   )
     throw new Error("Invalid group_by")
+  if (
+    filters.measure !== undefined &&
+    !["spending", "gross"].includes(filters.measure)
+  )
+    throw new Error("Invalid measure")
   for (const date of [filters.date_from, filters.date_to]) {
     if (date === undefined) continue
     const parsed = new Date(date)
@@ -90,7 +98,7 @@ export async function runFinanceAgent(
       system:
         "You are a read-only personal finance assistant. The current date in Singapore is " +
         currentDate +
-        ". Use query_spending for spending facts and base amounts only on its results. It reports gross expenses, not income or balances. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
+        ". Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
       tools: [querySpendingTool],
       ...(round === maxToolRounds
         ? { tool_choice: { type: "none" as const } }
@@ -143,7 +151,8 @@ export async function runFinanceAgent(
             filters.category,
             filters.date_from,
             filters.date_to,
-            filters.group_by ?? "none"
+            filters.group_by ?? "none",
+            filters.measure ?? "spending"
           )
           return { ...result, content: JSON.stringify(spendingResult) }
         } catch {

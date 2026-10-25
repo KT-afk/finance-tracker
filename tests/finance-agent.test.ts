@@ -83,6 +83,29 @@ async function main() {
     query: async () => ({ rows: [], total: 0, count: 0 }),
   })
   assert.equal(rounds, 5)
+  const measures: unknown[] = []
+  const measureRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("Gross vs mine", {
+    createMessage: async (params) => {
+      measureRequests.push(structuredClone(params))
+      if (measureRequests.length === 1)
+        return response("tool_use", [
+          call("m1", {}),
+          call("m2", { measure: "gross" }),
+          call("m3", { measure: "net" }),
+        ])
+      return done
+    },
+    query: async (_c, _f, _t, _g, measure) => {
+      measures.push(measure)
+      return { rows: [], total: 0, count: 0 }
+    },
+  })
+  assert.deepEqual(measures, ["spending", "gross"])
+  const measureResults = measureRequests[1].messages[2]
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.equal(measureResults[2].is_error, true)
+  assert.match(String(measureRequests[0].system), /owner's spending/)
   console.log("finance-agent: passed")
 }
 
