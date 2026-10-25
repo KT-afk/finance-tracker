@@ -8,8 +8,8 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `db:setup-demo` fails before migrating when `TURSO_DATABASE_URL` or `DATABASE_URL` is set, unless `ALLOW_REMOTE_DEMO_SEED=1`, matching the seed script's guard
-- [ ] The error says which variable to unset
-- [ ] Migrating the live database stays possible through a separate, explicit command
+- [x] `db:setup-demo` fails before migrating when `TURSO_DATABASE_URL` or `DATABASE_URL` is set, unless `ALLOW_REMOTE_DEMO_SEED=1`, matching the seed script's guard
+- [x] The error says which variable to unset
+- [x] Migrating the live database stays possible through a separate, explicit command

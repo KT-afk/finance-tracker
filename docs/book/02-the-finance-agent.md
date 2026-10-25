@@ -55,3 +55,11 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **How we checked.** We built the app, started it on a test database and read the headers on a page, a redirect and an API reply. The browser test for headers now passes.
 
 **Also found.** Of the four failing security tests, only this one was a real gap. Login lockout and rate limiting both work; their tests were wrong. Those notes are on ticket 23.
+
+## Ticket 22: Test setup can't touch the live database (2026-10-25)
+
+**The problem.** Earlier today, `npm run db:setup-demo` changed the live database by mistake (see chapter 3, lesson 1).
+
+**What we built.** A small guard, `scripts/require-local-db.mjs`, now runs first. If a remote database is set, it stops before anything else runs and says which setting to remove. To change the live database on purpose, there is a separate command: `npm run db:migrate`.
+
+**How we checked.** A test runs the guard with and without the remote settings. We also ran `db:setup-demo` in this environment, which has the live database set. It stopped with a clear message and changed nothing.

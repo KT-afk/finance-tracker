@@ -15,7 +15,7 @@ env -u TURSO_DATABASE_URL -u TURSO_AUTH_TOKEN -u DATABASE_URL -u DATABASE_AUTH_T
   FINANCE_DB_PATH=/path/to/test.db npm run db:setup-demo
 ```
 
-Ticket 22 will make `db:setup-demo` refuse to run against a remote database.
+Since ticket 22, `db:setup-demo` refuses to run when either setting is set. To change the live database on purpose, use `npm run db:migrate`.
 
 ## 2. Browser tests need the pre-installed browser
 
