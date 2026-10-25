@@ -17,7 +17,7 @@ async function main() {
   const requests: Anthropic.MessageCreateParamsNonStreaming[] = []
   let queries = 0
   const result = await runFinanceAgent("Compare spending", {
-    memories: async () => [],
+    loadMemories: async () => [],
     now: () => new Date("2026-09-12T17:00:00Z"),
     createMessage: async (params) => {
       requests.push(structuredClone(params))
@@ -60,7 +60,7 @@ async function main() {
   for (const reason of ["max_tokens", "refusal"] as const) {
     await assert.rejects(
       runFinanceAgent("test", {
-        memories: async () => [],
+        loadMemories: async () => [],
         createMessage: async () => response(reason, []),
       }),
       /did not finish/
@@ -68,14 +68,14 @@ async function main() {
   }
   await assert.rejects(
     runFinanceAgent("test", {
-      memories: async () => [],
+      loadMemories: async () => [],
       createMessage: async () => response("end_turn", []),
     }),
     /empty answer/
   )
   let rounds = 0
   await runFinanceAgent("test", {
-    memories: async () => [],
+    loadMemories: async () => [],
     createMessage: async (params) => {
       rounds++
       if (rounds === 5) {
@@ -90,7 +90,7 @@ async function main() {
   const measures: unknown[] = []
   const measureRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("Gross vs mine", {
-    memories: async () => [],
+    loadMemories: async () => [],
     createMessage: async (params) => {
       measureRequests.push(structuredClone(params))
       if (measureRequests.length === 1)
@@ -114,7 +114,7 @@ async function main() {
   const searches: unknown[] = []
   const searchRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("Which Grab rides?", {
-    memories: async () => [],
+    loadMemories: async () => [],
     createMessage: async (params) => {
       searchRequests.push(structuredClone(params))
       if (searchRequests.length === 1)
@@ -151,7 +151,7 @@ async function main() {
   assert.doesNotMatch(JSON.stringify(searchResults), /private database/)
   const historyRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("and last month?", {
-    memories: async () => [],
+    loadMemories: async () => [],
     history: [{ question: "Food this month?", answer: "$300." }],
     createMessage: async (params) => {
       historyRequests.push(structuredClone(params))
@@ -172,7 +172,7 @@ async function main() {
   const memoryRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("Anything unusual?", {
     now: () => new Date("2026-09-12T17:00:00Z"),
-    memories: async () => [
+    loadMemories: async () => [
       { key: "gym", value: "The $150 gym payment each month is expected" },
       { key: "rent", value: "Rent is split with Jane" },
     ],
@@ -203,7 +203,7 @@ async function main() {
   // With no memories saved the agent still answers, and says there are none
   const emptyRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   const plain = await runFinanceAgent("Hi", {
-    memories: async () => [],
+    loadMemories: async () => [],
     createMessage: async (params) => {
       emptyRequests.push(structuredClone(params))
       return done
@@ -211,6 +211,13 @@ async function main() {
   })
   assert.equal(plain.text, "Finished.")
   assert.match(JSON.stringify(emptyRequests[0].system), /No saved memories/)
+  const failedMemory = await runFinanceAgent("Hi", {
+    loadMemories: async () => {
+      throw new Error("no such table: ai_memory")
+    },
+    createMessage: async () => done,
+  })
+  assert.equal(failedMemory.text, "Finished.", "answers without memories")
   console.log("finance-agent: passed")
 }
 

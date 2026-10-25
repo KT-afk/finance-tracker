@@ -15,3 +15,5 @@
 - [ ] `formatMoney` in `lib/agent/search-transactions.ts` reuses an existing SGD formatter (`lib/display.ts` or `lib/daily-message.ts`) or they are merged
 - [ ] Search sorts rows before building results, instead of carrying `time` on the result and stripping it
 - [ ] Clearer names: `more` → `remaining_count`, `LIMIT` → `MAX_LISTED`
+- [ ] The system prompt is built in one `buildSystem(memories, date)` function instead of a constant, a local array and an inline literal (from ticket 04 review)
+- [ ] Tests get default dependencies from one helper instead of repeating `loadMemories: async () => []` in every call (from ticket 04 review)

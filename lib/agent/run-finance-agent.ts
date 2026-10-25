@@ -81,7 +81,7 @@ type Dependencies = {
   ) => Promise<Anthropic.Message>
   query: typeof querySpending
   search: typeof searchTransactions
-  memories: () => Promise<Memory[]>
+  loadMemories: () => Promise<Memory[]>
   now: () => Date
 }
 
@@ -102,7 +102,13 @@ export async function runFinanceAgent(
     })
   const query = overrides.query ?? querySpending
   const search = overrides.search ?? searchTransactions
-  const memories = await (overrides.memories ?? loadMemories)()
+  // A memory fault shouldn't block every question: answer without them
+  const memories = await (overrides.loadMemories ?? loadMemories)().catch(
+    (error) => {
+      console.error("Could not load memories", error)
+      return []
+    }
+  )
   // Fixed instructions, tools and memories rarely change, so they are cached;
   // the date and the conversation come after the cache mark
   const system: Anthropic.TextBlockParam[] = [
