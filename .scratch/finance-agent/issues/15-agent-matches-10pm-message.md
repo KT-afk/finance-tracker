@@ -8,7 +8,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A test seeds shares, a forgiven share and an unlabelled transfer, then compares the agent's totals with the 10pm message for the same day
-- [ ] Any difference is fixed so both use the owner's spending
+- [x] A test seeds shares, a forgiven share and an unlabelled transfer, then compares the agent's totals with the 10pm message for the same day
+- [x] Any difference is fixed so both use the owner's spending
+
+## Comments
+
+The 10pm message already used `withOwedShares` + `classifyCashFlow`, the same path as the agent, so no fix was needed. `tests/agent-spending.test.ts` now checks the agent total equals the 10pm month-so-far figure.

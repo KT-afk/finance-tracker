@@ -81,6 +81,11 @@ async function main() {
     )
     assert.equal(boardTotals["Unlabelled"], 50, "unlabelled transfers count")
 
+    // The 10pm message's month-so-far figure agrees too
+    const { buildDailySummary } = await import("../lib/daily-message")
+    const daily = await buildDailySummary(new Date("2026-09-30T14:00:00Z"))
+    assert.equal(byCategory.total, daily.monthTotal, "agrees with 10pm message")
+
     const gross = await querySpending(undefined, from, to, "none", "gross")
     assert.equal(gross.total, board.totalSpend + 80 - 30)
 
