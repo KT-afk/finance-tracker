@@ -166,6 +166,7 @@ Default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 - MUST: Read `docs/book/03-lessons.md` before running database, build or test commands
 - MUST: After resolving a ticket, add a short section to `docs/book/02-the-finance-agent.md` (or the matching chapter)
 - MUST: Add any mistake or surprise to `docs/book/03-lessons.md`
+- MUST: Start by reading `docs/book/04-where-we-are.md`; update it before ending a working session
 
 ### Domain docs
 
