@@ -61,7 +61,7 @@ async function main() {
       "none",
       "gross"
     )
-    assert.equal(grossFood.total, 120 + 10 + 30)
+    assert.equal(grossFood.total, 120 + 10, "off-bank rows are not gross")
 
     const byCategory = await querySpending(undefined, from, to, "category")
     const res = await dashboard.GET(
@@ -82,7 +82,7 @@ async function main() {
     assert.equal(boardTotals["Unlabelled"], 50, "unlabelled transfers count")
 
     const gross = await querySpending(undefined, from, to, "none", "gross")
-    assert.equal(gross.total, board.totalSpend + 80)
+    assert.equal(gross.total, board.totalSpend + 80 - 30)
 
     const byMonth = await querySpending(
       "Food & Drink",

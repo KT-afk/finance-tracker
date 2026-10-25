@@ -1,5 +1,5 @@
 import { db } from "../db"
-import { transactions, CATEGORIES } from "../schema"
+import { transactions, CATEGORIES, OFF_BANK } from "../schema"
 import { and, gte, lte } from "drizzle-orm"
 import { classifyCashFlow } from "../cash-flow"
 import { withOwedShares } from "../owed"
@@ -43,6 +43,9 @@ export async function querySpending(
   let count = 0
 
   for (const row of rows) {
+    // Gross matches the bank statement: off-bank rows (covered or forgiven
+    // amounts) never left the owner's accounts
+    if (measure === "gross" && row.bank === OFF_BANK) continue
     const classification = classifyCashFlow(
       measure === "gross" ? { ...row, owedShare: 0 } : row
     )
