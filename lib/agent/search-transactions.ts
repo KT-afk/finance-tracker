@@ -28,6 +28,7 @@ export type FoundTransaction = {
 export type SearchResult = {
   transactions: FoundTransaction[]
   total: number // the owner's spending across every match, not just those listed
+  gross_total: number // full payments across every match
   count: number
   more: number // matches not listed
 }
@@ -116,6 +117,7 @@ export async function searchTransactions(
 
   const matches: Array<FoundTransaction & { time: string | null }> = []
   let total = 0
+  let grossTotal = 0
   for (const row of rows) {
     // Same classification as the dashboard, so only payments count
     const classification = classifyCashFlow(row)
@@ -139,6 +141,7 @@ export async function searchTransactions(
     const title = row.payee ?? describeTransaction(row.description).title
     const shared = share !== amount
     total += share
+    grossTotal += amount
     matches.push({
       id: row.id,
       date: row.date,
@@ -159,6 +162,7 @@ export async function searchTransactions(
   return {
     transactions: matches.slice(0, LIMIT).map(({ time: _, ...t }) => t),
     total: roundMoney(total),
+    gross_total: roundMoney(grossTotal),
     count: matches.length,
     more: Math.max(0, matches.length - LIMIT),
   }
@@ -168,7 +172,7 @@ export const searchTransactionsTool = {
   name: "search_transactions",
   strict: true,
   description:
-    "Find the payments behind a number. Matches text in the merchant, description or memo, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner; total is the owner's spending across every match, and more is how many matches were not listed.",
+    "Find the payments behind a number. Matches text in the merchant, description or memo, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
   input_schema: {
     type: "object" as const,
     properties: {

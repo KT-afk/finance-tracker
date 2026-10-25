@@ -62,6 +62,7 @@ async function main() {
     assert.equal(dinner.transactions[0].your_share, 40)
     assert.match(dinner.transactions[0].display, /\$120.*\(your share \$40/)
     assert.equal(dinner.total, 40, "total is the owner's spending")
+    assert.equal(dinner.gross_total, 120)
     assert.equal(dinner.more, 0)
 
     const shopee = await searchTransactions({ text: "shopee" })
@@ -89,7 +90,13 @@ async function main() {
     )
 
     const none = await searchTransactions({ text: "netflix" })
-    assert.deepEqual(none, { transactions: [], total: 0, count: 0, more: 0 })
+    assert.deepEqual(none, {
+      transactions: [],
+      total: 0,
+      gross_total: 0,
+      count: 0,
+      more: 0,
+    })
 
     // Input validation
     assert.deepEqual(parseSearchInput({ text: "  grab  " }), { text: "grab" })

@@ -105,7 +105,7 @@ export async function runFinanceAgent(
       system:
         "You are a read-only personal finance assistant. The current date in Singapore is " +
         currentDate +
-        ". Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total, and when more is above 0 say how many more matched. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
+        ". Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total (the owner's spending, plus gross_total when it differs), say the totals cover every match, and when more is above 0 say how many more matched. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
       tools: [querySpendingTool, searchTransactionsTool],
       ...(round === maxToolRounds
         ? { tool_choice: { type: "none" as const } }

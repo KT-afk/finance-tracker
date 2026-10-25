@@ -122,7 +122,13 @@ async function main() {
     search: async (filters) => {
       searches.push(filters)
       if (filters.text === "x") throw new Error("private database details")
-      return { transactions: [], total: 0, count: 0, more: 0 }
+      return {
+        transactions: [],
+        total: 0,
+        gross_total: 0,
+        count: 0,
+        more: 0,
+      }
     },
   })
   assert.deepEqual(searches, [{ text: "Grab" }, { text: "x" }])
