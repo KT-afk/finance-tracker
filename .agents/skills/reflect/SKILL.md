@@ -42,10 +42,16 @@ Each reviewer and the synthesizer name a role line in the pstack settings file (
 | Lens      | Role line                                  | Default `model`         | Prompt template                    |
 | --------- | ------------------------------------------ | ----------------------- | ---------------------------------- |
 | Judgment  | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5-xhigh` | `references/judgment-reviewer.md`  |
-| Tooling   | `reflect tooling`                          | `grok-4.7-xhigh-fast`   | `references/tooling-reviewer.md`   |
+| Tooling   | `reflect tooling`                          | Codex (see below)       | `references/tooling-reviewer.md`   |
 | Divergent | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5-xhigh` | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in the `Task` response body.
+
+**Tooling reviewer on Codex (this repo's change; upstream uses Grok).** Run the tooling lens on a Codex model so it sees the session through a different model from the judgment reviewers:
+
+- **In Codex:** spawn it like the others with `model` unset, so it inherits Codex's model.
+- **In another harness with the `codex` CLI on `PATH`:** run it read-only instead of spawning a subagent: `codex exec --sandbox read-only "<the filled tooling-reviewer.md prompt>"`, and use its final message as the reviewer's output. It has no MCP access this way; say so in the summary.
+- **Otherwise:** spawn it on your harness's default model and say in the summary that the Codex lens was unavailable.
 
 ## 3. Synthesize
 
