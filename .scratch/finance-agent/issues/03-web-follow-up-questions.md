@@ -6,13 +6,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Saved conversations record source and topic; existing rows remain readable
-- [ ] A follow-up within 6 hours is answered using the previous exchange
-- [ ] After 6 hours without messages the agent receives no history
-- [ ] An ambiguous follow-up with no history gets a clarifying question
-- [ ] At most 10 exchanges are passed to the agent
-- [ ] Agent tests check history is passed or dropped by the 6-hour rule and the 10 limit
+- [x] Saved conversations record source and topic; existing rows remain readable
+- [x] A follow-up within 6 hours is answered using the previous exchange
+- [x] After 6 hours without messages the agent receives no history
+- [x] An ambiguous follow-up with no history gets a clarifying question
+- [x] At most 10 exchanges are passed to the agent
+- [x] Agent tests check history is passed or dropped by the 6-hour rule and the 10 limit
 
 Spec: `.scratch/finance-agent/spec.md`

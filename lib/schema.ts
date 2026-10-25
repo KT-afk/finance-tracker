@@ -133,12 +133,21 @@ export const owedDismissed = sqliteTable("owed_dismissed", {
   created_at: text("created_at").notNull(),
 })
 
+export const CONVERSATION_SOURCES = ["web", "telegram"] as const
+export type ConversationSource = (typeof CONVERSATION_SOURCES)[number]
+
 export const aiConversations = sqliteTable("ai_conversations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   question: text("question").notNull(),
   answer_text: text("answer_text").notNull(),
   answer_data: text("answer_data"), // JSON blob, nullable
   created_at: text("created_at").notNull(),
+  // Where the exchange happened; history is only shared within one source
+  // and topic. Rows from before these columns are web questions.
+  source: text("source", { enum: CONVERSATION_SOURCES })
+    .notNull()
+    .default("web"),
+  topic: text("topic").notNull().default("ask"),
 })
 
 export const aiMemory = sqliteTable("ai_memory", {

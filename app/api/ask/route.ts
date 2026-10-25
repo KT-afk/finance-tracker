@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
-import { aiConversations } from "@/lib/schema"
 import { runFinanceAgent } from "@/lib/agent/run-finance-agent"
+import { loadHistory, saveExchange } from "@/lib/agent/conversation"
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
@@ -10,12 +9,14 @@ export async function POST(req: NextRequest) {
   if (!question)
     return NextResponse.json({ error: "question is required" }, { status: 400 })
   try {
-    const answer = await runFinanceAgent(question)
-    await db.insert(aiConversations).values({
+    const history = await loadHistory("web", "ask", new Date())
+    const answer = await runFinanceAgent(question, { history })
+    await saveExchange({
       question,
-      answer_text: answer.text,
-      answer_data: null,
-      created_at: new Date().toISOString(),
+      answer: answer.text,
+      source: "web",
+      topic: "ask",
+      at: new Date(),
     })
     return NextResponse.json({ text: answer.text, answer_data: null })
   } catch {

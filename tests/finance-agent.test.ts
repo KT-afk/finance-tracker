@@ -143,6 +143,20 @@ async function main() {
     [undefined, true, true]
   )
   assert.doesNotMatch(JSON.stringify(searchResults), /private database/)
+  const historyRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("and last month?", {
+    history: [{ question: "Food this month?", answer: "$300." }],
+    createMessage: async (params) => {
+      historyRequests.push(structuredClone(params))
+      return done
+    },
+  })
+  assert.deepEqual(historyRequests[0].messages, [
+    { role: "user", content: "Food this month?" },
+    { role: "assistant", content: "$300." },
+    { role: "user", content: "and last month?" },
+  ])
+  assert.match(String(historyRequests[0].system), /ask what the owner means/)
   console.log("finance-agent: passed")
 }
 
