@@ -8,10 +8,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `X-Frame-Options: DENY` (and `Content-Security-Policy: frame-ancestors 'none'`) so no other site can frame the app
-- [ ] `X-Content-Type-Options: nosniff`
-- [ ] `Referrer-Policy: strict-origin-when-cross-origin` (or stricter)
-- [ ] The e2e test "should include security headers in responses" passes
-- [ ] The app still works in the browser and on the phone after the change
+- [x] `X-Frame-Options: DENY` (and `Content-Security-Policy: frame-ancestors 'none'`) so no other site can frame the app
+- [x] `X-Content-Type-Options: nosniff`
+- [x] `Referrer-Policy: strict-origin-when-cross-origin` (or stricter)
+- [x] The e2e test "should include security headers in responses" passes
+- [x] The app still works in the browser and on the phone after the change

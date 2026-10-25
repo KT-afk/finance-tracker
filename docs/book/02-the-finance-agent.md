@@ -45,3 +45,13 @@ We also turned on **prompt caching**. The parts of the request that rarely chang
 All remaining tickets were triaged and are `ready-for-agent`, except ticket 21, which needs the owner.
 
 We then ran the whole app with its browser tests. All 8 Ask page tests passed. 17 other tests failed, but they failed in exactly the same way before this work started. See chapter 3 and ticket 23.
+
+## Ticket 24: Security headers (2026-10-25)
+
+**The problem.** The app sent no security headers. Another website could load it in a hidden frame and trick you into clicking its buttons. This is called **clickjacking**.
+
+**What we built.** Every response now tells the browser: never show this app inside another site's frame, don't guess file types, and don't leak full page addresses to other sites. The headers live in `next.config.ts`.
+
+**How we checked.** We built the app, started it on a test database and read the headers on a page, a redirect and an API reply. The browser test for headers now passes.
+
+**Also found.** Of the four failing security tests, only this one was a real gap. Login lockout and rate limiting both work; their tests were wrong. Those notes are on ticket 23.

@@ -44,3 +44,7 @@ The agent's instructions live in one long string with straight double quotes aro
 ## 8. Tests can prove the code, not the AI's words
 
 Tests use a scripted fake AI. They can check what we send to the AI (the right tools, memories and history). They cannot check what the real AI says back. Behaviour such as "asks a question when it has no context" lives only in the instructions. Be honest about this in the ticket.
+
+## 9. Use a fresh test database for each browser test run
+
+Some browser tests depend on what is already in the database. A check we ran earlier left a saved conversation behind, and an Ask page test failed because of it. Delete the test database and run `db:setup-demo` again before each full browser test run.
