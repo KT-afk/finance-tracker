@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { CATEGORIES } from "../schema"
 import { querySpending, querySpendingTool } from "./query-spending"
+import {
+  parseSearchInput,
+  searchTransactions,
+  searchTransactionsTool,
+} from "./search-transactions"
 
 type QueryInput = {
   category?: string
@@ -62,6 +67,7 @@ type Dependencies = {
     params: Anthropic.MessageCreateParamsNonStreaming
   ) => Promise<Anthropic.Message>
   query: typeof querySpending
+  search: typeof searchTransactions
   now: () => Date
 }
 
@@ -80,6 +86,7 @@ export async function runFinanceAgent(
       return client.messages.create(params)
     })
   const query = overrides.query ?? querySpending
+  const search = overrides.search ?? searchTransactions
   const currentDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Singapore",
     year: "numeric",
@@ -98,8 +105,8 @@ export async function runFinanceAgent(
       system:
         "You are a read-only personal finance assistant. The current date in Singapore is " +
         currentDate +
-        ". Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
-      tools: [querySpendingTool],
+        ". Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total, and when more is above 0 say how many more matched. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Answer in plain text.",
+      tools: [querySpendingTool, searchTransactionsTool],
       ...(round === maxToolRounds
         ? { tool_choice: { type: "none" as const } }
         : {}),
@@ -130,11 +137,37 @@ export async function runFinanceAgent(
     const toolResults = await Promise.all(
       toolUses.map(async (toolUse): Promise<Anthropic.ToolResultBlockParam> => {
         const result = { type: "tool_result" as const, tool_use_id: toolUse.id }
+        if (toolUse.name === "search_transactions") {
+          let filters
+          try {
+            filters = parseSearchInput(toolUse.input)
+          } catch (error) {
+            return {
+              ...result,
+              is_error: true,
+              content: (error as Error).message,
+            }
+          }
+          try {
+            return {
+              ...result,
+              content: JSON.stringify(await search(filters)),
+            }
+          } catch {
+            return {
+              ...result,
+              is_error: true,
+              content:
+                "Transaction search failed. No data was returned; do not treat this as no matches.",
+            }
+          }
+        }
         if (toolUse.name !== "query_spending")
           return {
             ...result,
             is_error: true,
-            content: "Unsupported tool. Use query_spending.",
+            content:
+              "Unsupported tool. Use query_spending or search_transactions.",
           }
         let filters: QueryInput
         try {

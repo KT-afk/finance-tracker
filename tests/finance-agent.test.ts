@@ -106,6 +106,37 @@ async function main() {
     .content as Anthropic.ToolResultBlockParam[]
   assert.equal(measureResults[2].is_error, true)
   assert.match(String(measureRequests[0].system), /owner's spending/)
+  const searches: unknown[] = []
+  const searchRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("Which Grab rides?", {
+    createMessage: async (params) => {
+      searchRequests.push(structuredClone(params))
+      if (searchRequests.length === 1)
+        return response("tool_use", [
+          call("s1", { text: " Grab " }, "search_transactions"),
+          call("s2", { min_amount: -5 }, "search_transactions"),
+          call("s3", { text: "x" }, "search_transactions"),
+        ])
+      return done
+    },
+    search: async (filters) => {
+      searches.push(filters)
+      if (filters.text === "x") throw new Error("private database details")
+      return { transactions: [], total: 0, count: 0, more: 0 }
+    },
+  })
+  assert.deepEqual(searches, [{ text: "Grab" }, { text: "x" }])
+  assert.deepEqual(
+    searchRequests[0].tools?.map((t) => (t as Anthropic.Tool).name),
+    ["query_spending", "search_transactions"]
+  )
+  const searchResults = searchRequests[1].messages[2]
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    searchResults.map((r) => r.is_error),
+    [undefined, true, true]
+  )
+  assert.doesNotMatch(JSON.stringify(searchResults), /private database/)
   console.log("finance-agent: passed")
 }
 
