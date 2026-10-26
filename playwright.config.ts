@@ -1,27 +1,29 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from "@playwright/test"
 
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: "./tests/e2e",
   fullyParallel: false,
   retries: 0,
   workers: 1,
-  reporter: 'list',
+  reporter: "list",
   use: {
-    baseURL: process.env.BASE_URL ?? 'http://localhost:3000',
-    trace: 'on-first-retry',
+    baseURL: process.env.BASE_URL ?? "http://localhost:3000",
+    trace: "on-first-retry",
   },
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   webServer: process.env.BASE_URL
     ? undefined
     : {
-        command: 'npm run start',
-        url: 'http://localhost:3000',
+        command: "npm run start",
+        url: "http://localhost:3000",
         reuseExistingServer: true,
         timeout: 30000,
+        // Lets tests send a per-test login client header (see tests/e2e/fixtures.ts)
+        env: { AUTH_TEST_CLIENT_KEYS: "1" },
       },
 })
