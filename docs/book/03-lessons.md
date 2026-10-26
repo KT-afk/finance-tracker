@@ -60,3 +60,7 @@ GH_TOKEN=$(gh auth token --user KT-afk) gh pr create ...
 ## 11. Test the merged code, not only the branch
 
 A branch can pass every test and still break once `main` is merged in, if `main` has moved on. Before merging, merge `main` into a throwaway copy (a `git worktree`) and run the type check and the tests there. The unit tests also need a demo database first: run `db:setup-demo` with a temporary `FINANCE_DB_PATH` (lesson 1).
+
+## 14. Don't give one column two meanings
+
+`balance_history.recorded_at` means “when it was saved”. Putting the statement date in it for new rows only made old and new rows sort wrongly against each other. When a value means something new, give it a new column and say how old rows fall back.

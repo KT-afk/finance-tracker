@@ -12,13 +12,14 @@ Last updated: 2026-10-25, on `main` after merging pull request #24.
 - Four pstack skills added: `/create-verification-skill`, `/maintain-verification-skill`, `/correct`, `/reflect` (see chapter 1).
 - Code-review plugins enabled on the owner's account: Anthropic `code-review`, `codex-review`, `codex-dispatch`. The Codex ones need the `codex` CLI and a login.
 - Pull request #24 merged the finance agent branch into `main`. The merged code passed the type check and the unit tests first.
+- Ticket 14: the agent answers about income, savings and balances (see chapter 2).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Ticket 14:** income, savings and balances. Ready, not blocked, needs no setup.
+1. **Merge pull requests #26 (ticket 23) and #27 (ticket 14).**
 2. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
-3. **Ticket 23:** fix the 17 failing browser tests. Try `/create-verification-skill` first; a reliable way to drive the app makes this easier.
+3. **Ticket 25:** store each balance's statement date (P2).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.

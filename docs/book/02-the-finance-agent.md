@@ -63,3 +63,13 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **What we built.** A small guard, `scripts/require-local-db.mjs`, now runs first. If a remote database is set, it stops before anything else runs and says which setting to remove. To change the live database on purpose, there is a separate command: `npm run db:migrate`.
 
 **How we checked.** A test runs the guard with and without the remote settings. We also ran `db:setup-demo` in this environment, which has the live database set. It stopped with a clear message and changed nothing.
+
+## Ticket 14: Income, savings and balances (2026-10-26)
+
+**The problem.** The agent could only talk about spending. It could not say what came in, what was saved, or what is in the bank.
+
+**What we built.** Two new tools. `query_cash_flow` gives income, spending and savings (income minus spending) for a period. Income uses the dashboard's rules, so a transfer from your own account or a friend paying back a share is never income. Spending comes from `query_spending`, so the two tools never disagree. `get_balances` gives the latest balance of each account with the day it was recorded. For “can I afford X?”, the instructions tell the agent to give the facts (spending in that category this month, savings so far, dated balances) and never a yes or no.
+
+**Found in review.** Codex found that balances carry the upload time, not the statement date. We tried storing the statement's last transaction date instead, but Codex showed that this mixes two meanings in one column: old rows would hide newer uploads on the dashboard. We undid it. The agent now says “recorded 30 Sep” and that the statement may be older. Ticket 25 adds a proper statement date.
+
+**How we checked.** A test with a real database: salary counts, an own-account transfer and a repayment don't; savings is income minus spending; spending matches `query_spending`; balances are the latest per account with their date. The agent test checks the new tools are offered, bad input is refused, failures don't leak or read as zero, and the instructions forbid a yes or no.
