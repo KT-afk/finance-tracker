@@ -64,8 +64,10 @@ We did not add the rest of pstack. Its main mode overlaps with the skills we alr
 
 ### Our changes to pstack
 
+The four skills live in `~/.claude/skills/` on the owner's computer, not in this repo, so every repo can use them. A cloud session or another computer does not have them unless you copy that folder there.
+
 - **Codex reviews.** All three `/reflect` reviewers run on Codex, so they see the work through a different model. `/correct`, `/create-verification-skill` and `/maintain-verification-skill` ask Codex to review their changes before they commit or open a pull request.
-- **Low effort.** Codex and the subagents use low reasoning effort, not the upstream "xhigh". Ask for more when a review needs it.
-- **This repo's setup.** Backlog goes to `.scratch/`, checks run in the pre-commit hook (there is no CI), and the verification skill must follow lessons 1, 2 and 9 in chapter 3.
+- **Low effort.** Codex and the subagents use low reasoning effort, not the upstream "xhigh". The Codex model comes from `~/.codex/config.toml` (now `gpt-6-astra`).
+- **Repo details come from `AGENTS.md`.** The skills read the issue tracker, how checks run and the safety lessons from this repo's `AGENTS.md`, not from their own text.
 
 `/correct` and chapter 3 work together. Chapter 3 records a lesson in words. `/correct` turns the lesson into a check that fails, so words are not the only guard. The guard from ticket 22 is an example.
