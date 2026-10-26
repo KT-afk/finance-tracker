@@ -63,3 +63,13 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **What we built.** A small guard, `scripts/require-local-db.mjs`, now runs first. If a remote database is set, it stops before anything else runs and says which setting to remove. To change the live database on purpose, there is a separate command: `npm run db:migrate`.
 
 **How we checked.** A test runs the guard with and without the remote settings. We also ran `db:setup-demo` in this environment, which has the live database set. It stopped with a clear message and changed nothing.
+
+## Ticket 23: All browser tests pass (2026-10-26)
+
+**The problem.** 17 browser tests had failed since before the finance agent work. On the owner's Mac, 21 failed.
+
+**What we found.** One cause hid most of the others. The lockout test enters wrong passwords until the app locks out. Every test shared one login "client", so all the tests after it were locked out too. Once each test had its own client, the tests behind it showed their own mistakes: a hard-coded password, a button looked up by an old name, rate-limit tests that never logged in, a text check that also matched the AI insight, and a test for a bar chart the owner removed in July.
+
+**What we built.** Each test now sends its own client name (`tests/e2e/fixtures.ts`), and the tests above were fixed. The bar-chart test was deleted; a test for the "6-month summary" replaces the chart check. We also added a `verify-finance-tracker` skill. It starts the app from a copy of the code on a fresh demo database and port 3100, so it never touches the owner's real data or the always-on app.
+
+**How we checked.** A full run on a fresh demo database: 58 passed, 3 skipped, 0 failed. Codex reviewed the change. Its one finding (a `/tmp` path check) was wrong: the check matches part of the path and passed in the real run.
