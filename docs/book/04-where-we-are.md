@@ -2,7 +2,7 @@
 
 This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
 
-Last updated: 2026-10-25, on `main` after merging pull request #24.
+Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
 
 ## Done
 
@@ -12,13 +12,15 @@ Last updated: 2026-10-25, on `main` after merging pull request #24.
 - Four pstack skills added: `/create-verification-skill`, `/maintain-verification-skill`, `/correct`, `/reflect` (see chapter 1).
 - Code-review plugins enabled on the owner's account: Anthropic `code-review`, `codex-review`, `codex-dispatch`. The Codex ones need the `codex` CLI and a login.
 - Pull request #24 merged the finance agent branch into `main`. The merged code passed the type check and the unit tests first.
+- Ticket 23: all browser tests pass, and the `verify-finance-tracker` skill runs the app safely (see chapter 2).
+- pstack skills are global, with Codex reviews at low effort (pull request #25).
 - Ticket 25: balances keep their statement date (needs migration 0007).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge pull requests #26 (ticket 23), #27 (ticket 14) and #28 (ticket 25)**, in that order. Then run migration 0007 on the live database (`npm run db:migrate`) before deploying.
+1. **Run migration 0007** on the live database (`npm run db:migrate`) before deploying, and on the cloud database before the next `db:copy-cloud`.
 2. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
 3. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
