@@ -93,6 +93,7 @@ End of Transaction Details
 
 // New 2026 format
 const { transactions: ocbcTransactions } = parseOCBCPDF(ocbcText)
+assert.equal(parseOCBCPDF(ocbcText).statementDate, "2026-05-31")
 assert.equal(
   ocbcTransactions.length,
   2,
@@ -179,6 +180,8 @@ TOTAL BALANCE FOR LADY'S CARD 672.46
 `
 const uobTwoCardResult = parseUOBCreditCardPDF(uobTwoCardText)
 assert.equal(uobTwoCardResult.endingBalance, 2126.87)
+// The closing balance is dated by the statement, not its last transaction
+assert.equal(uobTwoCardResult.statementDate, "2026-09-27")
 assert.equal(uobTwoCardResult.accountType, "credit_card")
 // Card debt fell from 2,299.91 to 2,126.87, so transactions should net +173.04.
 assert.equal(checkReconciliation(uobTwoCardResult)?.expected, 173.04)

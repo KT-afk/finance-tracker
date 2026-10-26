@@ -62,6 +62,7 @@ interface PendingBalance {
   bank: string
   balance: number
   accountType: string
+  statementDate?: string
 }
 
 function formatSignedAmount(n: number): string {

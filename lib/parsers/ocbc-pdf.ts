@@ -1,4 +1,4 @@
-import { RawTransaction, ParseResult } from "./types"
+import { RawTransaction, ParseResult, statementDateFromText } from "./types"
 
 const MONTHS: Record<string, string> = {
   JAN: "01",
@@ -438,6 +438,9 @@ function extractOpeningBalance(text: string): number | undefined {
 
 export function parseOCBCPDF(text: string): ParseResult {
   const endingBalance = extractClosingBalance(text)
+  const statementDate = statementDateFromText(text, [
+    /\d+\s+[A-Z]{3}\s+\d{4}\s+TO\s+(\d+\s+[A-Z]{3}\s+\d{4})/i,
+  ])
   const openingBalance = extractOpeningBalance(text)
   const expectedNet =
     endingBalance !== undefined && openingBalance !== undefined
@@ -446,7 +449,7 @@ export function parseOCBCPDF(text: string): ParseResult {
 
   const columnar = parseOCBCPDFColumnar(text)
   if (columnar.length > 0)
-    return { transactions: columnar, endingBalance, expectedNet }
+    return { transactions: columnar, endingBalance, statementDate, expectedNet }
 
   // Columnar parse yielded nothing — plain-text (pdf-parse) extraction, the
   // default path since extractTextFromPDF prefers pdf-parse.
@@ -458,5 +461,5 @@ export function parseOCBCPDF(text: string): ParseResult {
       text.length
     )
   }
-  return { transactions: plainText, endingBalance, expectedNet }
+  return { transactions: plainText, endingBalance, statementDate, expectedNet }
 }

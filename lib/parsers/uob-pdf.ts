@@ -1,4 +1,4 @@
-import { RawTransaction, ParseResult } from "./types"
+import { RawTransaction, ParseResult, statementDateFromText } from "./types"
 
 const MONTHS: Record<string, string> = {
   JAN: "01",
@@ -137,6 +137,10 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     : 1
   const endingBalance = extractUOBClosingBalance(text)
   const expectedNet = extractUOBExpectedNet(text)
+  const statementDate = statementDateFromText(text, [
+    /Statement Date\s+(\d{1,2}\s+[A-Z]{3}\s+\d{4})/i,
+    /Period:\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s+to\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i,
+  ])
 
   const layoutTransactions = parseLayoutCreditCardText(
     text,
@@ -147,6 +151,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     return {
       transactions: layoutTransactions,
       endingBalance,
+      statementDate,
       expectedNet,
       accountType: "credit_card",
     }
@@ -160,6 +165,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
     return {
       transactions: stackedTransactions,
       endingBalance,
+      statementDate,
       expectedNet,
       accountType: "credit_card",
     }
@@ -168,6 +174,7 @@ export function parseUOBCreditCardPDF(text: string): ParseResult {
   return {
     transactions: accountTransactions,
     endingBalance,
+    statementDate,
     expectedNet,
     accountType: "credit_card",
   }

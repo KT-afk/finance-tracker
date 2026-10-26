@@ -50,6 +50,7 @@ assert.deepEqual(
   ]
 )
 assert.equal(result.endingBalance, 111.4)
+assert.equal(result.statementDate, "2026-09-30")
 assert.equal(checkReconciliation(result)?.ok, true)
 // Identical same-day rides must not collide on dedupe
 const hashes = normalize(result.transactions).map((t) => t.hash)

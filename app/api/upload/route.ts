@@ -5,7 +5,7 @@ import { categorize } from "@/lib/categorize"
 import { db } from "@/lib/db"
 import { transactions } from "@/lib/schema"
 import { Bank, BANKS } from "@/lib/schema"
-import { saveBalanceHistory } from "@/lib/balance-history"
+import { saveBalanceHistory, statementDateFor } from "@/lib/balance-history"
 import { checkReconciliation } from "@/lib/parsers/reconcile"
 import { inArray } from "drizzle-orm"
 
@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
       endingBalance,
       accountType = "savings",
     } = parseResult
+    // From every parsed row, before duplicates are dropped
+    const statementDate = statementDateFor(
+      parseResult,
+      raws.map((t) => t.date)
+    )
 
     if (raws.length === 0) {
       console.warn(
@@ -105,6 +110,7 @@ export async function POST(req: NextRequest) {
           balance: endingBalance,
           accountType,
           recordedAt: new Date().toISOString(),
+          statementDate,
         })
         savedBalance = true
       } catch (balanceError) {
@@ -129,7 +135,7 @@ export async function POST(req: NextRequest) {
         endingBalance,
         reconciliation,
         pendingBalance: balanceOnHold
-          ? { bank, balance: endingBalance, accountType }
+          ? { bank, balance: endingBalance, accountType, statementDate }
           : undefined,
       },
       transactions: categorized,

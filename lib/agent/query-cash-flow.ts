@@ -1,7 +1,8 @@
 import { db } from "../db"
-import { balanceHistory, BANKS, OFF_BANK, transactions } from "../schema"
-import { and, desc, eq, gte, lte } from "drizzle-orm"
+import { OFF_BANK, transactions } from "../schema"
+import { and, gte, lte } from "drizzle-orm"
 import { classifyCashFlow } from "../cash-flow"
+import { latestBalances } from "../balance-history"
 import { querySpending } from "./query-spending"
 import type Anthropic from "@anthropic-ai/sdk"
 
@@ -18,9 +19,11 @@ export type GetBalancesResult = {
     bank: string
     account_type: string
     balance: number
-    // The day the balance was recorded (upload or manual edit). The
-    // statement it came from may be older; see ticket 25.
-    recorded_on: string
+    // The date the balance was true for
+    as_of: string
+    // False for balances saved before statement dates were kept: as_of is
+    // then the day saved, and the balance may be older
+    exact: boolean
   }>
 }
 
@@ -58,25 +61,16 @@ export async function queryCashFlow(
 }
 
 export async function getBalances(): Promise<GetBalancesResult> {
-  const latest = await Promise.all(
-    BANKS.map(async (bank) => {
-      const [row] = await db
-        .select()
-        .from(balanceHistory)
-        .where(eq(balanceHistory.bank, bank))
-        .orderBy(desc(balanceHistory.recorded_at))
-        .limit(1)
-      return row
-        ? {
-            bank,
-            account_type: row.account_type,
-            balance: row.balance,
-            recorded_on: row.recorded_at.slice(0, 10),
-          }
-        : null
-    })
-  )
-  return { balances: latest.filter((row) => row !== null) }
+  const latest = await latestBalances()
+  return {
+    balances: latest.map((b) => ({
+      bank: b.bank,
+      account_type: b.account_type,
+      balance: b.balance,
+      as_of: b.as_of,
+      exact: b.exact,
+    })),
+  }
 }
 
 export const queryCashFlowTool = {
@@ -105,7 +99,7 @@ export const getBalancesTool = {
   name: "get_balances",
   strict: true,
   description:
-    "The latest recorded balance of each of the owner's accounts. recorded_on is the day the balance was uploaded or typed in; the statement it came from may be older. Credit card balances are owed amounts. There is no live balance.",
+    "The latest balance of each of the owner's accounts. as_of is the date the balance was true for. When exact is false, as_of is only the day it was saved and the balance may be older. Credit card balances are owed amounts. There is no live balance.",
   input_schema: {
     type: "object" as const,
     properties: {},

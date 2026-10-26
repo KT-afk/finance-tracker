@@ -42,6 +42,22 @@ export function relativeDate(dateStr: string): string {
   return date.toLocaleDateString("en-SG", { day: "numeric", month: "short" })
 }
 
+// "As of 30 Sep" when the balance's own date is known; else when it was saved
+export function balanceDateLabel(entry: {
+  recorded_at: string
+  as_of?: string
+  exact?: boolean
+}): string {
+  if (!entry.exact || !entry.as_of)
+    return `Updated ${relativeDate(entry.recorded_at)}`
+  const [year, month, day] = entry.as_of.split("-").map(Number)
+  return `As of ${new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)))}`
+}
+
 import { BANKS } from "./schema"
 
 export const BANK_TABS = ["all", ...BANKS] as const

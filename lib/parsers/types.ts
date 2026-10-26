@@ -12,6 +12,9 @@ export interface RawTransaction {
 export interface ParseResult {
   transactions: RawTransaction[]
   endingBalance?: number // Extracted from file if available
+  // YYYY-MM-DD the ending balance is true for, when the file says. Without
+  // it, the upload uses the statement's last transaction date.
+  statementDate?: string
   accountType?: "savings" | "credit_card" // Defaults to savings if not set
   // Net cash change implied by the statement's opening/closing figures
   // (credit cards: previous balance - new balance). Used to verify parsing.
@@ -169,4 +172,38 @@ export function parseFlexibleDate(dateStr: string): string {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return parseDDMMYYYY(s)
   if (/^\d{2} \w{3} \d{4}$/.test(s)) return parseDDMMMYYYY(s)
   throw new Error(`Unrecognised date format: ${dateStr}`)
+}
+
+const MONTH_NUMBERS: Record<string, string> = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+}
+
+/**
+ * The statement's closing date as YYYY-MM-DD: the first capture group of
+ * the first pattern that matches, written like "27 SEP 2026" or "31 Mar 2026".
+ */
+export function statementDateFromText(
+  text: string,
+  patterns: RegExp[]
+): string | undefined {
+  for (const pattern of patterns) {
+    const found = text.match(pattern)?.[1]?.trim().split(/\s+/)
+    if (!found || found.length !== 3) continue
+    const [day, mon, year] = found
+    const month = MONTH_NUMBERS[mon.slice(0, 3).toLowerCase()]
+    if (month && /^\d{1,2}$/.test(day) && /^\d{4}$/.test(year))
+      return `${year}-${month}-${day.padStart(2, "0")}`
+  }
+  return undefined
 }

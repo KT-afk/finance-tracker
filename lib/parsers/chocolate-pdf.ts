@@ -1,5 +1,5 @@
 import { Category } from "../schema"
-import { RawTransaction, ParseResult } from "./types"
+import { RawTransaction, ParseResult, statementDateFromText } from "./types"
 
 /**
  * Parse a Chocolate Finance monthly account statement (pdf-parse text).
@@ -50,11 +50,15 @@ function dedupeKey(seen: Map<string, number>, key: string): string {
 
 export function parseChocolatePDF(text: string): ParseResult {
   const period = text.match(
-    /(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})\s+[–-]\s+\d{1,2}\s+[A-Z][a-z]{2}\s+(\d{4})/
+    /(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})\s+[–-]\s+(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})/
   )
   if (!period) throw new Error("Could not find the Chocolate statement period")
   const startYear = parseInt(period[3])
-  const endYear = parseInt(period[4])
+  const endYear = parseInt(period[6])
+  const statementDate = statementDateFromText(
+    `${period[4]} ${period[5]} ${period[6]}`,
+    [/(.+)/]
+  )
 
   const start = text.match(/Start of month balance\s+(S\$[\d,]+\.\d{2})/)
   const end = text.match(/End of month balance\s+(S\$[\d,]+\.\d{2})/)
@@ -121,5 +125,11 @@ export function parseChocolatePDF(text: string): ParseResult {
       ? round2(endingBalance - openingBalance)
       : undefined
 
-  return { transactions, endingBalance, expectedNet, accountType: "savings" }
+  return {
+    transactions,
+    endingBalance,
+    statementDate,
+    expectedNet,
+    accountType: "savings",
+  }
 }

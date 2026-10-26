@@ -50,6 +50,13 @@
       "when": 1792910360651,
       "tag": "0006_conversation_source_topic",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793029398549,
+      "tag": "0007_balance_statement_date",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { RawTransaction, ParseResult, parseCSVRows } from './types'
+import { RawTransaction, ParseResult, parseCSVRows } from "./types"
 
 /**
  * Parse OCBC CSV export.
@@ -14,39 +14,30 @@ import { RawTransaction, ParseResult, parseCSVRows } from './types'
  */
 export function parseOCBC(csv: string): ParseResult {
   // "Transaction date" is the first cell of the real header row
-  const rows = parseCSVRows(csv, ['Transaction date', 'Transaction Date'])
+  const rows = parseCSVRows(csv, ["Transaction date", "Transaction Date"])
   const results: RawTransaction[] = []
   let endingBalance: number | undefined
+  // The date of the row the ending balance comes from
+  let statementDate: string | undefined
 
   for (const row of rows) {
     // Column name variants (case-insensitive key matching handled below)
     const dateStr =
-      row['Transaction date'] ??
-      row['Transaction Date'] ??
-      row['Date'] ??
-      ''
+      row["Transaction date"] ?? row["Transaction Date"] ?? row["Date"] ?? ""
 
     // Description may contain embedded newlines — collapse them to a space
-    const description = (
-      row['Description'] ?? ''
-    ).replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    const description = (row["Description"] ?? "")
+      .replace(/\s*\n\s*/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim()
 
     const withdrawalStr =
-      row['Withdrawals(SGD)'] ??
-      row['Withdrawals'] ??
-      row['Withdrawal'] ??
-      ''
+      row["Withdrawals(SGD)"] ?? row["Withdrawals"] ?? row["Withdrawal"] ?? ""
 
     const depositStr =
-      row['Deposits(SGD)'] ??
-      row['Deposits'] ??
-      row['Deposit'] ??
-      ''
+      row["Deposits(SGD)"] ?? row["Deposits"] ?? row["Deposit"] ?? ""
 
-    const balanceStr =
-      row['Balance'] ??
-      row['Available Balance'] ??
-      ''
+    const balanceStr = row["Balance"] ?? row["Available Balance"] ?? ""
 
     if (!dateStr || !description) continue
 
@@ -54,17 +45,17 @@ export function parseOCBC(csv: string): ParseResult {
     let date: string
     const trimmed = dateStr.trim()
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
-      const parts = trimmed.split('/')
-      date = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+      const parts = trimmed.split("/")
+      date = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`
     } else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
       date = trimmed
     } else {
       continue
     }
 
-    const withdrawal = parseFloat(withdrawalStr.replace(/,/g, '')) || 0
-    const deposit = parseFloat(depositStr.replace(/,/g, '')) || 0
-    const balance = parseFloat(balanceStr.replace(/,/g, '')) || 0
+    const withdrawal = parseFloat(withdrawalStr.replace(/,/g, "")) || 0
+    const deposit = parseFloat(depositStr.replace(/,/g, "")) || 0
+    const balance = parseFloat(balanceStr.replace(/,/g, "")) || 0
 
     let amount: number
     if (withdrawal > 0) {
@@ -75,13 +66,14 @@ export function parseOCBC(csv: string): ParseResult {
       continue
     }
 
-    results.push({ date, description, amount, bank: 'ocbc' })
+    results.push({ date, description, amount, bank: "ocbc" })
 
     // Capture the last valid balance as the ending balance
     if (balance > 0 || balance < 0) {
       endingBalance = balance
+      statementDate = date
     }
   }
 
-  return { transactions: results, endingBalance }
+  return { transactions: results, endingBalance, statementDate }
 }
