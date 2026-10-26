@@ -28,6 +28,8 @@ interface PendingBalance {
   bank: Bank
   balance: number
   accountType: AccountType
+  // Read from its own statement at preview, so it travels with the balance
+  statementDate?: string
 }
 
 function isPendingBalance(value: unknown): value is PendingBalance {
@@ -38,7 +40,10 @@ function isPendingBalance(value: unknown): value is PendingBalance {
     (BANKS as readonly string[]).includes(b.bank) &&
     typeof b.balance === "number" &&
     Number.isFinite(b.balance) &&
-    (b.accountType === "savings" || b.accountType === "credit_card")
+    (b.accountType === "savings" || b.accountType === "credit_card") &&
+    (b.statementDate === undefined ||
+      (typeof b.statementDate === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(b.statementDate)))
   )
 }
 
@@ -185,6 +190,7 @@ export async function POST(req: NextRequest) {
         balance: b.balance,
         accountType: b.accountType,
         recordedAt: new Date().toISOString(),
+        statementDate: b.statementDate,
       })
     }
 

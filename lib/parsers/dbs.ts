@@ -1,4 +1,9 @@
-import { RawTransaction, ParseResult, parseCSVRows, parseDDMMMYYYY } from './types'
+import {
+  RawTransaction,
+  ParseResult,
+  parseCSVRows,
+  parseDDMMMYYYY,
+} from "./types"
 
 /**
  * Parse DBS/POSB CSV export.
@@ -7,16 +12,19 @@ import { RawTransaction, ParseResult, parseCSVRows, parseDDMMMYYYY } from './typ
  * Debit = expense (negative), Credit = income (positive)
  */
 export function parseDBS(csv: string): ParseResult {
-  const rows = parseCSVRows(csv, ['Date', 'Transaction Date'])
+  const rows = parseCSVRows(csv, ["Date", "Transaction Date"])
   const results: RawTransaction[] = []
   let endingBalance: number | undefined
+  // The date of the row the ending balance comes from
+  let statementDate: string | undefined
 
   for (const row of rows) {
-    const dateStr = row['Date'] ?? ''
-    const description = row['Reference'] ?? row['Description'] ?? row['Particulars'] ?? ''
-    const debitStr = row['Debit Amount'] ?? row['Withdrawals'] ?? ''
-    const creditStr = row['Credit Amount'] ?? row['Deposits'] ?? ''
-    const balanceStr = row['Balance'] ?? ''
+    const dateStr = row["Date"] ?? ""
+    const description =
+      row["Reference"] ?? row["Description"] ?? row["Particulars"] ?? ""
+    const debitStr = row["Debit Amount"] ?? row["Withdrawals"] ?? ""
+    const creditStr = row["Credit Amount"] ?? row["Deposits"] ?? ""
+    const balanceStr = row["Balance"] ?? ""
 
     if (!dateStr || !description) continue
 
@@ -32,9 +40,9 @@ export function parseDBS(csv: string): ParseResult {
       }
     }
 
-    const debit = parseFloat(debitStr.replace(/,/g, '')) || 0
-    const credit = parseFloat(creditStr.replace(/,/g, '')) || 0
-    const balance = parseFloat(balanceStr.replace(/,/g, '')) || 0
+    const debit = parseFloat(debitStr.replace(/,/g, "")) || 0
+    const credit = parseFloat(creditStr.replace(/,/g, "")) || 0
+    const balance = parseFloat(balanceStr.replace(/,/g, "")) || 0
 
     let amount: number
     if (debit > 0) {
@@ -45,13 +53,14 @@ export function parseDBS(csv: string): ParseResult {
       continue
     }
 
-    results.push({ date, description: description.trim(), amount, bank: 'dbs' })
+    results.push({ date, description: description.trim(), amount, bank: "dbs" })
 
     // Capture the last valid balance as the ending balance
     if (balance > 0) {
       endingBalance = balance
+      statementDate = date
     }
   }
 
-  return { transactions: results, endingBalance }
+  return { transactions: results, endingBalance, statementDate }
 }

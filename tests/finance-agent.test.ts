@@ -196,7 +196,8 @@ async function main() {
           bank: "dbs",
           account_type: "savings",
           balance: 9500,
-          recorded_on: "2026-09-30",
+          as_of: "2026-09-30",
+          exact: true,
         },
       ],
     }),
@@ -212,15 +213,11 @@ async function main() {
     [undefined, true, true, undefined, true, true]
   )
   assert.match(String(cashResults[0].content), /"savings":4940/)
-  assert.match(String(cashResults[3].content), /"recorded_on":"2026-09-30"/)
+  assert.match(String(cashResults[3].content), /"as_of":"2026-09-30"/)
   assert.doesNotMatch(JSON.stringify(cashResults), /private database/)
   assert.match(String(cashResults[5].content), /not treat this as zero/)
   const cashInstructions = JSON.stringify(cashRequests[0].system)
-  assert.match(
-    cashInstructions,
-    /recorded_on/,
-    "balances are given with their date"
-  )
+  assert.match(cashInstructions, /as_of/, "balances are given with their date")
   assert.match(cashInstructions, /afford/)
   assert.match(cashInstructions, /never answer yes or no/)
   const historyRequests: Anthropic.MessageCreateParamsNonStreaming[] = []

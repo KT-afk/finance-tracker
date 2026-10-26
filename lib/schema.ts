@@ -176,7 +176,11 @@ export const balanceHistory = sqliteTable("balance_history", {
   account_type: text("account_type", { enum: ACCOUNT_TYPES })
     .notNull()
     .default("savings"),
+  // When the balance was saved (upload or manual edit)
   recorded_at: text("recorded_at").notNull(),
+  // YYYY-MM-DD the balance was true for: the statement's date for uploads,
+  // the day typed in for manual edits. Null on rows saved before ticket 25.
+  statement_date: text("statement_date"),
 })
 
 // Every bank email the alert reader has looked at, so each is processed once.

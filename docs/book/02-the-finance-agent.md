@@ -83,3 +83,13 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **Found in review.** Codex found that balances carry the upload time, not the statement date. We tried storing the statement's last transaction date instead, but Codex showed that this mixes two meanings in one column: old rows would hide newer uploads on the dashboard. We undid it. The agent now says “recorded 30 Sep” and that the statement may be older. Ticket 25 adds a proper statement date.
 
 **How we checked.** A test with a real database: salary counts, an own-account transfer and a repayment don't; savings is income minus spending; spending matches `query_spending`; balances are the latest per account with their date. The agent test checks the new tools are offered, bad input is refused, failures don't leak or read as zero, and the instructions forbid a yes or no.
+
+## Ticket 25: Balances keep their statement date (2026-10-26)
+
+**The problem.** A balance only knew when it was saved. A September statement uploaded in October looked like an October balance.
+
+**What we built.** A new `statement_date` column (migration 0007), kept apart from `recorded_at`, the save time (lesson 14). Bank files give the date: CSV files by the row the balance comes from, PDFs by the statement's closing date. Typed-in balances use today. The newest balance is picked the same way everywhere: rows with a statement date first, because every old row was saved before them. The agent now says “as of 30 Sep”. The Accounts page shows “As of 30 Sept”.
+
+**Found in review.** Codex reviewed three times. It caught PDF balances dated by their last transaction (UOB's closes on 27 Sep, its last payment was 14 Sep), the trend chart picking balances in a different order, a fallback that turned credit cards into savings on an older database, the Accounts page still showing the save time, and the cloud copy dropping the new column. All are fixed.
+
+**Before deploying.** Run migration 0007 on the live database (`npm run db:migrate`, chapter 3 lesson 1), and on the cloud database before the next `db:copy-cloud`.

@@ -1,4 +1,9 @@
-import { RawTransaction, ParseResult, parseCSVRows, parseDDMMYYYY } from './types'
+import {
+  RawTransaction,
+  ParseResult,
+  parseCSVRows,
+  parseDDMMYYYY,
+} from "./types"
 
 /**
  * Parse UOB CSV export.
@@ -7,16 +12,18 @@ import { RawTransaction, ParseResult, parseCSVRows, parseDDMMYYYY } from './type
  * Withdrawal = expense (negative), Deposit = income (positive)
  */
 export function parseUOB(csv: string): ParseResult {
-  const rows = parseCSVRows(csv, ['Transaction Date', 'Account', 'Date'])
+  const rows = parseCSVRows(csv, ["Transaction Date", "Account", "Date"])
   const results: RawTransaction[] = []
   let endingBalance: number | undefined
+  // The date of the row the ending balance comes from
+  let statementDate: string | undefined
 
   for (const row of rows) {
-    const dateStr = row['Transaction Date'] ?? row['Date'] ?? ''
-    const description = row['Description'] ?? row['Reference'] ?? ''
-    const withdrawalStr = row['Withdrawal'] ?? row['Withdrawals'] ?? ''
-    const depositStr = row['Deposit'] ?? row['Deposits'] ?? ''
-    const balanceStr = row['Balance'] ?? ''
+    const dateStr = row["Transaction Date"] ?? row["Date"] ?? ""
+    const description = row["Description"] ?? row["Reference"] ?? ""
+    const withdrawalStr = row["Withdrawal"] ?? row["Withdrawals"] ?? ""
+    const depositStr = row["Deposit"] ?? row["Deposits"] ?? ""
+    const balanceStr = row["Balance"] ?? ""
 
     if (!dateStr || !description) continue
 
@@ -31,9 +38,9 @@ export function parseUOB(csv: string): ParseResult {
       }
     }
 
-    const withdrawal = parseFloat(withdrawalStr.replace(/,/g, '')) || 0
-    const deposit = parseFloat(depositStr.replace(/,/g, '')) || 0
-    const balance = parseFloat(balanceStr.replace(/,/g, '')) || 0
+    const withdrawal = parseFloat(withdrawalStr.replace(/,/g, "")) || 0
+    const deposit = parseFloat(depositStr.replace(/,/g, "")) || 0
+    const balance = parseFloat(balanceStr.replace(/,/g, "")) || 0
 
     let amount: number
     if (withdrawal > 0) {
@@ -44,13 +51,14 @@ export function parseUOB(csv: string): ParseResult {
       continue
     }
 
-    results.push({ date, description: description.trim(), amount, bank: 'uob' })
+    results.push({ date, description: description.trim(), amount, bank: "uob" })
 
     // Capture the last valid balance as the ending balance
     if (balance > 0 || balance < 0) {
       endingBalance = balance
+      statementDate = date
     }
   }
 
-  return { transactions: results, endingBalance }
+  return { transactions: results, endingBalance, statementDate }
 }

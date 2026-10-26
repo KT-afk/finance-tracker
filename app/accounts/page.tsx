@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatSGD, relativeDate } from "@/lib/display"
+import { balanceDateLabel, formatSGD, relativeDate } from "@/lib/display"
 import { BANKS } from "@/lib/schema"
 
 interface BankBalance {
@@ -18,6 +18,8 @@ interface BankBalance {
   balance: number
   account_type: string
   recorded_at: string
+  as_of?: string
+  exact?: boolean
 }
 
 interface BalancesData {
@@ -250,7 +252,7 @@ export default function AccountsPage() {
                       </p>
                       {entry ? (
                         <p className="text-xs text-zinc-500 mt-0.5">
-                          Updated {relativeDate(entry.recorded_at)}
+                          {balanceDateLabel(entry)}
                         </p>
                       ) : (
                         <p className="text-xs text-zinc-600 mt-0.5">
@@ -353,7 +355,7 @@ export default function AccountsPage() {
                         </p>
                         {entry && (
                           <p className="text-xs text-zinc-500 mt-0.5">
-                            Updated {relativeDate(entry.recorded_at)}
+                            {balanceDateLabel(entry)}
                           </p>
                         )}
                       </div>

@@ -53,6 +53,7 @@ assert.deepEqual(
 assert.equal(result.accountType, "savings")
 // Total across Main Account + Savings, not just the last pot listed.
 assert.equal(result.endingBalance, 2672.84)
+assert.equal(result.statementDate, "2026-05-31")
 assert.equal(checkReconciliation(result)?.ok, true)
 
 console.log("Trust PDF parser test passed")

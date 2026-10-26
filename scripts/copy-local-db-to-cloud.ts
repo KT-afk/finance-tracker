@@ -70,7 +70,8 @@ const tables: TableCopy[] = [
   },
   {
     name: "balance_history",
-    columns: ["id", "bank", "balance", "recorded_at"],
+    // statement_date needs migration 0007 on the cloud database first
+    columns: ["id", "bank", "balance", "recorded_at", "statement_date"],
     conflictColumn: "id",
   },
   {

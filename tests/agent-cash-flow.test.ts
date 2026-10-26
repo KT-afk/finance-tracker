@@ -72,13 +72,15 @@ async function main() {
         bank: "dbs",
         account_type: "savings",
         balance: 9500.5,
-        recorded_on: "2026-09-30",
+        as_of: "2026-09-30",
+        exact: false,
       },
       {
         bank: "uob",
         account_type: "credit_card",
         balance: -300,
-        recorded_on: "2026-09-25",
+        as_of: "2026-09-25",
+        exact: false,
       },
     ])
     console.log("agent-cash-flow: passed")

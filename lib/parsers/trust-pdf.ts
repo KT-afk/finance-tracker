@@ -1,4 +1,4 @@
-import { RawTransaction, ParseResult } from "./types"
+import { RawTransaction, ParseResult, statementDateFromText } from "./types"
 
 const MONTHS: Record<string, string> = {
   Jan: "01",
@@ -209,10 +209,15 @@ export function parseTrustPDF(text: string): ParseResult {
     })
   }
 
+  const statementDate = statementDateFromText(text, [
+    /Statement period\s+\d{1,2}\s+\w+\s+\d{4}\s*-\s*(\d{1,2}\s+\w+\s+\d{4})/i,
+  ])
+
   if (!isSavingsStatement) {
     return {
       transactions: results,
       endingBalance: lastClosingBalance,
+      statementDate,
       accountType: "credit_card",
     }
   }
@@ -230,6 +235,7 @@ export function parseTrustPDF(text: string): ParseResult {
   return {
     transactions: results,
     endingBalance,
+    statementDate,
     expectedNet,
     accountType: "savings",
   }
