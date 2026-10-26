@@ -56,4 +56,4 @@ For each rejected finding:
 
 ## Backlog
 
-For each item, describe the pattern, what was hit, and the suggested mechanism. The parent files each to whatever devex / backlog tracker the team uses.
+For each item, describe the pattern, what was hit, and the suggested mechanism. The parent files each as a ticket in `.scratch/`.

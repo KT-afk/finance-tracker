@@ -37,35 +37,35 @@ One message, three `Task` calls, `subagent_type: generalPurpose`, agent mode (`r
 
 **Other harnesses.** The spawns in this skill use Cursor's `Task` tool. In another harness, use its subagent tool: `Agent` in Claude Code (`subagent_type: general-purpose`), `task` in OpenCode (`subagent_type: general`), `spawn_agent` in Codex. Keep the prompt and the model. Drop parameters your tool doesn't have. If your harness has no subagent tool, as in Pi without an extension, run each role yourself, one after another.
 
-Each reviewer and the synthesizer name a role line in the pstack settings file (`~/.cursor/rules/pstack-models.mdc` in Cursor, `~/.claude/rules/pstack-models.md` in Claude Code, `~/.agents/pstack-models.md` in other harnesses) and a default. Set `model` to that line's value, or to the default if the file or the line is missing. Leave `model` unset when the value is `auto` or `inherit-parent`. If your subagent tool rejects a slug, use the default and say so. If it rejects the default, use the closest valid slug of the same family from its error message or your harness's model list. Pick each subagent's reasoning level and fast or standard speed for the job, per the Subagents section of the **poteto-mode** skill.
+Each reviewer and the synthesizer name a role line in the pstack settings file (`~/.cursor/rules/pstack-models.mdc` in Cursor, `~/.claude/rules/pstack-models.md` in Claude Code, `~/.agents/pstack-models.md` in other harnesses) and a default. Set `model` to that line's value, or to the default if the file or the line is missing. Leave `model` unset when the value is `auto` or `inherit-parent`. If your subagent tool rejects a slug, use the default and say so. If it rejects the default, use the closest valid slug of the same family from its error message or your harness's model list. Use low reasoning effort for every reviewer and the synthesizer unless the user asks for more.
 
-| Lens      | Role line                                  | Default `model`         | Prompt template                    |
-| --------- | ------------------------------------------ | ----------------------- | ---------------------------------- |
-| Judgment  | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5-xhigh` | `references/judgment-reviewer.md`  |
-| Tooling   | `reflect tooling`                          | Codex (see below)       | `references/tooling-reviewer.md`   |
-| Divergent | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5-xhigh` | `references/divergent-reviewer.md` |
+| Lens      | Role line                                  | Default `model`   | Prompt template                    |
+| --------- | ------------------------------------------ | ----------------- | ---------------------------------- |
+| Judgment  | `reflect judgment, divergent, synthesizer` | Codex (see below) | `references/judgment-reviewer.md`  |
+| Tooling   | `reflect tooling`                          | Codex (see below) | `references/tooling-reviewer.md`   |
+| Divergent | `reflect judgment, divergent, synthesizer` | Codex (see below) | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in the `Task` response body.
 
-**Tooling reviewer on Codex (this repo's change; upstream uses Grok).** Run the tooling lens on a Codex model so it sees the session through a different model from the judgment reviewers:
+**All three reviewers on Codex (this repo's change; upstream uses Opus and Grok).** Reviewers run on Codex so they see the session through a different model from the agent that did the work. The synthesizer stays in your harness.
 
-- **In Codex:** spawn it like the others with `model` unset, so it inherits Codex's model.
-- **In another harness with the `codex` CLI on `PATH`:** run it read-only instead of spawning a subagent: `codex exec --sandbox read-only "<the filled tooling-reviewer.md prompt>"`, and use its final message as the reviewer's output. It has no MCP access this way; say so in the summary.
-- **Otherwise:** spawn it on your harness's default model and say in the summary that the Codex lens was unavailable.
+- **In Codex:** spawn each reviewer with `model` unset, so it inherits Codex's model.
+- **In another harness with the `codex` CLI on `PATH`:** run the three reviewers in parallel, read-only, at low effort, instead of spawning subagents: `codex exec --sandbox read-only -c model_reasoning_effort="low" "<the filled reviewer prompt>"`. Use each final message as that reviewer's output. They have no MCP access this way; say so in the summary.
+- **Otherwise:** spawn them on your harness's default model and say in the summary that the Codex lens was unavailable.
 
 ## 3. Synthesize
 
-One `Task` call, `subagent_type: generalPurpose`, `model` from the `reflect judgment, divergent, synthesizer` line (default `claude-opus-5-5-xhigh`), agent mode (`readonly: false`). It spot-verifies citations through MCP, and readonly strips MCPs. Pass `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. It returns an Accepted / Rejected / Backlog list.
+One `Task` call, `subagent_type: generalPurpose`, `model` from the `reflect judgment, divergent, synthesizer` line (default `opus` in Claude Code, at low effort), agent mode (`readonly: false`). It spot-verifies citations through MCP, and readonly strips MCPs. Pass `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. It returns an Accepted / Rejected / Backlog list.
 
 ## 4. Structural enforcement check
 
-Move any Accepted item that a lint rule, script, metadata flag, or runtime check would enforce more reliably to Backlog. See the **encode-lessons-in-structure** principle skill.
+Move any Accepted item that a lint rule, script, metadata flag, or runtime check would enforce more reliably to Backlog. `/correct` is the skill that builds those checks.
 
 ## 5. Apply
 
 Present the synthesizer's full Accepted / Rejected / Backlog output and wait for explicit approval before applying any Accepted edit. The user picks the subset and may redirect routings. Skill changes affect every future agent in the org. Do not auto-apply.
 
-File each Backlog item to your team's devex or backlog tracker without waiting. Only the Accepted list waits for approval.
+File each Backlog item as a ticket in `.scratch/` (see `docs/agents/issue-tracker.md`) without waiting. Only the Accepted list waits for approval.
 
 Never edit a skill under `plugins/cache/`. Before approval, show its destination: `.cursor/skills/<skill>/` or `~/.cursor/skills/<skill>/` in Cursor, or your harness's project or user skill folder, such as `.claude/skills/<skill>/` or `~/.agents/skills/<skill>/`. After approval, copy the skill folder there and edit the copy. Never open a PR or push.
 
@@ -84,5 +84,5 @@ Short list, no preamble:
 
 - Edits applied: `<skill path>`. What changed, one line each.
 - New skills created: `<skill path>`. One line each (rare).
-- Backlog filed to the devex tracker: `<issue title>` (`<tags>`). One line each.
+- Backlog filed to `.scratch/`: `<issue title>` (`<tags>`). One line each.
 - Dropped: one line per rejected finding + reason from the synthesizer.

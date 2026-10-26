@@ -48,3 +48,15 @@ Tests use a scripted fake AI. They can check what we send to the AI (the right t
 ## 9. Use a fresh test database for each browser test run
 
 Some browser tests depend on what is already in the database. A check we ran earlier left a saved conversation behind, and an Ask page test failed because of it. Delete the test database and run `db:setup-demo` again before each full browser test run.
+
+## 10. Use the KT-afk account for GitHub
+
+This computer is logged in to two GitHub accounts. The default one is a work account, `kongtatong-wise`. This repo belongs to `KT-afk`. Run `gh` commands with that account's token, so you do not change the default:
+
+```bash
+GH_TOKEN=$(gh auth token --user KT-afk) gh pr create ...
+```
+
+## 11. Test the merged code, not only the branch
+
+A branch can pass every test and still break once `main` is merged in, if `main` has moved on. Before merging, merge `main` into a throwaway copy (a `git worktree`) and run the type check and the tests there. The unit tests also need a demo database first: run `db:setup-demo` with a temporary `FINANCE_DB_PATH` (lesson 1).

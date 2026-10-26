@@ -10,6 +10,8 @@ Every serious project needs a scripted way to drive the real app and prove behav
 
 ## 1. Interview the repo, not the user
 
+In this repo, first read `docs/book/03-lessons.md`. Lessons 1, 2 and 9 (live database guard, pre-installed browser, fresh test database) must be built into the generated Launch and Cleanup sections.
+
 Answer these from the codebase and only ask the user what you cannot observe:
 
 - **Surface:** what does a user actually touch? A web UI, a CLI/TUI, a desktop app, an API, a mobile app, a library? A repo can have several; pick the primary one and note the rest.
@@ -38,6 +40,8 @@ Create `<skills>/verify-<app>/features/README.md` plus one file per user-facing 
 ## 4. Prove the generated skill before handing it over
 
 Run its own instructions end to end once: launch, doctor, drive ONE mapped feature (one is enough; the map exists so later runs can cover the rest), capture evidence, clean up. After cleanup, confirm the evidence still exists at the named location — a cleanup that eats the proof fails this step. Fix what fails, and run the generated cleanup after every failed iteration too, so broken attempts don't strand processes and ports. A generated skill that was never executed is a draft, not a deliverable. If you proved it in a stand-in for the real target (a container in place of a fresh VM, a local stack in place of a remote one), list every setup step the stand-in did that the target will not. Those steps stay unverified until a run on the real target covers them.
+
+Then have Codex review the generated skill read-only, at low effort: `codex exec --sandbox read-only -c model_reasoning_effort="low" "Review <skills>/verify-<app>/ against .agents/skills/create-verification-skill/SKILL.md. List wrong commands, missing sections and unsafe steps."`. Fix each finding that holds up, and rerun step 4 if you changed Launch, Drive or Cleanup.
 
 ## 5. Offer the maintenance loop
 
