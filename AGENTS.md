@@ -171,3 +171,8 @@ Default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Checks and safety
+
+- Checks run in the pre-commit hook (`scripts/run-tests.sh`). There is no CI.
+- Before driving the app or running tests, follow `docs/book/03-lessons.md` lessons 1, 2 and 9: unset the live database settings, use the pre-installed browser, and start from a fresh test database.

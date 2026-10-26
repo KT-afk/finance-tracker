@@ -2,7 +2,7 @@
 
 This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
 
-Last updated: 2026-10-25, at the end of a cloud session on branch `ccr-f84f8aa4-x0x6n3`.
+Last updated: 2026-10-25, on `main` after merging pull request #24.
 
 ## Done
 
@@ -11,15 +11,15 @@ Last updated: 2026-10-25, at the end of a cloud session on branch `ccr-f84f8aa4-
 - All tickets triaged. Review findings filed as backlog tickets with priorities.
 - Four pstack skills added: `/create-verification-skill`, `/maintain-verification-skill`, `/correct`, `/reflect` (see chapter 1).
 - Code-review plugins enabled on the owner's account: Anthropic `code-review`, `codex-review`, `codex-dispatch`. The Codex ones need the `codex` CLI and a login.
+- Pull request #24 merged the finance agent branch into `main`. The merged code passed the type check and the unit tests first.
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge the branch.** Open a pull request from `ccr-f84f8aa4-x0x6n3` into `main`, review it, and merge.
-2. **Ticket 14:** income, savings and balances. Ready, not blocked, needs no setup.
-3. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
-4. **Ticket 23:** fix the 17 failing browser tests. Try `/create-verification-skill` first; a reliable way to drive the app makes this easier.
-5. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
+1. **Ticket 14:** income, savings and balances. Ready, not blocked, needs no setup.
+2. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
+3. **Ticket 23:** fix the 17 failing browser tests. Try `/create-verification-skill` first; a reliable way to drive the app makes this easier.
+4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
 
@@ -33,7 +33,7 @@ Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 one
 
 ```bash
 git fetch origin
-git checkout ccr-f84f8aa4-x0x6n3   # or main, once merged
+git checkout main
 npm install
 ```
 
