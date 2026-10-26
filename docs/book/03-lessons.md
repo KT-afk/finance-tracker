@@ -74,3 +74,9 @@ The lockout test locked out every test after it, so their own bugs never showed.
 ## 14. Don't give one column two meanings
 
 `balance_history.recorded_at` means “when it was saved”. Putting the statement date in it for new rows only made old and new rows sort wrongly against each other. When a value means something new, give it a new column and say how old rows fall back.
+
+## 15. The live data is in the cloud, not in `finance.db`
+
+The real data (about 1,800 transactions) is in the Turso cloud database. The local `finance.db` on the owner's Mac only holds the 25 demo transactions. Its settings are not on the Mac, so to change the cloud database the owner makes a short-lived token at app.turso.tech and runs `TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:migrate` in their own terminal. `drizzle-kit migrate` can finish without printing “applied”, so check afterwards: count the rows in `__drizzle_migrations`.
+
+Never paste the token into the chat. If it happens, delete the token in Turso.

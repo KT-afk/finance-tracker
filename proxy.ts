@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   "/api/config",
   // Checks CRON_SECRET itself; Vercel Cron has no session cookie
   "/api/cron/daily",
+  // Checks Telegram's secret-token header itself
+  "/api/telegram",
   "/favicon.ico",
   "/manifest.webmanifest",
 ]

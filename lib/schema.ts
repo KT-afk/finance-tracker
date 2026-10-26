@@ -150,6 +150,12 @@ export const aiConversations = sqliteTable("ai_conversations", {
   topic: text("topic").notNull().default("ask"),
 })
 
+// Telegram update ids already handled, so a re-sent update is answered once
+export const telegramUpdates = sqliteTable("telegram_updates", {
+  update_id: integer("update_id").primaryKey(),
+  received_at: text("received_at").notNull(),
+})
+
 export const aiMemory = sqliteTable("ai_memory", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   key: text("key").notNull().unique(),

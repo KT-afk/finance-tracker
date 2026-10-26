@@ -93,3 +93,13 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **Found in review.** Codex reviewed three times. It caught PDF balances dated by their last transaction (UOB's closes on 27 Sep, its last payment was 14 Sep), the trend chart picking balances in a different order, a fallback that turned credit cards into savings on an older database, the Accounts page still showing the save time, and the cloud copy dropping the new column. All are fixed.
 
 **Before deploying.** Run migration 0007 on the live database (`npm run db:migrate`, chapter 3 lesson 1), and on the cloud database before the next `db:copy-cloud`.
+
+## Ticket 05: Ask anything in Telegram (2026-10-27)
+
+**The problem.** The owner could only ask the agent questions on the web page.
+
+**What we built.** A Telegram webhook. When the owner writes in the **Ask anything** topic of their private group, the bot shows “typing…”, asks the finance agent, and answers in the same topic. It checks Telegram's secret header, ignores anyone else and any other chat or topic, and answers each message once even if Telegram sends it again (a new `telegram_updates` table remembers the ids). It replies to Telegram at once and runs the agent afterwards, so a slow answer does not make Telegram retry. Telegram has its own conversation history, apart from the web. `npm run telegram:setup` prints the group and topic ids and registers the webhook.
+
+**Found in review.** Codex found that answers over 4,096 characters would be refused by Telegram, so long answers are now split. It also found that an odd secret could crash the check instead of being refused.
+
+**How we checked.** Tests with a fake agent and a fake Telegram: owner-only, other chats and topics ignored, repeated update not answered twice, follow-up history, history kept apart from the web, a short error message on failure, and a fresh start after 6 quiet hours. The secret check and message splitting have their own test. Nothing has talked to the real Telegram yet: that needs the owner's bot (see the ticket's owner steps).
