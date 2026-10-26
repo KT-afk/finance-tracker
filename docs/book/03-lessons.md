@@ -61,6 +61,16 @@ GH_TOKEN=$(gh auth token --user KT-afk) gh pr create ...
 
 A branch can pass every test and still break once `main` is merged in, if `main` has moved on. Before merging, merge `main` into a throwaway copy (a `git worktree`) and run the type check and the tests there. The unit tests also need a demo database first: run `db:setup-demo` with a temporary `FINANCE_DB_PATH` (lesson 1).
 
+## 12. The always-on app uses this repo and port 3000
+
+The owner's Mac runs the app all the time (launchd `com.financetracker.app`). It runs `npm run start` from this repo, on port 3000, with the real `finance.db` and `.env.local`. Playwright's default setup reuses whatever already runs on port 3000. So a plain `npm run test:e2e` can test against real data, and `npm run build` replaces the build the always-on app serves.
+
+Use the `verify-finance-tracker` skill instead. It builds and runs a copy of the code in `/tmp`, on port 3100, with a demo database.
+
+## 13. One broken test can hide many others
+
+The lockout test locked out every test after it, so their own bugs never showed. Fixing it uncovered six more problems. When many tests fail the same way, fix the shared cause first, then run again before you count what is left.
+
 ## 14. Don't give one column two meanings
 
 `balance_history.recorded_at` means “when it was saved”. Putting the statement date in it for new rows only made old and new rows sort wrongly against each other. When a value means something new, give it a new column and say how old rows fall back.

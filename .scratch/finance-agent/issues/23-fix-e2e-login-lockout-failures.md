@@ -10,11 +10,11 @@ Note for this environment: the project pins Playwright 1.61.1, so the pre-instal
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Lockout tests reset or isolate the lockout so later tests can log in
-- [ ] Dashboard and insights failures are fixed or the tests updated to match the demo data
-- [ ] The full e2e suite passes on a fresh demo database
+- [x] Lockout tests reset or isolate the lockout so later tests can log in
+- [x] Dashboard and insights failures are fixed or the tests updated to match the demo data
+- [x] The full e2e suite passes on a fresh demo database
 
 ## Comments
 
