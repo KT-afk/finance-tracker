@@ -140,7 +140,7 @@ async function main() {
   assert.deepEqual(searches, [{ text: "Grab" }, { text: "x" }])
   assert.deepEqual(
     searchRequests[0].tools?.map((t) => (t as Anthropic.Tool).name),
-    ["query_spending", "search_transactions"]
+    ["query_spending", "search_transactions", "query_cash_flow", "get_balances"]
   )
   const searchResults = searchRequests[1].messages[2]
     .content as Anthropic.ToolResultBlockParam[]
@@ -149,6 +149,80 @@ async function main() {
     [undefined, true, true]
   )
   assert.doesNotMatch(JSON.stringify(searchResults), /private database/)
+  // Income, savings and dated balances; failures don't leak or read as zero
+  const cashFlowCalls: string[][] = []
+  const cashRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("Can I afford a $2,000 trip?", {
+    loadMemories: async () => [],
+    createMessage: async (params) => {
+      cashRequests.push(structuredClone(params))
+      if (cashRequests.length === 1)
+        return response("tool_use", [
+          call(
+            "c1",
+            { date_from: "2026-09-01", date_to: "2026-09-30" },
+            "query_cash_flow"
+          ),
+          call("c2", { date_from: "2026-09-01" }, "query_cash_flow"),
+          call(
+            "c3",
+            { date_from: "2026-09-30", date_to: "2026-09-01" },
+            "query_cash_flow"
+          ),
+          call("c4", {}, "get_balances"),
+          call("c5", { bank: "dbs" }, "get_balances"),
+          call(
+            "c6",
+            { date_from: "2026-08-01", date_to: "2026-08-31" },
+            "query_cash_flow"
+          ),
+        ])
+      return done
+    },
+    cashFlow: async (from, to) => {
+      cashFlowCalls.push([from, to])
+      if (from === "2026-08-01") throw new Error("private database details")
+      return {
+        date_from: from,
+        date_to: to,
+        income: 5000,
+        spending: 60,
+        savings: 4940,
+      }
+    },
+    balances: async () => ({
+      balances: [
+        {
+          bank: "dbs",
+          account_type: "savings",
+          balance: 9500,
+          recorded_on: "2026-09-30",
+        },
+      ],
+    }),
+  })
+  assert.deepEqual(cashFlowCalls, [
+    ["2026-09-01", "2026-09-30"],
+    ["2026-08-01", "2026-08-31"],
+  ])
+  const cashResults = cashRequests[1].messages[2]
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    cashResults.map((r) => r.is_error),
+    [undefined, true, true, undefined, true, true]
+  )
+  assert.match(String(cashResults[0].content), /"savings":4940/)
+  assert.match(String(cashResults[3].content), /"recorded_on":"2026-09-30"/)
+  assert.doesNotMatch(JSON.stringify(cashResults), /private database/)
+  assert.match(String(cashResults[5].content), /not treat this as zero/)
+  const cashInstructions = JSON.stringify(cashRequests[0].system)
+  assert.match(
+    cashInstructions,
+    /recorded_on/,
+    "balances are given with their date"
+  )
+  assert.match(cashInstructions, /afford/)
+  assert.match(cashInstructions, /never answer yes or no/)
   const historyRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("and last month?", {
     loadMemories: async () => [],

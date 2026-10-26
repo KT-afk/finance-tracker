@@ -70,3 +70,7 @@ Use the `verify-finance-tracker` skill instead. It builds and runs a copy of the
 ## 13. One broken test can hide many others
 
 The lockout test locked out every test after it, so their own bugs never showed. Fixing it uncovered six more problems. When many tests fail the same way, fix the shared cause first, then run again before you count what is left.
+
+## 14. Don't give one column two meanings
+
+`balance_history.recorded_at` means “when it was saved”. Putting the statement date in it for new rows only made old and new rows sort wrongly against each other. When a value means something new, give it a new column and say how old rows fall back.

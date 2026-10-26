@@ -73,3 +73,13 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **What we built.** Each test now sends its own client name (`tests/e2e/fixtures.ts`), and the tests above were fixed. The bar-chart test was deleted; a test for the "6-month summary" replaces the chart check. We also added a `verify-finance-tracker` skill. It starts the app from a copy of the code on a fresh demo database and port 3100, so it never touches the owner's real data or the always-on app.
 
 **How we checked.** A full run on a fresh demo database: 58 passed, 3 skipped, 0 failed. Codex reviewed the change. Its one finding (a `/tmp` path check) was wrong: the check matches part of the path and passed in the real run.
+
+## Ticket 14: Income, savings and balances (2026-10-26)
+
+**The problem.** The agent could only talk about spending. It could not say what came in, what was saved, or what is in the bank.
+
+**What we built.** Two new tools. `query_cash_flow` gives income, spending and savings (income minus spending) for a period. Income uses the dashboard's rules, so a transfer from your own account or a friend paying back a share is never income. Spending comes from `query_spending`, so the two tools never disagree. `get_balances` gives the latest balance of each account with the day it was recorded. For “can I afford X?”, the instructions tell the agent to give the facts (spending in that category this month, savings so far, dated balances) and never a yes or no.
+
+**Found in review.** Codex found that balances carry the upload time, not the statement date. We tried storing the statement's last transaction date instead, but Codex showed that this mixes two meanings in one column: old rows would hide newer uploads on the dashboard. We undid it. The agent now says “recorded 30 Sep” and that the statement may be older. Ticket 25 adds a proper statement date.
+
+**How we checked.** A test with a real database: salary counts, an own-account transfer and a repayment don't; savings is income minus spending; spending matches `query_spending`; balances are the latest per account with their date. The agent test checks the new tools are offered, bad input is refused, failures don't leak or read as zero, and the instructions forbid a yes or no.

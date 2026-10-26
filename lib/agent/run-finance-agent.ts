@@ -2,6 +2,12 @@ import Anthropic from "@anthropic-ai/sdk"
 import { CATEGORIES } from "../schema"
 import type { Exchange } from "./conversation"
 import { loadMemories, type Memory } from "./memories"
+import {
+  getBalances,
+  getBalancesTool,
+  queryCashFlow,
+  queryCashFlowTool,
+} from "./query-cash-flow"
 import { querySpending, querySpendingTool } from "./query-spending"
 import {
   parseSearchInput,
@@ -45,7 +51,12 @@ function parseToolInput(input: unknown): QueryInput {
     !["spending", "gross"].includes(filters.measure)
   )
     throw new Error("Invalid measure")
-  for (const date of [filters.date_from, filters.date_to]) {
+  checkDates(filters.date_from, filters.date_to)
+  return filters
+}
+
+function checkDates(dateFrom?: string, dateTo?: string) {
+  for (const date of [dateFrom, dateTo]) {
     if (date === undefined) continue
     const parsed = new Date(date)
     if (
@@ -55,17 +66,41 @@ function parseToolInput(input: unknown): QueryInput {
     )
       throw new Error("Dates must be valid YYYY-MM-DD dates")
   }
-  if (
-    filters.date_from &&
-    filters.date_to &&
-    filters.date_from > filters.date_to
-  )
+  if (dateFrom && dateTo && dateFrom > dateTo)
     throw new Error("date_to must not be before date_from")
-  return filters
+}
+
+function parseCashFlowInput(input: unknown): {
+  date_from: string
+  date_to: string
+} {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("Tool input must be an object")
+  const values = input as Record<string, unknown>
+  for (const key of Object.keys(values))
+    if (!["date_from", "date_to"].includes(key))
+      throw new Error("Unknown filter")
+  if (
+    typeof values.date_from !== "string" ||
+    typeof values.date_to !== "string"
+  )
+    throw new Error("date_from and date_to are required strings")
+  checkDates(values.date_from, values.date_to)
+  return { date_from: values.date_from, date_to: values.date_to }
+}
+
+function checkNoInput(input: unknown) {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.keys(input).length
+  )
+    throw new Error("get_balances takes no input")
 }
 
 const INSTRUCTIONS =
-  "You are a read-only personal finance assistant. Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments), not income or balances; give gross spending only when asked for it, and say which one you are giving. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total (the owner's spending, plus gross_total when it differs), say the totals cover every match, and when more is above 0 say how many more matched. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Earlier messages are recent conversation; if a follow-up such as “and last month?” depends on context you do not have, ask what the owner means instead of guessing. Answer in plain text."
+  "You are a read-only personal finance assistant. Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments); give gross spending only when asked for it, and say which one you are giving. Use query_cash_flow for income and savings (income minus spending) over a period. Use get_balances for balances and always give each balance with its recorded_on date, for example “$9,500 in DBS, recorded 30 Sep”, and say the statement may be older; never call a balance current. When asked whether the owner can afford something, never answer yes or no: give how the cost compares with spending so far in that category this month, savings so far this month, and the latest dated balances, and leave the decision to the owner. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total (the owner's spending, plus gross_total when it differs), say the totals cover every match, and when more is above 0 say how many more matched. You cannot correct transactions or save memories; explain that limitation when asked. Never claim to have made changes. If no matching transactions are found, say so without guessing why. Earlier messages are recent conversation; if a follow-up such as “and last month?” depends on context you do not have, ask what the owner means instead of guessing. Answer in plain text."
 
 function formatMemories(memories: Memory[]): string {
   if (!memories.length) return "No saved memories."
@@ -81,6 +116,8 @@ type Dependencies = {
   ) => Promise<Anthropic.Message>
   query: typeof querySpending
   search: typeof searchTransactions
+  cashFlow: typeof queryCashFlow
+  balances: typeof getBalances
   loadMemories: () => Promise<Memory[]>
   now: () => Date
 }
@@ -102,6 +139,8 @@ export async function runFinanceAgent(
     })
   const query = overrides.query ?? querySpending
   const search = overrides.search ?? searchTransactions
+  const cashFlow = overrides.cashFlow ?? queryCashFlow
+  const balances = overrides.balances ?? getBalances
   // A memory fault shouldn't block every question: answer without them
   const memories = await (overrides.loadMemories ?? loadMemories)().catch(
     (error) => {
@@ -145,7 +184,12 @@ export async function runFinanceAgent(
           text: "The current date in Singapore is " + currentDate + ".",
         },
       ],
-      tools: [querySpendingTool, searchTransactionsTool],
+      tools: [
+        querySpendingTool,
+        searchTransactionsTool,
+        queryCashFlowTool,
+        getBalancesTool,
+      ],
       ...(round === maxToolRounds
         ? { tool_choice: { type: "none" as const } }
         : {}),
@@ -201,12 +245,60 @@ export async function runFinanceAgent(
             }
           }
         }
+        if (toolUse.name === "query_cash_flow") {
+          let period
+          try {
+            period = parseCashFlowInput(toolUse.input)
+          } catch (error) {
+            return {
+              ...result,
+              is_error: true,
+              content: (error as Error).message,
+            }
+          }
+          try {
+            return {
+              ...result,
+              content: JSON.stringify(
+                await cashFlow(period.date_from, period.date_to)
+              ),
+            }
+          } catch {
+            return {
+              ...result,
+              is_error: true,
+              content:
+                "Cash flow query failed. No data was returned; do not treat this as zero income or savings.",
+            }
+          }
+        }
+        if (toolUse.name === "get_balances") {
+          try {
+            checkNoInput(toolUse.input)
+          } catch (error) {
+            return {
+              ...result,
+              is_error: true,
+              content: (error as Error).message,
+            }
+          }
+          try {
+            return { ...result, content: JSON.stringify(await balances()) }
+          } catch {
+            return {
+              ...result,
+              is_error: true,
+              content:
+                "Balance lookup failed. No data was returned; do not treat this as zero balances.",
+            }
+          }
+        }
         if (toolUse.name !== "query_spending")
           return {
             ...result,
             is_error: true,
             content:
-              "Unsupported tool. Use query_spending or search_transactions.",
+              "Unsupported tool. Use query_spending, search_transactions, query_cash_flow or get_balances.",
           }
         let filters: QueryInput
         try {
