@@ -154,4 +154,6 @@ A button does nothing, and says so, when:
 
 **What we built.** Now it offers: “Remember: The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring”, with ✅ and ❌. It does the same when you say “remember that…”. Tap ✅ and it's saved, and the change log records it; after that, the agent uses it in every answer. It's saved as yours if you asked, or as the agent's suggestion if it noticed. Using the same short name again replaces the old memory, and the offer tells you what it replaces.
 
-**How we checked.** Database tests: a new memory, a replacement, yours versus suggested, reject, a memory changed meanwhile, and refusals (no name, too long, already remembered). Agent tests: the tool, its strict input, and instructions that never say “saved” before you confirm.
+**Found in review.** The save could overwrite a memory changed at the same moment, the same kind of race we fixed in ticket 07 (lesson 22); now the save itself checks. Older memories with capitals (“Rent”) would have been duplicated instead of replaced; now names are compared without case.
+
+**How we checked.** Database tests: a new memory, a replacement, yours versus suggested, reject, a memory changed or deleted meanwhile, an older memory with capitals, and refusals (no name, too long, already remembered). Agent tests: the tool, its strict input, and instructions that never say “saved” before you confirm.

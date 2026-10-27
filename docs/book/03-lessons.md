@@ -104,3 +104,7 @@ To make a button count once, we first used a database transaction. With two taps
 ## 21. A build should not need the internet
 
 `next/font/google` downloads fonts during every build. One failed download stopped a production deploy, even though the code was fine. Keep what the build needs in the repo. To test it, build with `HTTPS_PROXY=http://127.0.0.1:9`, which blocks all downloads.
+
+## 22. Reuse a fix everywhere the same shape appears
+
+Ticket 07's review found a race: a check, then a write that didn't repeat the check. We fixed it for categories, then wrote the same race again for memories in ticket 08, and review caught it again. When a fix is about a pattern (check, then write), search for the pattern, not just the line. Also: SQLite's `unique` is case-sensitive, so “Rent” and “rent” are two different memories unless you compare with `lower()`.

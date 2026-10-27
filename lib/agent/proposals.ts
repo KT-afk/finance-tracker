@@ -286,6 +286,11 @@ async function applyMemory(
   lost: Lost,
   now: Date
 ): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that memory has changed since this was proposed.",
+  }
   const [current] = await db
     .select({ value: aiMemory.value })
     .from(aiMemory)
@@ -293,55 +298,93 @@ async function applyMemory(
     .limit(1)
   if ((current?.value ?? "") !== proposal.before) {
     if (!(await settle("conflict"))) return lost
-    return {
-      outcome: "conflict",
-      message:
-        "Nothing changed: that memory has changed since this was proposed.",
-    }
+    return conflict
   }
   if (!(await settle("confirmed"))) return lost
-  let entry: { id: number }
-  try {
-    // The memory and its log entry are written together
-    const [[logged]] = await db.batch([
-      db
-        .insert(changeLog)
-        .values({
-          created_at: now.toISOString(),
-          kind: "memory",
-          target: proposal.target,
-          before: proposal.before,
-          after: proposal.after,
-          source: proposal.source,
-          request: proposal.request,
-          proposal_id: proposal.id,
-        })
-        .returning({ id: changeLog.id }),
-      db
+  const source = proposal.memory_source ?? "user"
+  // The write only happens if the memory still has its "before" text (or
+  // still doesn't exist), and the log row only if the write happened: a
+  // change made a moment ago is never overwritten
+  const write = proposal.before
+    ? db
+        .update(aiMemory)
+        .set({ value: proposal.after, source })
+        .where(
+          and(
+            eq(aiMemory.key, proposal.target),
+            eq(aiMemory.value, proposal.before)
+          )
+        )
+    : db
         .insert(aiMemory)
         .values({
           key: proposal.target,
           value: proposal.after,
-          source: proposal.memory_source ?? "user",
+          source,
           created_at: now.toISOString(),
         })
-        .onConflictDoUpdate({
-          target: aiMemory.key,
-          set: {
-            value: proposal.after,
-            source: proposal.memory_source ?? "user",
-          },
-        }),
+        .onConflictDoNothing()
+  let entry: { id: number } | undefined
+  try {
+    const [, logged] = await db.batch([
+      write,
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`'memory'`.as("kind"),
+              target: aiMemory.key,
+              before: sql`${proposal.before}`.as("before"),
+              after: aiMemory.value,
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(aiMemory)
+            .where(
+              and(
+                eq(aiMemory.key, proposal.target),
+                eq(aiMemory.value, proposal.after),
+                // A new memory: only the row this write created carries
+                // this timestamp, so an equal row saved elsewhere won't log
+                proposal.before
+                  ? undefined
+                  : eq(aiMemory.created_at, now.toISOString())
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
     ])
-    entry = logged
+    entry = logged[0]
   } catch (error) {
     await reopenIfNothingWritten(proposal)
     throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
   }
   return {
     outcome: "applied",
     message: `Saved: ${proposal.after}. Change #${entry.id} in the change log.`,
   }
+}
+
+/** A memory by name, ignoring case (older memories may use capitals). */
+async function findMemory(key: string) {
+  const [row] = await db
+    .select({ key: aiMemory.key, value: aiMemory.value })
+    .from(aiMemory)
+    .where(sql`lower(${aiMemory.key}) = ${key.toLowerCase()}`)
+    .limit(1)
+  return row
 }
 
 // Memories go into every request, so keep them short
@@ -371,11 +414,7 @@ export async function proposeMemory(input: {
     throw new ProposalError(
       `Keep a memory to ${MAX_MEMORY_VALUE} characters; split it if needed`
     )
-  const [current] = await db
-    .select({ value: aiMemory.value })
-    .from(aiMemory)
-    .where(eq(aiMemory.key, key))
-    .limit(1)
+  const current = await findMemory(key)
   const before = current?.value ?? ""
   if (before === value) throw new ProposalError("That is already remembered")
   const summary =
@@ -384,7 +423,8 @@ export async function proposeMemory(input: {
   await db.insert(agentProposals).values({
     id,
     kind: "memory",
-    target: key,
+    // Replace an existing memory under its own name
+    target: current?.key ?? key,
     before,
     after: value,
     summary,

@@ -333,7 +333,58 @@ async function main() {
       (await memories()).find((m) => m.key === "gym")?.value,
       "Gym is $120 a month"
     )
-    assert.equal(await logCount(), logsBefore + 2, "two saves logged")
+    assert.equal(await logCount(), logsBefore + 2, "two saves logged so far")
+
+    // An older memory saved with capitals is replaced, not duplicated
+    await db.insert(aiMemory).values({
+      key: "Rent",
+      value: "Rent is split with Jane",
+      source: "user",
+      created_at: t0.toISOString(),
+    })
+    const m5 = await proposeMemory({
+      key: "rent",
+      value: "Rent is split with Jane, $1,000 each",
+      ownerAsked: true,
+      source: "web",
+      request: "rent is 1000 each",
+      now: t0,
+    })
+    assert.match(m5.summary, /\(replaces: Rent is split with Jane\)/)
+    assert.equal(
+      (await decideProposal(m5.id, "confirm", t0)).outcome,
+      "applied"
+    )
+    const rents = (await memories()).filter(
+      (m) => m.key.toLowerCase() === "rent"
+    )
+    assert.deepEqual(rents, [
+      {
+        key: "Rent",
+        value: "Rent is split with Jane, $1,000 each",
+        source: "user",
+      },
+    ])
+
+    // Deleted after the proposal: nothing is saved, and it says so
+    const m6 = await proposeMemory({
+      key: "rent",
+      value: "Rent is $2,000",
+      ownerAsked: true,
+      source: "web",
+      request: "x",
+      now: t0,
+    })
+    const { eq: eqOp } = await import("drizzle-orm")
+    await db.delete(aiMemory).where(eqOp(aiMemory.key, "Rent"))
+    assert.equal(
+      (await decideProposal(m6.id, "confirm", t0)).outcome,
+      "conflict"
+    )
+    assert.equal(
+      (await memories()).filter((m) => m.key.toLowerCase() === "rent").length,
+      0
+    )
 
     // Refused before anything is stored
     for (const [key, value, why] of [

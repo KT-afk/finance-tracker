@@ -16,3 +16,6 @@
 - [ ] `lib/agent/proposals.ts` splits into rules (propose/decide), the agent tool and its parser, and display formatting
 - [ ] The four `if (!(await settle(...))) return lost` guards in `decideProposal` become one status → message map
 - [ ] A test forces a category change between `decideProposal`'s check and its write (the write itself refuses it; only this path is untested)
+- [ ] One `currentMemory(key)`-style helper for the memory lookups in `proposeMemory` and `applyMemory` (from ticket 08 review)
+- [ ] `memory_source` reuses an exported `MEMORY_SOURCES` beside `aiMemory` in `lib/schema.ts` (from ticket 08 review)
+- [ ] Deleting a memory from the Ask page (`DELETE /api/memory/[id]`) is not recorded in the change log; decide whether it should be (from ticket 08 review)

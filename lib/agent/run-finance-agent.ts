@@ -155,7 +155,7 @@ export async function runFinanceAgent(
   } = {}
 ) {
   const propose = overrides.propose ?? proposeRecategorise
-  const rememberLater = overrides.proposeMemory ?? proposeMemory
+  const proposeMem = overrides.proposeMemory ?? proposeMemory
   const now = overrides.now ?? (() => new Date())
   // Proposals made while answering, for the caller to show with buttons
   const proposals: AgentProposal[] = []
@@ -353,7 +353,7 @@ export async function runFinanceAgent(
         if (toolUse.name === "propose_memory") {
           try {
             const { name, fact, owner_asked } = parseMemoryInput(toolUse.input)
-            const proposal = await rememberLater({
+            const proposal = await proposeMem({
               key: name,
               value: fact,
               ownerAsked: owner_asked,
