@@ -1,33 +1,37 @@
-import type { Metadata, Viewport } from 'next'
-import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
-import './globals.css'
-import NavBar from '@/components/NavBar'
+import type { Metadata, Viewport } from "next"
+import localFont from "next/font/local"
+import "./globals.css"
+import NavBar from "@/components/NavBar"
 
-const ibmPlexSans = IBM_Plex_Sans({
-  weight: ['400', '500', '600'],
-  variable: '--font-sans',
-  subsets: ['latin'],
+// Fonts live in the repo (app/fonts, OFL licence) so a build never depends
+// on downloading them from Google; a failed download broke a deploy once
+const ibmPlexSans = localFont({
+  src: "./fonts/IBMPlexSans-Variable.woff2",
+  weight: "400 600",
+  variable: "--font-sans",
 })
 
-const ibmPlexMono = IBM_Plex_Mono({
-  weight: ['400', '500'],
-  variable: '--font-mono',
-  subsets: ['latin'],
+const ibmPlexMono = localFont({
+  src: [
+    { path: "./fonts/IBMPlexMono-400.woff2", weight: "400" },
+    { path: "./fonts/IBMPlexMono-500.woff2", weight: "500" },
+  ],
+  variable: "--font-mono",
 })
 
 export const metadata: Metadata = {
-  title: 'Finance Tracker',
-  description: 'Personal finance tracker for SG bank accounts',
-  manifest: '/manifest.webmanifest',
+  title: "Finance Tracker",
+  description: "Personal finance tracker for SG bank accounts",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: 'Finance Tracker',
-    statusBarStyle: 'black-translucent',
+    title: "Finance Tracker",
+    statusBarStyle: "black-translucent",
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#09090b',
+  themeColor: "#09090b",
 }
 
 export default function RootLayout({
@@ -43,9 +47,7 @@ export default function RootLayout({
         <NavBar />
 
         {/* Desktop: offset for sidebar. Mobile: offset for bottom nav */}
-        <main className="md:ml-56 pb-20 md:pb-4 min-h-screen">
-          {children}
-        </main>
+        <main className="md:ml-56 pb-20 md:pb-4 min-h-screen">{children}</main>
 
         {/* Footer with version */}
         <footer className="md:ml-56 pb-20 md:pb-4 px-4 py-3 border-t border-zinc-900 text-[10px] text-zinc-700 text-center">
