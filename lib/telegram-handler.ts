@@ -1,6 +1,7 @@
 import { db } from "./db"
 import { telegramUpdates } from "./schema"
 import { loadHistory, saveExchange, type Exchange } from "./agent/conversation"
+import type { Decision, DecisionOutcome } from "./agent/proposals"
 
 export type TelegramTarget = { chatId: number; threadId?: number }
 
@@ -24,17 +25,96 @@ export type TelegramUpdate = {
     // Also set on every topic message, pointing at the topic's first message
     reply_to_message?: { message_id: number; text?: string }
   }
+  // A tap on an inline button, such as ✅ or ❌ on a proposal
+  callback_query?: {
+    id: string
+    from: { id: number }
+    data?: string
+    message?: {
+      message_id: number
+      message_thread_id?: number
+      chat: { id: number }
+      text?: string
+    }
+  }
 }
+
+export type TelegramButton = { text: string; data: string }
 
 type Dependencies = {
   config: TelegramConfig
   now: () => Date
   runAgent: (
     question: string,
-    options: { history: Exchange[] }
-  ) => Promise<{ text: string }>
-  send: (text: string, target: TelegramTarget) => Promise<void>
+    options: { history: Exchange[]; source: "telegram" }
+  ) => Promise<{
+    text: string
+    proposals?: { id: string; summary: string }[]
+  }>
+  send: (
+    text: string,
+    target: TelegramTarget,
+    options?: { buttons?: TelegramButton[] }
+  ) => Promise<void>
   sendTyping: (target: TelegramTarget) => Promise<void>
+  decide: (
+    id: string,
+    decision: Decision
+  ) => Promise<{ outcome: DecisionOutcome; message: string }>
+  // Stops the spinner on a tapped button, with a short note
+  answerCallback: (id: string, text: string) => Promise<void>
+  editMessage: (
+    chatId: number,
+    messageId: number,
+    text: string
+  ) => Promise<void>
+}
+
+// Button data: "p:<proposal id>:y" to confirm, ":n" to reject (≤ 64 bytes)
+const PROPOSAL_DATA = /^p:([A-Za-z0-9]{1,40}):([yn])$/
+
+function proposalButtons(id: string): TelegramButton[] {
+  return [
+    { text: "✅ Confirm", data: `p:${id}:y` },
+    { text: "❌ Reject", data: `p:${id}:n` },
+  ]
+}
+
+/** A tap on a proposal's button: decide it, then say what happened. */
+async function handleButton(
+  query: NonNullable<TelegramUpdate["callback_query"]>,
+  deps: Dependencies
+) {
+  const match = PROPOSAL_DATA.exec(query.data ?? "")
+  if (!match) {
+    await deps.answerCallback(query.id, "That button doesn’t do anything.")
+    return
+  }
+  let result: { message: string }
+  try {
+    result = await deps.decide(
+      match[1],
+      match[2] === "y" ? "confirm" : "reject"
+    )
+  } catch (error) {
+    console.error("Telegram button failed", error)
+    await deps.answerCallback(
+      query.id,
+      "Sorry, I couldn’t do that just now. Nothing changed. Please try again."
+    )
+    return
+  }
+  await deps.answerCallback(query.id, result.message)
+  // Show the result in place of the buttons, so an old proposal can't be
+  // tapped again by mistake
+  if (query.message)
+    await deps
+      .editMessage(
+        query.message.chat.id,
+        query.message.message_id,
+        `${query.message.text ?? ""}\n\n${result.message}`.trim()
+      )
+      .catch((error) => console.error("Telegram edit failed", error))
 }
 
 /** The conversation each topic keeps; the history topic key. */
@@ -77,6 +157,17 @@ export async function handleTelegramUpdate(
   deps: Dependencies
 ): Promise<void> {
   const { config } = deps
+  const query = update.callback_query
+  if (query) {
+    if (
+      query.from.id !== config.ownerId ||
+      query.message?.chat.id !== config.groupId
+    )
+      return
+    if (!(await claimUpdate(update.update_id, deps.now()))) return
+    await handleButton(query, deps)
+    return
+  }
   const message = update.message
   const question = message?.text?.trim()
   const topic = topicOf(message?.message_thread_id, config)
@@ -100,9 +191,12 @@ export async function handleTelegramUpdate(
   // The indicator is a nicety; never let it stop the answer
   await deps.sendTyping(target).catch(() => {})
   let answer: string
+  let proposals: { id: string; summary: string }[]
   try {
     const history = await loadHistory("telegram", topic, deps.now())
-    answer = (await deps.runAgent(prompt, { history })).text
+    const reply = await deps.runAgent(prompt, { history, source: "telegram" })
+    answer = reply.text
+    proposals = reply.proposals ?? []
   } catch (error) {
     console.error("Telegram question failed", error)
     await deps.send(
@@ -112,6 +206,10 @@ export async function handleTelegramUpdate(
     return
   }
   await deps.send(answer, target)
+  for (const proposal of proposals)
+    await deps.send(`Proposed change:\n${proposal.summary}`, target, {
+      buttons: proposalButtons(proposal.id),
+    })
   await saveExchange({
     question: prompt,
     answer,

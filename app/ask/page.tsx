@@ -17,12 +17,99 @@ interface AnswerData {
   values: number[]
 }
 
+interface Proposal {
+  id: string
+  summary: string
+}
+
 interface Message {
   id: string
   role: "user" | "ai" | "loading"
   text: string
   answer_data?: AnswerData | null
+  proposals?: Proposal[]
   timestamp?: string
+}
+
+/** A change the agent proposed: nothing happens until Confirm. */
+function ProposalCard({ proposal }: { proposal: Proposal }) {
+  const [busy, setBusy] = useState<"confirm" | "reject" | null>(null)
+  // decided: the server answered for good; the buttons go away
+  const [result, setResult] = useState<{
+    text: string
+    decided: boolean
+  } | null>(null)
+
+  async function decide(decision: "confirm" | "reject") {
+    setBusy(decision)
+    try {
+      const res = await fetch(`/api/proposals/${proposal.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      })
+      const data = await res.json()
+      setResult(
+        res.ok
+          ? { text: data.message, decided: true }
+          : {
+              text: data.error ?? "Nothing changed. Try again.",
+              decided: false,
+            }
+      )
+    } catch {
+      // Nothing changed; keep the buttons so the owner can try again
+      setResult({
+        text: "Couldn’t reach the server. Nothing changed. Try again.",
+        decided: false,
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const spinner = (
+    <span
+      aria-hidden="true"
+      className="inline-block size-3.5 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+    />
+  )
+  const buttonClass =
+    "inline-flex items-center gap-2 min-h-11 rounded-lg px-3 text-sm font-medium transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2"
+
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-600/60 bg-zinc-900/80 px-3 py-2.5">
+      <p className="text-xs text-zinc-400">Proposed change</p>
+      <p className="text-sm text-zinc-100 break-words tabular-nums">
+        {proposal.summary}
+      </p>
+      <p aria-live="polite" className="text-sm text-zinc-300 mt-2 empty:hidden">
+        {result?.text}
+      </p>
+      {!result?.decided && (
+        <div className="flex gap-2 mt-2">
+          <button
+            type="button"
+            onClick={() => decide("confirm")}
+            disabled={busy !== null}
+            className={`${buttonClass} bg-emerald-700 hover:bg-emerald-800 text-white focus-visible:outline-emerald-400`}
+          >
+            {busy === "confirm" && spinner}
+            Confirm
+          </button>
+          <button
+            type="button"
+            onClick={() => decide("reject")}
+            disabled={busy !== null}
+            className={`${buttonClass} bg-zinc-700 hover:bg-zinc-800 text-zinc-100 focus-visible:outline-zinc-400`}
+          >
+            {busy === "reject" && spinner}
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface MemoryEntry {
@@ -136,6 +223,7 @@ export default function AskPage() {
         role: "ai",
         text: data.error ? `Error: ${data.error}` : data.text,
         answer_data: data.answer_data ?? null,
+        proposals: data.error ? [] : (data.proposals ?? []),
       }
       setMessages((prev) =>
         prev.filter((m) => m.id !== "loading").concat(aiMsg)
@@ -173,8 +261,8 @@ export default function AskPage() {
               <br />
               <span className="text-zinc-600">
                 e.g. "How much on food last month?" or "Compare food and
-                transport spending." Read-only: this assistant cannot change
-                transactions or save memories.
+                transport spending." It can propose fixing a category, but
+                nothing changes until you confirm.
               </span>
             </p>
           </div>
@@ -220,6 +308,9 @@ export default function AskPage() {
                   {msg.text}
                 </p>
                 {msg.answer_data && <MiniBarChart data={msg.answer_data} />}
+                {msg.proposals?.map((p) => (
+                  <ProposalCard key={p.id} proposal={p} />
+                ))}
                 {msg.timestamp && showTime && (
                   <p className="text-[10px] text-zinc-600 mt-2">
                     {formatTime(msg.timestamp)}

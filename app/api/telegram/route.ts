@@ -1,7 +1,14 @@
 import { after, NextResponse } from "next/server"
 import { timingSafeEqual } from "node:crypto"
 import { runFinanceAgent } from "@/lib/agent/run-finance-agent"
-import { sendTelegramTo, sendTypingTo, telegramId } from "@/lib/telegram"
+import {
+  answerCallbackQuery,
+  editTelegramMessage,
+  sendTelegramTo,
+  sendTypingTo,
+  telegramId,
+} from "@/lib/telegram"
+import { decideProposal } from "@/lib/agent/proposals"
 import {
   handleTelegramUpdate,
   type TelegramConfig,
@@ -58,10 +65,13 @@ export async function POST(req: Request) {
     handleTelegramUpdate(update, {
       config,
       now: () => new Date(),
-      runAgent: (question, { history }) =>
-        runFinanceAgent(question, { history }),
+      runAgent: (question, { history, source }) =>
+        runFinanceAgent(question, { history, source }),
       send: sendTelegramTo,
       sendTyping: sendTypingTo,
+      decide: (id, decision) => decideProposal(id, decision, new Date()),
+      answerCallback: answerCallbackQuery,
+      editMessage: editTelegramMessage,
     }).catch((error) => console.error("Telegram update failed", error))
   )
   return NextResponse.json({ ok: true })

@@ -92,3 +92,11 @@ Turning on Topics makes a basic group a supergroup, with a new id that starts wi
 ## 18. Real questions are bigger than test questions
 
 Tests asked about one month. The owner's first real follow-up asked about three months at once, and hit both the answer-length limit and the lookup limit. When a limit is reached, give back what you have and say so; don't throw it all away. Try a few real questions soon after anything goes live.
+
+## 19. Helper scripts must work on the Mac and in the cloud
+
+The `verify-finance-tracker` scripts were written on the Mac. In a cloud session there is no `rsync`, `cp -c` is a Mac-only option, and `lsof` can't see network ports. The scripts now use `tar`, a plain copy, and `/proc` on Linux. When you write a helper, try it in both places, or at least avoid Mac-only flags.
+
+## 20. Claim with one statement, not a transaction
+
+To make a button count once, we first used a database transaction. With two taps at once, the second waited on the first and failed with “database is locked”. A single `UPDATE … WHERE status = 'pending'` claims the row instead: only one tap can change it, and nobody waits.

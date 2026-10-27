@@ -8,7 +8,7 @@ if [[ -f "$RUN_DIR/server.pid" ]] && kill -0 "$(cat "$RUN_DIR/server.pid")" 2>/d
   echo "An instance is already running (pid $(cat "$RUN_DIR/server.pid")). Run cleanup.sh first." >&2
   exit 1
 fi
-if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+if [[ -n "$(listen_owner)" ]]; then
   echo "Port $PORT is taken by a process this skill did not start. Set VERIFY_PORT." >&2
   exit 1
 fi
@@ -17,11 +17,18 @@ rm -rf "$RUN_DIR" && mkdir -p "$RUN_DIR/app" "$EVIDENCE_DIR"
 # Build and run from a copy of the working tree, so the owner's .next build,
 # finance.db and .env.local are never read or replaced. Uncommitted changes
 # are included.
-rsync -a --exclude node_modules --exclude .next --exclude .git --exclude output \
-  --exclude test-results --exclude 'finance.db*' --exclude 'backups' --exclude 'logs' \
-  --exclude '.env*' "$ROOT/" "$RUN_DIR/app/"
-# Turbopack rejects a node_modules symlink, so clone it (copy-on-write on APFS, near instant).
-cp -cR "$ROOT/node_modules" "$RUN_DIR/app/node_modules"
+# tar, not rsync: it is on macOS and on cloud sessions alike
+tar -C "$ROOT" --exclude=node_modules --exclude=.next --exclude=.git \
+  --exclude=output --exclude=test-results --exclude='finance.db*' \
+  --exclude=backups --exclude=logs --exclude='.env*' -cf - . |
+  tar -C "$RUN_DIR/app" -xf -
+# Turbopack rejects a node_modules symlink, so copy it: a copy-on-write
+# clone on macOS (near instant), a plain copy elsewhere (cloud sessions)
+if [[ "$(uname)" == Darwin ]]; then
+  cp -cR "$ROOT/node_modules" "$RUN_DIR/app/node_modules"
+else
+  cp -R "$ROOT/node_modules" "$RUN_DIR/app/node_modules"
+fi
 cd "$RUN_DIR/app"
 safe_env npm run -s db:setup-demo >"$RUN_DIR/setup.log" 2>&1 || { echo "Demo setup failed, see $RUN_DIR/setup.log" >&2; exit 1; }
 safe_env npm run -s build >"$RUN_DIR/build.log" 2>&1 || { echo "Build failed, see $RUN_DIR/build.log" >&2; exit 1; }

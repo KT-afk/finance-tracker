@@ -16,3 +16,25 @@ safe_env() {
     AUTH_TEST_CLIENT_KEYS=1 \
     "$@"
 }
+
+# Which pid listens on $PORT. lsof on macOS; on Linux (cloud sessions) lsof
+# may not see sockets, so read /proc instead.
+listen_owner() {
+  local pid
+  pid="$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1)"
+  if [[ -z "$pid" && -r /proc/net/tcp ]]; then
+    local hex inode
+    hex="$(printf '%04X' "$PORT")"
+    for inode in $(awk -v p=":$hex" '$4 == "0A" && substr($2, length($2) - 4) == p { print $10 }' /proc/net/tcp /proc/net/tcp6 2>/dev/null); do
+      pid="$(find /proc/[0-9]*/fd -lname "socket:\[$inode\]" 2>/dev/null | head -1 | cut -d/ -f3)"
+      [[ -n "$pid" ]] && break
+    done
+  fi
+  echo "$pid"
+}
+
+# Whether that pid has the throwaway database open
+has_test_db() {
+  lsof -p "$1" 2>/dev/null | grep -q "$RUN_DIR/test.db" ||
+    ls -l "/proc/$1/fd" 2>/dev/null | grep -q "$RUN_DIR/test.db"
+}

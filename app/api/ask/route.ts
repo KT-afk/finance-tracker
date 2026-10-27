@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "question is required" }, { status: 400 })
   try {
     const history = await loadHistory("web", "ask", new Date())
-    const answer = await runFinanceAgent(question, { history })
+    const answer = await runFinanceAgent(question, { history, source: "web" })
     await saveExchange({
       question,
       answer: answer.text,
@@ -18,7 +18,11 @@ export async function POST(req: NextRequest) {
       topic: "ask",
       at: new Date(),
     })
-    return NextResponse.json({ text: answer.text, answer_data: null })
+    return NextResponse.json({
+      text: answer.text,
+      answer_data: null,
+      proposals: answer.proposals,
+    })
   } catch {
     return NextResponse.json(
       { error: "Unable to complete your question. Please try again." },

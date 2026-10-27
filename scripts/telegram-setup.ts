@@ -103,7 +103,7 @@ async function main() {
   await call(token, "setWebhook", {
     url: `${appUrl}/api/telegram`,
     secret_token: secret,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
   })
   console.log(`Webhook set to ${appUrl}/api/telegram`)
   console.log(
