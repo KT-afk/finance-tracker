@@ -168,6 +168,8 @@ async function main() {
       "propose_recategorise",
       "propose_memory",
       "propose_note",
+      "list_changes",
+      "undo_change",
     ]
   )
   const searchResults = searchRequests[1].messages[2]
@@ -532,6 +534,54 @@ async function main() {
     withNote.text,
     /couldn’t load/,
     "no notice when memories load"
+  )
+  // Change log: read with list_changes, undo straight away with undo_change
+  const undone: unknown[] = []
+  const listed: unknown[] = []
+  const logReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("undo the last change", {
+    loadMemories: async () => [],
+    source: "telegram",
+    now: () => new Date("2026-10-27T12:00:00Z"),
+    createMessage: async (params) => {
+      logReqs.push(structuredClone(params))
+      if (logReqs.length === 1)
+        return response("tool_use", [
+          call("l1", { since: "2026-10-20", limit: 5 }, "list_changes"),
+          call("l2", { since: "2026-02-30" }, "list_changes"),
+          call("u1", {}, "undo_change"),
+          call("u2", { change_id: 12 }, "undo_change"),
+          call("u3", { change_id: "last" }, "undo_change"),
+        ])
+      return done
+    },
+    listChanges: async (options) => {
+      listed.push(options)
+      return []
+    },
+    undoChange: async (id, ctx) => {
+      undone.push({ id, source: ctx.source, request: ctx.request })
+      if (id === 12) throw new Error("private database details")
+      return { outcome: "undone" as const, message: "Undid #4" }
+    },
+  })
+  assert.deepEqual(listed, [{ since: "2026-10-20", limit: 5 }])
+  assert.deepEqual(undone, [
+    { id: undefined, source: "telegram", request: "undo the last change" },
+    { id: 12, source: "telegram", request: "undo the last change" },
+  ])
+  const logResults = logReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    logResults.map((r) => r.is_error),
+    [undefined, true, undefined, true, true]
+  )
+  assert.match(String(logResults[2].content), /Undid #4/)
+  assert.match(String(logResults[3].content), /Nothing was changed/)
+  assert.doesNotMatch(JSON.stringify(logResults), /private database/)
+  assert.match(
+    JSON.stringify(logReqs[0].system),
+    /only when the owner.s own message asks to undo/
   )
   console.log("finance-agent: passed")
 }

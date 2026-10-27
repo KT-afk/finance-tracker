@@ -41,6 +41,17 @@ function day(date: string): string {
   }).format(new Date(`${date}T00:00:00Z`))
 }
 
+/** How a payment is named to the owner: "Shopee $80 on 6 Sept 2026". */
+export function describePayment(tx: {
+  payee: string | null
+  description: string
+  amount: number
+  date: string
+}): string {
+  const title = tx.payee ?? describeTransaction(tx.description).title
+  return `${title} ${money(tx.amount)} on ${day(tx.date)}`
+}
+
 // Short enough for Telegram's 64-byte button data, hard to guess
 function newId(): string {
   return randomBytes(12).toString("base64url").replace(/[-_]/g, "x")
@@ -82,8 +93,7 @@ export async function proposeRecategorise(input: {
   if (tx.category === input.category)
     throw new ProposalError(`It is already ${tx.category}`)
 
-  const title = tx.payee ?? describeTransaction(tx.description).title
-  const summary = `${title} ${money(tx.amount)} on ${day(tx.date)}: ${tx.category} → ${input.category}`
+  const summary = `${describePayment(tx)}: ${tx.category} → ${input.category}`
   const id = newId()
   await db.insert(agentProposals).values({
     id,
@@ -477,9 +487,8 @@ export async function proposeNote(input: {
   if (!tx) throw new ProposalError("Transaction not found; search for it first")
   const before = tx.note ?? ""
   if (before === note) throw new ProposalError("That note is already on it")
-  const title = tx.payee ?? describeTransaction(tx.description).title
   const summary =
-    `Note on ${title} ${money(tx.amount)} on ${day(tx.date)}: “${note}”` +
+    `Note on ${describePayment(tx)}: “${note}”` +
     (before ? ` (replaces “${before}”)` : "")
   const id = newId()
   await db.insert(agentProposals).values({

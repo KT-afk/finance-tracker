@@ -167,3 +167,11 @@ A button does nothing, and says so, when:
 Also: if your memories ever fail to load, the answer now ends with “(I couldn't load your saved memories for this answer.)”, instead of quietly answering without them.
 
 **How we checked.** Database tests for proposing, confirming, replacing, rejecting and a note changed meanwhile. A search test: the note comes back, shows in the line, and “ring” finds it. Agent tests for the new tool and the memory notice. In the browser, the Transactions page shows the note. The full browser suite passed: 62 passed, 3 skipped.
+
+## Ticket 09: Reading the change log and undo (2026-10-27)
+
+**What we built.** Ask “what did you change this week?” and the agent lists each change: its number, what changed (“Shopee $80 on 6 Sept 2026”, or a memory's name), from what to what, and when. Say “undo the last change” or “undo #12” and it's undone straight away, with no button, because undoing only puts things back. The undo is written in the change log too, pointing at the change it reversed. Nothing in the log is ever edited or deleted. Undoing an undo puts the change back.
+
+**When undo refuses.** If something changed the same thing since (for example, you recategorised the payment again by hand), the undo changes nothing and says what it is now.
+
+**How we checked.** A database test makes four real changes through proposals (a category, a note, a new memory and a replacement), lists them, and undoes each kind, including twice, after a change elsewhere, and an undo of an undo. It also checks that the first four entries are untouched at the end. Agent tests cover the two tools and their strict input.
