@@ -139,3 +139,11 @@ A button does nothing, and says so, when:
 **Found in review.** Three fixes before merging. If the payment's category changed in the split second between the check and the save, confirming would have overwritten it; now the save itself requires the old category, and saves the change and its log row together or not at all. If saving failed after it had in fact worked, a second tap could have applied it twice; now it only offers a retry when nothing was saved. On the web, an error hid the buttons for good; now they stay so you can try again. Clean-ups went to ticket 28.
 
 **Surprise.** Our first version wrapped the decision in a database transaction. Two taps at once then made the second one wait and fail with “database is locked”. Now one statement claims the proposal, and the change and its log row are saved together.
+
+## Ticket 29: Fonts live in the repo (2026-10-27)
+
+**The problem.** After #31 merged, the live site didn't update: Vercel's build failed because it couldn't download the IBM Plex fonts from Google that time. The site kept running the previous version.
+
+**What we built.** The two fonts are now files in `app/fonts`, with their free licence, and the app loads them from there. The site looks the same, and builds no longer need Google.
+
+**How we checked.** We built the old and new code with the internet cut off. The old code failed with the same error as Vercel; the new code built.

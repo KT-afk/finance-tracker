@@ -25,7 +25,7 @@ Every step runs with the live database settings unset, `ANTHROPIC_API_KEY` empty
 
 Ready means it prints `READY http://127.0.0.1:3100 (pid …)`. Logs: `/tmp/verify-finance-tracker/{setup,build,server}.log`.
 
-The build fetches Google fonts. In a network-restricted sandbox it can take 15 minutes or fail with font errors; run it with network access.
+The fonts are bundled in `app/fonts`, so the build needs no network for them.
 
 ## Doctor
 

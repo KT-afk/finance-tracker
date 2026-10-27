@@ -100,3 +100,7 @@ The `verify-finance-tracker` scripts were written on the Mac. In a cloud session
 ## 20. Claim with one statement, not a transaction
 
 To make a button count once, we first used a database transaction. With two taps at once, the second waited on the first and failed with “database is locked”. A single `UPDATE … WHERE status = 'pending'` claims the row instead: only one tap can change it, and nobody waits.
+
+## 21. A build should not need the internet
+
+`next/font/google` downloads fonts during every build. One failed download stopped a production deploy, even though the code was fine. Keep what the build needs in the repo. To test it, build with `HTTPS_PROXY=http://127.0.0.1:9`, which blocks all downloads.
