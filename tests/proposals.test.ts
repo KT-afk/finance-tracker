@@ -34,7 +34,7 @@ async function main() {
   delete process.env.DATABASE_AUTH_TOKEN
 
   try {
-    const { proposeRecategorise, proposeMemory, decideProposal } =
+    const { proposeRecategorise, proposeMemory, proposeNote, decideProposal } =
       await import("../lib/agent/proposals")
     const { db } = await import("../lib/db")
     const { transactions, changeLog, agentProposals, aiMemory } =
@@ -405,6 +405,98 @@ async function main() {
         }),
         why,
         `${key} = ${value}`
+      )
+    }
+
+    // Notes on a transaction: proposed, saved on confirm, logged
+    const noteOn = async (id: string) =>
+      (
+        await db
+          .select({ note: transactions.note })
+          .from(transactions)
+          .where(eq(transactions.id, id))
+      )[0].note
+    const n1 = await proposeNote({
+      transactionId: "shopee",
+      note: "  Wedding ring   for my wife ",
+      source: "telegram",
+      request: "that was my wedding ring",
+      now: t0,
+    })
+    assert.equal(
+      n1.summary,
+      "Note on Shopee $80 on 6 Sept 2026: “Wedding ring for my wife”"
+    )
+    assert.equal(await noteOn("shopee"), null, "nothing saved before confirm")
+    const noted = await decideProposal(n1.id, "confirm", t0)
+    assert.equal(noted.outcome, "applied")
+    assert.equal(await noteOn("shopee"), "Wedding ring for my wife")
+    const [noteLog] = (await db.select().from(changeLog)).slice(-1)
+    assert.deepEqual(
+      {
+        kind: noteLog.kind,
+        target: noteLog.target,
+        before: noteLog.before,
+        after: noteLog.after,
+      },
+      {
+        kind: "note",
+        target: "shopee",
+        before: "",
+        after: "Wedding ring for my wife",
+      }
+    )
+    assert.match(noted.message, new RegExp(`#${noteLog.id}`))
+
+    // Replacing says what it replaces; reject keeps the old note
+    const n2 = await proposeNote({
+      transactionId: "shopee",
+      note: "Ring",
+      source: "web",
+      request: "x",
+      now: t0,
+    })
+    assert.match(n2.summary, /\(replaces “Wedding ring for my wife”\)$/)
+    assert.equal(
+      (await decideProposal(n2.id, "reject", t0)).outcome,
+      "rejected"
+    )
+    assert.equal(await noteOn("shopee"), "Wedding ring for my wife")
+
+    // The note changed since the proposal: nothing changes
+    const n3 = await proposeNote({
+      transactionId: "shopee",
+      note: "Ring for Yoon Thiri",
+      source: "web",
+      request: "x",
+      now: t0,
+    })
+    await db
+      .update(transactions)
+      .set({ note: "Edited elsewhere" })
+      .where(eq(transactions.id, "shopee"))
+    assert.equal(
+      (await decideProposal(n3.id, "confirm", t0)).outcome,
+      "conflict"
+    )
+    assert.equal(await noteOn("shopee"), "Edited elsewhere")
+
+    for (const [transactionId, note, why] of [
+      ["missing", "x", /not found/i],
+      ["shopee", "", /what the note/i],
+      ["shopee", "n".repeat(201), /200/],
+      ["shopee", "Edited elsewhere", /already/i],
+    ] as const) {
+      await assert.rejects(
+        proposeNote({
+          transactionId,
+          note,
+          source: "web",
+          request: "x",
+          now: t0,
+        }),
+        why,
+        `${transactionId}: ${note}`
       )
     }
 

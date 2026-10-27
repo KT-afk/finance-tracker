@@ -86,6 +86,8 @@ const tables: TableCopy[] = [
       "is_corrected",
       "hash",
       "uploaded_at",
+      // Not "note": notes are set in the cloud through Telegram, and a copy
+      // would overwrite them with the local value (book chapter 3, lesson 23)
     ],
     conflictColumn: "hash",
   },

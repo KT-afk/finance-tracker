@@ -116,6 +116,27 @@ async function main() {
     ]) {
       assert.throws(() => parseSearchInput(bad), Error, JSON.stringify(bad))
     }
+    // The owner's note comes back with the payment, and text search finds it
+    const { db } = await import("../lib/db")
+    const { transactions } = await import("../lib/schema")
+    const { eq } = await import("drizzle-orm")
+    await db
+      .update(transactions)
+      .set({ note: "Wedding ring" })
+      .where(eq(transactions.id, "shopee"))
+    const ring = await searchTransactions({ text: "ring" })
+    assert.deepEqual(
+      ring.transactions.map((t) => t.id),
+      ["shopee"]
+    )
+    assert.equal(ring.transactions[0].note, "Wedding ring")
+    assert.match(ring.transactions[0].display, /\(your note: Wedding ring\)$/)
+    const all = await searchTransactions({ category: "Shopping" })
+    assert.equal(
+      all.transactions[0].note,
+      "Wedding ring",
+      "notes in every listing"
+    )
     console.log("transaction-search: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

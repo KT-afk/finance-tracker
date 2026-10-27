@@ -166,9 +166,10 @@ export async function decideProposal(
     return { outcome: "rejected", message: "Rejected. Nothing changed." }
   }
 
-  return proposal.kind === "memory"
-    ? applyMemory(proposal, settle, lost, now)
-    : applyRecategorise(proposal, settle, lost, now)
+  if (proposal.kind === "memory")
+    return applyMemory(proposal, settle, lost, now)
+  if (proposal.kind === "note") return applyNote(proposal, settle, lost, now)
+  return applyRecategorise(proposal, settle, lost, now)
 }
 
 type Proposal = typeof agentProposals.$inferSelect
@@ -375,6 +376,166 @@ async function applyMemory(
     outcome: "applied",
     message: `Saved: ${proposal.after}. Change #${entry.id} in the change log.`,
   }
+}
+
+const noteOf = sql<string>`coalesce(${transactions.note}, '')`
+
+async function applyNote(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that payment's note has changed since this was proposed.",
+  }
+  const [target] = await db
+    .select({ note: noteOf })
+    .from(transactions)
+    .where(eq(transactions.id, proposal.target))
+    .limit(1)
+  if (!target || target.note !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return target
+      ? conflict
+      : {
+          ...conflict,
+          message: "Nothing changed: that transaction no longer exists.",
+        }
+  }
+  if (!(await settle("confirmed"))) return lost
+  // Same shape as recategorise: both writes require the note to be unchanged
+  const stillBefore = and(
+    eq(transactions.id, proposal.target),
+    sql`${noteOf} = ${proposal.before}`
+  )
+  let entry: { id: number } | undefined
+  try {
+    const [logged] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`'note'`.as("kind"),
+              target: transactions.id,
+              before: noteOf.as("before"),
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(transactions)
+            .where(stillBefore)
+        )
+        .returning({ id: changeLog.id }),
+      db.update(transactions).set({ note: proposal.after }).where(stillBefore),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
+// A note should read at a glance next to the payment
+const MAX_NOTE = 200
+
+/** Store a proposal to set the owner's note on one transaction. */
+export async function proposeNote(input: {
+  transactionId: string
+  note: string
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<{ id: string; summary: string }> {
+  const note = input.note.replace(/\s+/g, " ").trim()
+  if (!note) throw new ProposalError("Say what the note should be")
+  if (note.length > MAX_NOTE)
+    throw new ProposalError(`Keep a note to ${MAX_NOTE} characters`)
+  const [tx] = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, input.transactionId))
+    .limit(1)
+  if (!tx) throw new ProposalError("Transaction not found; search for it first")
+  const before = tx.note ?? ""
+  if (before === note) throw new ProposalError("That note is already on it")
+  const title = tx.payee ?? describeTransaction(tx.description).title
+  const summary =
+    `Note on ${title} ${money(tx.amount)} on ${day(tx.date)}: “${note}”` +
+    (before ? ` (replaces “${before}”)` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "note",
+    target: tx.id,
+    before,
+    after: note,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+export const proposeNoteTool = {
+  name: "propose_note",
+  strict: true,
+  description:
+    "Propose a note on one transaction, for a fact about that payment, such as what it was for (“wedding ring”). Find the transaction first with search_transactions and use its id. The note then comes back with the payment in every lookup. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      transaction_id: {
+        type: "string",
+        description: "The id from search_transactions",
+      },
+      note: {
+        type: "string",
+        description: "Short note, e.g. Wedding ring for my wife",
+      },
+    },
+    additionalProperties: false,
+    required: ["transaction_id", "note"],
+  },
+} satisfies import("@anthropic-ai/sdk").default.Tool
+
+/** Strict check of the propose_note input. */
+export function parseNoteInput(input: unknown): {
+  transaction_id: string
+  note: string
+} {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new ProposalError("Tool input must be an object")
+  const values = input as Record<string, unknown>
+  for (const key of Object.keys(values))
+    if (!["transaction_id", "note"].includes(key))
+      throw new ProposalError("Unknown field " + key)
+  const { transaction_id, note } = values
+  if (typeof transaction_id !== "string" || !transaction_id.trim())
+    throw new ProposalError(
+      "transaction_id must be the id from search_transactions"
+    )
+  if (typeof note !== "string") throw new ProposalError("note must be a string")
+  return { transaction_id: transaction_id.trim(), note }
 }
 
 /** A memory by name, ignoring case (older memories may use capitals). */
