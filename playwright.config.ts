@@ -13,7 +13,18 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Set where the installed browser doesn't match the pinned
+        // Playwright, such as cloud sessions (book chapter 3, lesson 2)
+        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+          ? {
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH,
+              },
+            }
+          : {}),
+      },
     },
   ],
   webServer: process.env.BASE_URL

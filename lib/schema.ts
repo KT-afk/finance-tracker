@@ -210,3 +210,48 @@ export const integrationTokens = sqliteTable("integration_tokens", {
   value: text("value").notNull(),
   updated_at: text("updated_at").notNull(),
 })
+
+// A change the finance agent proposed. Nothing changes until the owner
+// confirms it; confirming re-checks the target still has `before`.
+export const PROPOSAL_STATUSES = [
+  "pending",
+  "confirmed",
+  "rejected",
+  "expired",
+  // The target changed after the proposal, so confirming changed nothing
+  "conflict",
+] as const
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
+export const CHANGE_KINDS = ["recategorise"] as const
+export type ChangeKind = (typeof CHANGE_KINDS)[number]
+
+export const agentProposals = sqliteTable("agent_proposals", {
+  id: text("id").primaryKey(),
+  kind: text("kind", { enum: CHANGE_KINDS }).notNull(),
+  target: text("target").notNull(), // e.g. a transaction id
+  before: text("before").notNull(),
+  after: text("after").notNull(),
+  summary: text("summary").notNull(), // what the owner saw, e.g. "SHOPEE $80 …"
+  source: text("source", { enum: CONVERSATION_SOURCES }).notNull(),
+  request: text("request").notNull(), // the owner's message that led to it
+  status: text("status", { enum: PROPOSAL_STATUSES })
+    .notNull()
+    .default("pending"),
+  created_at: text("created_at").notNull(),
+  decided_at: text("decided_at"),
+})
+
+// Append-only: every applied change. Rows are never edited or deleted.
+export const changeLog = sqliteTable("change_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  created_at: text("created_at").notNull(),
+  kind: text("kind", { enum: CHANGE_KINDS }).notNull(),
+  target: text("target").notNull(),
+  before: text("before").notNull(),
+  after: text("after").notNull(),
+  source: text("source", { enum: CONVERSATION_SOURCES }).notNull(),
+  request: text("request").notNull(),
+  proposal_id: text("proposal_id"),
+  // For an undo (ticket 09): the entry it reverses
+  reverses_id: integer("reverses_id"),
+})

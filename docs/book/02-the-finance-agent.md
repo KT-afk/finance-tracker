@@ -121,3 +121,19 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **What we built.** More room (about 3,000 words) and eight lookups. If an answer still runs out, you get what was written, marked “cut short”, instead of an error. The agent is also told to keep answers short and to skip Markdown, because Telegram showed `**` as typed.
 
 **How we checked.** Agent tests: a cut-off answer is sent with the note, a cut-off answer with no text still fails, the agent gets eight lookup rounds, and the instructions ban Markdown. We could not see the real error, because Vercel's logs are out of reach, so the real check is asking the same question again.
+
+## Ticket 07: Proposed changes and the change log (2026-10-27)
+
+**The problem.** The agent could only read. Fixing a wrong category meant opening the Transactions page.
+
+**What we built.** Say “that $80 Shopee was a gift”. The agent finds the payment and **proposes** a change: “Shopee $80 on 6 Sept 2026: Shopping → Personal”, with ✅ Confirm and ❌ Reject. In Telegram these are buttons under the message; on the web Ask page they are buttons on a card. Nothing changes until you confirm. Every confirmed change is written to the new **change log**, which is never edited or deleted (ticket 09 will let you read it and undo).
+
+A button does nothing, and says so, when:
+
+- the proposal is older than 24 hours;
+- it was already confirmed or rejected (so a double tap only counts once);
+- the payment's category changed since the proposal.
+
+**How we checked.** A database test proposes, confirms, rejects, double-taps, waits 24 hours and changes the payment underneath. Agent and Telegram tests cover the new tool and the buttons. In the browser, the Ask page shows the card and its buttons call the real server. The whole browser suite passed: 60 passed, 3 skipped.
+
+**Surprise.** Our first version wrapped the decision in a database transaction. Two taps at once then made the second one wait and fail with “database is locked”. Now one statement claims the proposal, and the change and its log row are saved together.

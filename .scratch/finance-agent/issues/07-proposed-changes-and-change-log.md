@@ -6,18 +6,22 @@
 
 **Blocked by:** 02, 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The agent never changes data without a confirmed proposal and never claims it did
-- [ ] Proposals name the exact transaction and the before and after category
-- [ ] Confirm applies the change and records it in the change log; reject changes nothing
-- [ ] Proposals expire after 24 hours; an expired or already-used button does nothing and says so
-- [ ] If the transaction changed since the proposal, confirming changes nothing and says why
-- [ ] Works in Telegram (inline buttons) and on the web Ask page
-- [ ] Agent and Telegram handler tests cover propose, confirm, reject, expiry and conflict
+- [x] The agent never changes data without a confirmed proposal and never claims it did
+- [x] Proposals name the exact transaction and the before and after category
+- [x] Confirm applies the change and records it in the change log; reject changes nothing
+- [x] Proposals expire after 24 hours; an expired or already-used button does nothing and says so
+- [x] If the transaction changed since the proposal, confirming changes nothing and says why
+- [x] Works in Telegram (inline buttons) and on the web Ask page
+- [x] Agent and Telegram handler tests cover propose, confirm, reject, expiry and conflict
 
 Spec: `.scratch/finance-agent/spec.md`
 
 ## Comments
 
 Triage (2026-10-25): fully specified; ready for agent once its blockers are resolved.
+
+Resolved (2026-10-27): migration 0009 adds `agent_proposals` and the append-only `change_log`. `lib/agent/proposals.ts` stores a recategorise proposal (refusing Repayment and Paid by Others, which belong to Owed to you, and non-spending categories on hand-entered rows) and decides it: one conditional update claims a pending proposal, so a double tap applies once; expired after 24 hours; `conflict` when the transaction no longer has the "before" category; the change and its log row are written in one batch. The agent's `propose_recategorise` tool stores proposals and the agent returns them; Telegram sends each with ✅/❌ buttons and edits the message with the result; the web Ask page shows Confirm and Reject. The "read-only" wording is gone (ticket 17).
+
+Before it works in Telegram: run migration 0009 on the live database, and re-register the webhook so Telegram sends button taps (`npm run telegram:setup` now asks for `callback_query`).

@@ -66,18 +66,60 @@ export function splitMessage(text: string, max = MAX_MESSAGE_LENGTH): string[] {
   return parts
 }
 
-/** Send to a chat, in a topic when threadId is given; long text is split. */
+/**
+ * Send to a chat, in a topic when threadId is given; long text is split.
+ * Buttons go on the last part, in one row.
+ */
 export async function sendTelegramTo(
   text: string,
-  target: { chatId: number; threadId?: number }
+  target: { chatId: number; threadId?: number },
+  options: { buttons?: { text: string; data: string }[] } = {}
 ): Promise<void> {
-  for (const part of splitMessage(text))
+  const parts = splitMessage(text)
+  for (const [i, part] of parts.entries())
     await callTelegram("sendMessage", {
       chat_id: target.chatId,
       message_thread_id: target.threadId,
       text: part,
       disable_web_page_preview: true,
+      ...(options.buttons && i === parts.length - 1
+        ? {
+            reply_markup: {
+              inline_keyboard: [
+                options.buttons.map((b) => ({
+                  text: b.text,
+                  callback_data: b.data,
+                })),
+              ],
+            },
+          }
+        : {}),
     })
+}
+
+/** Stop the spinner on a tapped button and show a short note. */
+export async function answerCallbackQuery(
+  id: string,
+  text: string
+): Promise<void> {
+  // Telegram shows at most 200 characters here
+  await callTelegram("answerCallbackQuery", {
+    callback_query_id: id,
+    text: text.slice(0, 200),
+  })
+}
+
+/** Replace a message's text; its buttons go away. */
+export async function editTelegramMessage(
+  chatId: number,
+  messageId: number,
+  text: string
+): Promise<void> {
+  await callTelegram("editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text: splitMessage(text)[0],
+  })
 }
 
 /** Show "typing…" in a chat or topic for a few seconds. */

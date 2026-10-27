@@ -68,6 +68,9 @@ async function main() {
     const asked: { question: string; history: unknown[] }[] = []
     let now = new Date("2026-10-27T12:00:00Z")
     let failAgent = false
+    const decided: { id: string; decision: string }[] = []
+    const callbackAnswers: { id: string; text: string }[] = []
+    const edits: { chatId: number; messageId: number; text: string }[] = []
     const deps = {
       config,
       now: () => now,
@@ -81,12 +84,30 @@ async function main() {
       },
       send: async (
         text: string,
-        target: { chatId: number; threadId?: number }
+        target: { chatId: number; threadId?: number },
+        options?: { buttons?: { text: string; data: string }[] }
       ) => {
-        sent.push({ text, ...target })
+        sent.push({
+          text,
+          ...target,
+          ...(options?.buttons ? { buttons: options.buttons } : {}),
+        })
       },
       sendTyping: async (target: { chatId: number; threadId?: number }) => {
         typing.push(target)
+      },
+      decide: async (id: string, decision: "confirm" | "reject") => {
+        decided.push({ id, decision })
+        return {
+          outcome: "applied" as const,
+          message: `Done: ${id}. Change #1 in the change log.`,
+        }
+      },
+      answerCallback: async (id: string, text: string) => {
+        callbackAnswers.push({ id, text })
+      },
+      editMessage: async (chatId: number, messageId: number, text: string) => {
+        edits.push({ chatId, messageId, text })
       },
     }
 
@@ -256,6 +277,101 @@ async function main() {
       null,
       "0 is not a topic, the same rule as the webhook"
     )
+
+    // A proposal from the agent is sent after the answer, with buttons
+    const sentBefore = sent.length
+    await handleTelegramUpdate(message(40, "that $80 Shopee was a gift"), {
+      ...deps,
+      runAgent: async (question: string, options: { source?: string }) => {
+        assert.equal(options.source, "telegram")
+        return {
+          text: "I've proposed moving it to Personal.",
+          proposals: [
+            {
+              id: "abc123",
+              summary: "Shopee $80 on 6 Sept 2026: Shopping → Personal",
+            },
+          ],
+        }
+      },
+    })
+    assert.deepEqual(sent.slice(sentBefore), [
+      {
+        text: "I've proposed moving it to Personal.",
+        chatId: config.groupId,
+        threadId: 7,
+      },
+      {
+        text: "Proposed change:\nShopee $80 on 6 Sept 2026: Shopping → Personal",
+        chatId: config.groupId,
+        threadId: 7,
+        buttons: [
+          { text: "✅ Confirm", data: "p:abc123:y" },
+          { text: "❌ Reject", data: "p:abc123:n" },
+        ],
+      },
+    ])
+
+    // Tapping a button decides the proposal, answers the tap and updates
+    // the message so its buttons are gone
+    const tap = (
+      updateId: number,
+      data: string,
+      overrides: { from?: number; chat?: number } = {}
+    ) => ({
+      update_id: updateId,
+      callback_query: {
+        id: `cb${updateId}`,
+        from: { id: overrides.from ?? config.ownerId },
+        data,
+        message: {
+          message_id: 777,
+          message_thread_id: 7,
+          chat: { id: overrides.chat ?? config.groupId },
+          text: "Proposed change:\nShopee $80 on 6 Sept 2026: Shopping → Personal",
+        },
+      },
+    })
+    await handleTelegramUpdate(tap(41, "p:abc123:y"), deps)
+    assert.deepEqual(decided, [{ id: "abc123", decision: "confirm" }])
+    assert.deepEqual(callbackAnswers, [
+      { id: "cb41", text: "Done: abc123. Change #1 in the change log." },
+    ])
+    assert.deepEqual(edits, [
+      {
+        chatId: config.groupId,
+        messageId: 777,
+        text: "Proposed change:\nShopee $80 on 6 Sept 2026: Shopping → Personal\n\nDone: abc123. Change #1 in the change log.",
+      },
+    ])
+    await handleTelegramUpdate(tap(42, "p:abc123:n"), deps)
+    assert.deepEqual(decided.at(-1), { id: "abc123", decision: "reject" })
+
+    // A re-sent tap is handled once
+    await handleTelegramUpdate(tap(42, "p:abc123:n"), deps)
+    assert.equal(decided.length, 2)
+
+    // Taps by anyone else, from another chat, or with odd data change nothing
+    await handleTelegramUpdate(tap(43, "p:abc123:y", { from: 999 }), deps)
+    await handleTelegramUpdate(tap(44, "p:abc123:y", { chat: -2002 }), deps)
+    await handleTelegramUpdate(tap(45, "p:abc123:maybe"), deps)
+    await handleTelegramUpdate(tap(46, "something else"), deps)
+    assert.equal(decided.length, 2)
+    // An odd tap from the owner still stops the button's spinner
+    assert.deepEqual(
+      callbackAnswers.slice(-2).map((a) => a.id),
+      ["cb45", "cb46"]
+    )
+
+    // If deciding fails, the owner hears so and nothing claims success
+    await handleTelegramUpdate(tap(47, "p:abc123:y"), {
+      ...deps,
+      decide: async () => {
+        throw new Error("private database details")
+      },
+    })
+    assert.match(callbackAnswers.at(-1)!.text, /couldn.t/i)
+    assert.doesNotMatch(callbackAnswers.at(-1)!.text, /private/)
 
     console.log("telegram-handler: passed")
   } finally {

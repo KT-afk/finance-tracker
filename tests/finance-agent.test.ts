@@ -160,7 +160,13 @@ async function main() {
   assert.deepEqual(searches, [{ text: "Grab" }, { text: "x" }])
   assert.deepEqual(
     searchRequests[0].tools?.map((t) => (t as Anthropic.Tool).name),
-    ["query_spending", "search_transactions", "query_cash_flow", "get_balances"]
+    [
+      "query_spending",
+      "search_transactions",
+      "query_cash_flow",
+      "get_balances",
+      "propose_recategorise",
+    ]
   )
   const searchResults = searchRequests[1].messages[2]
     .content as Anthropic.ToolResultBlockParam[]
@@ -309,6 +315,108 @@ async function main() {
     createMessage: async () => done,
   })
   assert.equal(failedMemory.text, "Finished.", "answers without memories")
+  // Proposing a change: stored through the propose dependency with the
+  // question and source, returned to the caller, never applied by the agent
+  const proposed: unknown[] = []
+  const proposeRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const withProposal = await runFinanceAgent("that $80 Shopee was a gift", {
+    loadMemories: async () => [],
+    source: "telegram",
+    now: () => new Date("2026-09-12T17:00:00Z"),
+    createMessage: async (params) => {
+      proposeRequests.push(structuredClone(params))
+      if (proposeRequests.length === 1)
+        return response("tool_use", [
+          call(
+            "p1",
+            { transaction_id: "shopee", category: "Personal" },
+            "propose_recategorise"
+          ),
+          call(
+            "p2",
+            { transaction_id: "shopee", category: "Personal", amount: 5 },
+            "propose_recategorise"
+          ),
+          call(
+            "p3",
+            { transaction_id: "x", category: "Personal" },
+            "propose_recategorise"
+          ),
+        ])
+      return done
+    },
+    propose: async (input) => {
+      proposed.push({ ...input, now: input.now.toISOString() })
+      if (input.transactionId === "x")
+        throw new Error("private database details")
+      return {
+        id: "abc123def456",
+        summary: "Shopee $80 on 6 Sept 2026: Shopping → Personal",
+      }
+    },
+  })
+  assert.deepEqual(proposed, [
+    {
+      transactionId: "shopee",
+      category: "Personal",
+      source: "telegram",
+      request: "that $80 Shopee was a gift",
+      now: "2026-09-12T17:00:00.000Z",
+    },
+    {
+      transactionId: "x",
+      category: "Personal",
+      source: "telegram",
+      request: "that $80 Shopee was a gift",
+      now: "2026-09-12T17:00:00.000Z",
+    },
+  ])
+  assert.deepEqual(withProposal.proposals, [
+    {
+      id: "abc123def456",
+      summary: "Shopee $80 on 6 Sept 2026: Shopping → Personal",
+    },
+  ])
+  const proposeResults = proposeRequests[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.match(
+    String(proposeResults[0].content),
+    /waiting for the owner to confirm/
+  )
+  assert.equal(proposeResults[1].is_error, true, "unknown field refused")
+  assert.equal(proposeResults[2].is_error, true)
+  assert.doesNotMatch(JSON.stringify(proposeResults), /private database/)
+  assert.ok(
+    proposeRequests[0].tools?.some(
+      (t) => (t as Anthropic.Tool).name === "propose_recategorise"
+    )
+  )
+  const instructions = JSON.stringify(proposeRequests[0].system)
+  assert.doesNotMatch(instructions, /read-only/)
+  assert.match(instructions, /never say it was changed/)
+  assert.match(
+    instructions,
+    /cannot delete transactions, change amounts or dates/
+  )
+
+  // Without a source the proposal is recorded as from the web
+  await runFinanceAgent("grab was travel", {
+    loadMemories: async () => [],
+    createMessage: async (params) =>
+      params.messages.length === 1
+        ? response("tool_use", [
+            call(
+              "w",
+              { transaction_id: "grab", category: "Travel" },
+              "propose_recategorise"
+            ),
+          ])
+        : done,
+    propose: async (input) => {
+      assert.equal(input.source, "web")
+      return { id: "w1", summary: "x" }
+    },
+  })
   console.log("finance-agent: passed")
 }
 
