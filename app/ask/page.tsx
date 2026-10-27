@@ -34,7 +34,11 @@ interface Message {
 /** A change the agent proposed: nothing happens until Confirm. */
 function ProposalCard({ proposal }: { proposal: Proposal }) {
   const [busy, setBusy] = useState<"confirm" | "reject" | null>(null)
-  const [result, setResult] = useState<string | null>(null)
+  // decided: the server answered for good; the buttons go away
+  const [result, setResult] = useState<{
+    text: string
+    decided: boolean
+  } | null>(null)
 
   async function decide(decision: "confirm" | "reject") {
     setBusy(decision)
@@ -45,13 +49,33 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
         body: JSON.stringify({ decision }),
       })
       const data = await res.json()
-      setResult(data.message ?? data.error ?? "Nothing changed.")
+      setResult(
+        res.ok
+          ? { text: data.message, decided: true }
+          : {
+              text: data.error ?? "Nothing changed. Try again.",
+              decided: false,
+            }
+      )
     } catch {
-      setResult("Couldn’t reach the server. Nothing changed.")
+      // Nothing changed; keep the buttons so the owner can try again
+      setResult({
+        text: "Couldn’t reach the server. Nothing changed. Try again.",
+        decided: false,
+      })
     } finally {
       setBusy(null)
     }
   }
+
+  const spinner = (
+    <span
+      aria-hidden="true"
+      className="inline-block size-3.5 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+    />
+  )
+  const buttonClass =
+    "inline-flex items-center gap-2 min-h-11 rounded-lg px-3 text-sm font-medium transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2"
 
   return (
     <div className="mt-3 rounded-xl border border-zinc-600/60 bg-zinc-900/80 px-3 py-2.5">
@@ -60,25 +84,27 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
         {proposal.summary}
       </p>
       <p aria-live="polite" className="text-sm text-zinc-300 mt-2 empty:hidden">
-        {result}
+        {result?.text}
       </p>
-      {!result && (
+      {!result?.decided && (
         <div className="flex gap-2 mt-2">
           <button
             type="button"
             onClick={() => decide("confirm")}
             disabled={busy !== null}
-            className="min-h-11 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 px-3 text-sm font-medium text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+            className={`${buttonClass} bg-emerald-700 hover:bg-emerald-800 text-white focus-visible:outline-emerald-400`}
           >
-            {busy === "confirm" ? "Confirming…" : "Confirm"}
+            {busy === "confirm" && spinner}
+            Confirm
           </button>
           <button
             type="button"
             onClick={() => decide("reject")}
             disabled={busy !== null}
-            className="min-h-11 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-60 px-3 text-sm font-medium text-zinc-100 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400"
+            className={`${buttonClass} bg-zinc-700 hover:bg-zinc-800 text-zinc-100 focus-visible:outline-zinc-400`}
           >
-            {busy === "reject" ? "Rejecting…" : "Reject"}
+            {busy === "reject" && spinner}
+            Reject
           </button>
         </div>
       )}

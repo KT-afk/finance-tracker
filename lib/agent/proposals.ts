@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { db } from "../db"
 import { describeTransaction } from "../describe-transaction"
 import {
@@ -181,9 +181,37 @@ export async function decideProposal(
   }
   if (!(await settle("confirmed"))) return lost
 
+  // Both writes require the transaction to still have the "before"
+  // category, and run in one batch: either both happen or neither, even if
+  // the category changed a moment ago
+  const stillBefore = and(
+    eq(transactions.id, proposal.target),
+    eq(transactions.category, proposal.before)
+  )
+  let entry: { id: number } | undefined
   try {
-    // The change and its log entry are written together
-    const [, [entry]] = await db.batch([
+    const [logged] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              // null lets SQLite number the entry
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`${proposal.kind}`.as("kind"),
+              target: transactions.id,
+              before: transactions.category,
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(transactions)
+            .where(stillBefore)
+        )
+        .returning({ id: changeLog.id }),
       db
         .update(transactions)
         .set(
@@ -192,32 +220,40 @@ export async function decideProposal(
             ? { category: proposal.after }
             : { category: proposal.after, is_corrected: true }
         )
-        .where(eq(transactions.id, proposal.target)),
-      db
-        .insert(changeLog)
-        .values({
-          created_at: now.toISOString(),
-          kind: proposal.kind,
-          target: proposal.target,
-          before: proposal.before,
-          after: proposal.after,
-          source: proposal.source,
-          request: proposal.request,
-          proposal_id: proposal.id,
-        })
-        .returning({ id: changeLog.id }),
+        .where(stillBefore),
     ])
-    return {
-      outcome: "applied",
-      message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
-    }
+    entry = logged[0]
   } catch (error) {
-    // Nothing was written; let the owner tap again
+    // Let the owner tap again, but only if nothing was written: the batch
+    // may have committed before the error reached us
+    const written = await db
+      .select({ id: changeLog.id })
+      .from(changeLog)
+      .where(eq(changeLog.proposal_id, proposal.id))
+      .catch(() => [{ id: 0 }])
+    if (written.length === 0)
+      await db
+        .update(agentProposals)
+        .set({ status: "pending", decided_at: null })
+        .where(
+          and(eq(agentProposals.id, id), eq(agentProposals.status, "confirmed"))
+        )
+    throw error
+  }
+  if (!entry) {
+    // Changed between the check above and the write
     await db
       .update(agentProposals)
-      .set({ status: "pending", decided_at: null })
+      .set({ status: "conflict" })
       .where(eq(agentProposals.id, id))
-    throw error
+    return {
+      outcome: "conflict",
+      message: `Nothing changed: it is no longer ${proposal.before}, since this was proposed.`,
+    }
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
   }
 }
 

@@ -131,4 +131,50 @@ test.describe("ask / AI chat", () => {
     })
     expect(res.status()).toBe(400)
   })
+
+  test("a failed Confirm keeps the buttons so the owner can try again", async ({
+    authedPage: page,
+  }) => {
+    await page.route("**/api/ask", (route) =>
+      route.fulfill({
+        json: {
+          text: "Proposed.",
+          answer_data: null,
+          proposals: [
+            {
+              id: "noSuchProposal2",
+              summary: "Grab $12.50 on 7 Sept 2026: Transport → Travel",
+            },
+          ],
+        },
+      })
+    )
+    // The first tap fails on the server; later taps reach the real route
+    let failed = false
+    await page.route("**/api/proposals/**", (route) => {
+      if (failed) return route.continue()
+      failed = true
+      return route.fulfill({
+        status: 500,
+        json: {
+          error:
+            "Couldn’t do that just now. Nothing changed. Please try again.",
+        },
+      })
+    })
+    await page.goto("/ask")
+    await page.fill("textarea", "grab was a trip")
+    await page.getByRole("button", { name: "Ask" }).click()
+    await page.getByRole("button", { name: "Confirm" }).click()
+    await expect(
+      page.getByText(
+        "Couldn’t do that just now. Nothing changed. Please try again."
+      )
+    ).toBeVisible()
+    await page.getByRole("button", { name: "Confirm" }).click()
+    await expect(
+      page.getByText("That proposal no longer exists. Nothing changed.")
+    ).toBeVisible()
+    await expect(page.getByRole("button", { name: "Confirm" })).toHaveCount(0)
+  })
 })

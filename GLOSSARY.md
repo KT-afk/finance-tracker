@@ -44,6 +44,10 @@ _Avoid_: Cap, allowance
 The assistant that answers the owner's questions about their money and can make changes on their behalf once the owner confirms each one.
 _Avoid_: Bot, AI, assistant
 
+**Proposal**:
+A change the finance agent suggests but has not made, such as moving one transaction to another category. It shows exactly what would change, from what to what. Nothing changes until the owner confirms it; it can also be rejected, and it expires after 24 hours. Confirming does nothing if the data changed since it was proposed.
+_Avoid_: Suggestion, pending change, draft
+
 **Change log**:
 The permanent record of every confirmed change the finance agent made to the owner's data: what changed, from what to what, when, and which request caused it. Any entry can be undone, and the undo is itself recorded.
 _Avoid_: Audit trail, history

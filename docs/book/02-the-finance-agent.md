@@ -136,4 +136,6 @@ A button does nothing, and says so, when:
 
 **How we checked.** A database test proposes, confirms, rejects, double-taps, waits 24 hours and changes the payment underneath. Agent and Telegram tests cover the new tool and the buttons. In the browser, the Ask page shows the card and its buttons call the real server. The whole browser suite passed: 60 passed, 3 skipped.
 
+**Found in review.** Three fixes before merging. If the payment's category changed in the split second between the check and the save, confirming would have overwritten it; now the save itself requires the old category, and saves the change and its log row together or not at all. If saving failed after it had in fact worked, a second tap could have applied it twice; now it only offers a retry when nothing was saved. On the web, an error hid the buttons for good; now they stay so you can try again. Clean-ups went to ticket 28.
+
 **Surprise.** Our first version wrapped the decision in a database transaction. Two taps at once then made the second one wait and fail with “database is locked”. Now one statement claims the proposal, and the change and its log row are saved together.
