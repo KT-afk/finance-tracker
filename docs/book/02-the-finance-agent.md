@@ -177,3 +177,12 @@ Also: if your memories ever fail to load, the answer now ends with “(I couldn'
 **Found in review.** Three fixes. “Since 27 Oct” started at 8am Singapore time; now it starts at midnight (lesson 24). Saying “undo the last change” twice would have redone the first change; now it undoes the next one. And because undo has no button, a Telegram reply that quotes someone else's message can't trigger an undo: you need to ask in your own words.
 
 **How we checked.** A database test makes four real changes through proposals (a category, a note, a new memory and a replacement), lists them, and undoes each kind, including twice, after a change elsewhere, and an undo of an undo. It also checks that the first four entries are untouched at the end. Agent tests cover the two tools and their strict input.
+
+## Ticket 10: Rules and shares from chat (2026-10-27)
+
+**What we built.** Two more things you can set by asking, each with ✅ and ❌, recorded in the change log, and undoable:
+
+- **Category rules.** “Always put Grab in Transport” offers: “Rule: payments containing ‘grab’ go to Transport (2 past payments match; they keep their categories)”. Rules sort future uploads. To fix past payments, the agent offers to recategorise them one by one.
+- **Shares.** “Jane owes me $40 of that dinner” offers: “Share: Jane owes $40 of SUSHI TEI $120 on 5 Sept 2026”. Once confirmed, your spending counts only your $80, and Jane shows in Owed to you, exactly as if you'd split it in the app. The same checks apply: only money you paid from a bank, and not more than the payment.
+
+**How we checked.** A database test proposes, confirms, replaces and undoes rules and shares, checks a share lowers Food spending from $140 to $100 and undo brings it back, a share changed meanwhile, and the app's checks (income, a hand-entered row, too much, nothing). Agent tests cover both tools and their strict input.

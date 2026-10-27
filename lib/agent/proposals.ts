@@ -3,8 +3,16 @@ import { and, eq, sql } from "drizzle-orm"
 import { db } from "../db"
 import { describeTransaction } from "../describe-transaction"
 import {
+  cleanAmount,
+  cleanPerson,
+  getBankTransaction,
+  OwedError,
+} from "../owed"
+import {
   agentProposals,
   aiMemory,
+  categoryRules,
+  owedEntries,
   CATEGORIES,
   changeLog,
   OFF_BANK,
@@ -179,6 +187,8 @@ export async function decideProposal(
   if (proposal.kind === "memory")
     return applyMemory(proposal, settle, lost, now)
   if (proposal.kind === "note") return applyNote(proposal, settle, lost, now)
+  if (proposal.kind === "rule") return applyRule(proposal, settle, lost, now)
+  if (proposal.kind === "share") return applyShare(proposal, settle, lost, now)
   return applyRecategorise(proposal, settle, lost, now)
 }
 
@@ -547,6 +557,337 @@ export function parseNoteInput(input: unknown): {
   return { transaction_id: transaction_id.trim(), note }
 }
 
+// ---- Category rules: keyword → category for future uploads ----
+
+const MIN_KEYWORD = 2
+const MAX_KEYWORD = 40
+
+async function currentRule(keyword: string) {
+  const [row] = await db
+    .select({ category: categoryRules.category })
+    .from(categoryRules)
+    .where(eq(categoryRules.keyword, keyword))
+    .limit(1)
+  return row?.category ?? ""
+}
+
+/**
+ * Store a proposal to add or change a category rule. Rules apply to future
+ * uploads; past payments keep their categories, and the summary says how
+ * many match.
+ */
+export async function proposeRule(input: {
+  keyword: string
+  category: string
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<{ id: string; summary: string }> {
+  // Stored the same way the app's saveRule() stores keywords
+  const keyword = input.keyword.replace(/\s+/g, " ").trim().toLowerCase()
+  if (keyword.length < MIN_KEYWORD || keyword.length > MAX_KEYWORD)
+    throw new ProposalError(
+      `The keyword must be ${MIN_KEYWORD} to ${MAX_KEYWORD} characters`
+    )
+  if (!(CATEGORIES as readonly string[]).includes(input.category))
+    throw new ProposalError("Use a category from the tool schema")
+  if (OWED_CATEGORIES.includes(input.category))
+    throw new ProposalError(
+      "Repayments and things others paid for are set from Owed to you in the app, not by a rule"
+    )
+  const before = await currentRule(keyword)
+  if (before === input.category)
+    throw new ProposalError(`That rule already sends “${keyword}” to ${before}`)
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(sql`instr(lower(${transactions.description}), ${keyword}) > 0`)
+  const matches = `${count} past payment${count === 1 ? "" : "s"} match`
+  const summary =
+    `Rule: payments containing “${keyword}” go to ${input.category} (` +
+    (before ? `replaces ${before}; ` : "") +
+    `${matches}; they keep their categories)`
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "rule",
+    target: keyword,
+    before,
+    after: input.category,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyRule(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message: "Nothing changed: that rule has changed since this was proposed.",
+  }
+  if ((await currentRule(proposal.target)) !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  // Conditional write, and a log row only if it happened (lesson 22)
+  const write = proposal.before
+    ? db
+        .update(categoryRules)
+        .set({ category: proposal.after, created_at: now.toISOString() })
+        .where(
+          and(
+            eq(categoryRules.keyword, proposal.target),
+            eq(categoryRules.category, proposal.before)
+          )
+        )
+    : db
+        .insert(categoryRules)
+        .values({
+          id: newId(),
+          keyword: proposal.target,
+          category: proposal.after,
+          created_at: now.toISOString(),
+        })
+        .onConflictDoNothing()
+  let entry: { id: number } | undefined
+  try {
+    const [, logged] = await db.batch([
+      write,
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`'rule'`.as("kind"),
+              target: categoryRules.keyword,
+              before: sql`${proposal.before}`.as("before"),
+              after: categoryRules.category,
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(categoryRules)
+            .where(
+              and(
+                eq(categoryRules.keyword, proposal.target),
+                eq(categoryRules.category, proposal.after),
+                // only the row this write touched carries this timestamp
+                eq(categoryRules.created_at, now.toISOString())
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
+// ---- Shares: part of a payment someone else should cover ----
+
+/** "Jane|40" ↔ { person, amount }; "" means no share. */
+export function encodeShare(share: { person: string; amount: number } | null) {
+  return share ? `${share.person}|${share.amount}` : ""
+}
+export function decodeShare(value: string) {
+  if (!value) return null
+  const at = value.lastIndexOf("|")
+  return { person: value.slice(0, at), amount: Number(value.slice(at + 1)) }
+}
+/** How a share reads to the owner: "Jane owes $40", or "no share". */
+export function describeShare(value: string) {
+  const share = decodeShare(value)
+  return share ? `${share.person} owes ${money(share.amount)}` : "no share"
+}
+
+async function currentShare(transactionId: string) {
+  const [row] = await db
+    .select({ person: owedEntries.person, amount: owedEntries.amount })
+    .from(owedEntries)
+    .where(
+      and(
+        eq(owedEntries.transaction_id, transactionId),
+        eq(owedEntries.kind, "share")
+      )
+    )
+    .limit(1)
+  return encodeShare(row ?? null)
+}
+
+/**
+ * Store a proposal to set someone's share of one payment, with the same
+ * checks as the app: a bank payment out, and no more than its amount.
+ */
+export async function proposeShare(input: {
+  transactionId: string
+  person: string
+  amount: number
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<{ id: string; summary: string }> {
+  let tx: Awaited<ReturnType<typeof getBankTransaction>>
+  let person: string
+  let amount: number
+  try {
+    tx = await getBankTransaction(input.transactionId)
+    if (tx.amount >= 0)
+      throw new OwedError("Only money you paid out can be split")
+    person = await cleanPerson(input.person)
+    amount = cleanAmount(input.amount, Math.abs(tx.amount))
+  } catch (error) {
+    if (error instanceof OwedError) throw new ProposalError(error.message)
+    throw error
+  }
+  // Something else about owed money is already recorded on this payment
+  const [other] = await db
+    .select({ kind: owedEntries.kind })
+    .from(owedEntries)
+    .where(eq(owedEntries.transaction_id, tx.id))
+    .limit(1)
+  if (other && other.kind !== "share")
+    throw new ProposalError("This payment is already recorded in Owed to you")
+  const before = await currentShare(tx.id)
+  const after = encodeShare({ person, amount })
+  if (before === after) throw new ProposalError("That share is already set")
+  const summary =
+    `Share: ${describeShare(after)} of ${describePayment(tx)}` +
+    (before ? ` (replaces ${describeShare(before)})` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "share",
+    target: tx.id,
+    before,
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyShare(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that payment's share has changed since this was proposed.",
+  }
+  if ((await currentShare(proposal.target)) !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const after = decodeShare(proposal.after)!
+  const before = decodeShare(proposal.before)
+  const write = before
+    ? db
+        .update(owedEntries)
+        .set({
+          person: after.person,
+          amount: after.amount,
+          created_at: now.toISOString(),
+        })
+        .where(
+          and(
+            eq(owedEntries.transaction_id, proposal.target),
+            eq(owedEntries.kind, "share"),
+            eq(owedEntries.person, before.person),
+            eq(owedEntries.amount, before.amount)
+          )
+        )
+    : db
+        .insert(owedEntries)
+        .values({
+          id: newId(),
+          transaction_id: proposal.target,
+          person: after.person,
+          kind: "share",
+          amount: after.amount,
+          created_at: now.toISOString(),
+        })
+        .onConflictDoNothing()
+  let entry: { id: number } | undefined
+  try {
+    const [, logged] = await db.batch([
+      write,
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`'share'`.as("kind"),
+              target: owedEntries.transaction_id,
+              before: sql`${proposal.before}`.as("before"),
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(owedEntries)
+            .where(
+              and(
+                eq(owedEntries.transaction_id, proposal.target),
+                eq(owedEntries.kind, "share"),
+                eq(owedEntries.person, after.person),
+                eq(owedEntries.amount, after.amount),
+                eq(owedEntries.created_at, now.toISOString())
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
 /** A memory by name, ignoring case (older memories may use capitals). */
 async function findMemory(key: string) {
   const [row] = await db
@@ -691,4 +1032,77 @@ export function parseMemoryInput(input: unknown): {
   if (typeof owner_asked !== "boolean")
     throw new ProposalError("owner_asked must be true or false")
   return { name, fact, owner_asked }
+}
+
+export const proposeRuleTool = {
+  name: "propose_rule",
+  strict: true,
+  description:
+    "Propose adding or changing a category rule: future uploads whose bank description contains the keyword go to the category (e.g. keyword grab → Transport). Past payments keep their categories; use propose_recategorise for those. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      keyword: {
+        type: "string",
+        description: "Text in the bank description, e.g. grab or fairprice",
+      },
+      category: { type: "string", enum: [...CATEGORIES] },
+    },
+    additionalProperties: false,
+    required: ["keyword", "category"],
+  },
+} satisfies import("@anthropic-ai/sdk").default.Tool
+
+export const proposeShareTool = {
+  name: "propose_share",
+  strict: true,
+  description:
+    "Propose that someone owes the owner part of one payment they made (e.g. Jane owes $40 of a $120 dinner). Find the payment first with search_transactions and use its id. Once confirmed, the owner's spending counts only their part and the person shows in Owed to you. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      transaction_id: {
+        type: "string",
+        description: "The id from search_transactions",
+      },
+      person: { type: "string", description: "Who owes it, e.g. Jane" },
+      amount: { type: "number", description: "How much they owe, in SGD" },
+    },
+    additionalProperties: false,
+    required: ["transaction_id", "person", "amount"],
+  },
+} satisfies import("@anthropic-ai/sdk").default.Tool
+
+function strictObject(input: unknown, allowed: string[]) {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new ProposalError("Tool input must be an object")
+  for (const key of Object.keys(input))
+    if (!allowed.includes(key)) throw new ProposalError("Unknown field " + key)
+  return input as Record<string, unknown>
+}
+
+/** Strict check of the propose_rule input. */
+export function parseRuleInput(input: unknown) {
+  const { keyword, category } = strictObject(input, ["keyword", "category"])
+  if (typeof keyword !== "string" || typeof category !== "string")
+    throw new ProposalError("keyword and category must be strings")
+  return { keyword, category }
+}
+
+/** Strict check of the propose_share input. */
+export function parseShareInput(input: unknown) {
+  const { transaction_id, person, amount } = strictObject(input, [
+    "transaction_id",
+    "person",
+    "amount",
+  ])
+  if (typeof transaction_id !== "string" || !transaction_id.trim())
+    throw new ProposalError(
+      "transaction_id must be the id from search_transactions"
+    )
+  if (typeof person !== "string")
+    throw new ProposalError("person must be a string")
+  if (typeof amount !== "number" || !Number.isFinite(amount))
+    throw new ProposalError("amount must be a number")
+  return { transaction_id: transaction_id.trim(), person, amount }
 }

@@ -228,7 +228,15 @@ export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
 // recategorise: target is a transaction id, before/after are categories.
 // memory: target is the memory's key, before/after its text ("" = none).
 // note: target is a transaction id, before/after its note ("" = none).
-export const CHANGE_KINDS = ["recategorise", "memory", "note"] as const
+// rule: target is the keyword, before/after its category ("" = no rule).
+// share: target is a transaction id, before/after "person|amount" ("" = none).
+export const CHANGE_KINDS = [
+  "recategorise",
+  "memory",
+  "note",
+  "rule",
+  "share",
+] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
 export const agentProposals = sqliteTable("agent_proposals", {

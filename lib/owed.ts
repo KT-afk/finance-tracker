@@ -36,7 +36,7 @@ function roundMoney(value: number): number {
  * Trims and collapses spaces, and reuses an existing name regardless of
  * case so "jane" and "Jane" stay one person.
  */
-async function cleanPerson(person: unknown): Promise<string> {
+export async function cleanPerson(person: unknown): Promise<string> {
   const value =
     typeof person === "string" ? person.replace(/\s+/g, " ").trim() : ""
   if (!value) throw new OwedError("Say who owes this")
@@ -53,7 +53,7 @@ async function cleanPerson(person: unknown): Promise<string> {
 // Far above any real shared bill; catches typos like an extra few zeros
 const MAX_AMOUNT = 1_000_000
 
-function cleanAmount(
+export function cleanAmount(
   amount: unknown,
   max = MAX_AMOUNT,
   tooMuch = "Amount can't be more than the payment"
@@ -101,7 +101,7 @@ async function getTransaction(id: string) {
 }
 
 // Shares and repayments are for money that moved through the owner's banks
-async function getBankTransaction(id: string) {
+export async function getBankTransaction(id: string) {
   const transaction = await getTransaction(id)
   if (transaction.bank === OFF_BANK) {
     throw new OwedError("This isn’t a bank transaction")

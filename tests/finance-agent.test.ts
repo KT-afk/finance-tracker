@@ -168,6 +168,8 @@ async function main() {
       "propose_recategorise",
       "propose_memory",
       "propose_note",
+      "propose_rule",
+      "propose_share",
       "list_changes",
       "undo_change",
     ]
@@ -606,6 +608,61 @@ async function main() {
   )[0]
   assert.equal(quotedResult.is_error, true)
   assert.match(String(quotedResult.content), /Nothing was changed/)
+  // Rules and shares: stored through their propose dependencies
+  const ruleShare: unknown[] = []
+  const rsReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const withRS = await runFinanceAgent("grab is transport; jane owes 40", {
+    loadMemories: async () => [],
+    source: "web",
+    createMessage: async (params) => {
+      rsReqs.push(structuredClone(params))
+      if (rsReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "r1",
+            { keyword: "grab", category: "Transport" },
+            "propose_rule"
+          ),
+          call(
+            "s1",
+            { transaction_id: "dinner", person: "Jane", amount: 40 },
+            "propose_share"
+          ),
+          call(
+            "s2",
+            { transaction_id: "dinner", person: "Jane", amount: "40" },
+            "propose_share"
+          ),
+          call("r2", { keyword: "grab" }, "propose_rule"),
+        ])
+      return done
+    },
+    proposeRule: async (input) => {
+      ruleShare.push(["rule", input.keyword, input.category, input.source])
+      return { id: "rule1", summary: "Rule: grab → Transport" }
+    },
+    proposeShare: async (input) => {
+      ruleShare.push(["share", input.transactionId, input.person, input.amount])
+      return { id: "share1", summary: "Share: Jane owes $40" }
+    },
+  })
+  assert.deepEqual(ruleShare, [
+    ["rule", "grab", "Transport", "web"],
+    ["share", "dinner", "Jane", 40],
+  ])
+  assert.deepEqual(
+    withRS.proposals.map((p) => p.id),
+    ["rule1", "share1"]
+  )
+  const rsResults = rsReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    rsResults.map((r) => r.is_error),
+    [undefined, undefined, true, true]
+  )
+  const rsInstructions = JSON.stringify(rsReqs[0].system)
+  assert.match(rsInstructions, /propose_rule/)
+  assert.match(rsInstructions, /propose_share/)
   console.log("finance-agent: passed")
 }
 
