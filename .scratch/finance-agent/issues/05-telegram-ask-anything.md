@@ -25,7 +25,9 @@ Triage (2026-10-25): ready for agent; ticket 03 is resolved so this is unblocked
 
 Resolved (2026-10-27): `lib/telegram-handler.ts` handles one update with injected agent and sender; `app/api/telegram/route.ts` checks the secret-token header, answers 200 at once and runs the handler with `after()`; `/api/telegram` skips the app password, like the cron route. Seen update ids live in a new `telegram_updates` table (migration 0008). Long answers are split under Telegram's 4,096-character limit. Replies in Daily insights are left for ticket 06.
 
-Setup run (2026-10-27): `npm run telegram:setup` registered the webhook at `https://finance-tracker-latest-xi.vercel.app/api/telegram`. Use `TELEGRAM_GROUP_ID=-1004480176355`, `TELEGRAM_INSIGHTS_TOPIC_ID=3`, `TELEGRAM_ASK_TOPIC_ID=4`, `TELEGRAM_OWNER_ID=730041802`. The script also printed `-5301050001`, the group's old id from before Topics turned it into a supergroup; ignore it. It printed `GroupAnonymousBot` (1087968824) too, because one message was sent as an anonymous admin; such messages are ignored, so post as yourself. Steps 1–6 are done (5: migration 0008 was already on the live database); 7 and 8 remain.
+Setup run (2026-10-27): `npm run telegram:setup` registered the webhook at `https://finance-tracker-latest-xi.vercel.app/api/telegram`. Use `TELEGRAM_GROUP_ID=-1004480176355`, `TELEGRAM_INSIGHTS_TOPIC_ID=3`, `TELEGRAM_ASK_TOPIC_ID=4`, `TELEGRAM_OWNER_ID=730041802`. The script also printed `-5301050001`, the group's old id from before Topics turned it into a supergroup; ignore it. It printed `GroupAnonymousBot` (1087968824) too, because one message was sent as an anonymous admin; such messages are ignored, so post as yourself. Steps 1–6 are done (5: migration 0008 was already on the live database).
+
+Live (2026-10-27 09:55 SGT): Vercel settings set; the SpendingInsights bot answered three questions in Ask anything, including two Telegram had held while the app refused them. Steps 7 and 8 are done.
 
 ## Owner steps
 
