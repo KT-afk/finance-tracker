@@ -103,3 +103,21 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **Found in review.** Codex found that answers over 4,096 characters would be refused by Telegram, so long answers are now split. It also found that an odd secret could crash the check instead of being refused.
 
 **How we checked.** Tests with a fake agent and a fake Telegram: owner-only, other chats and topics ignored, repeated update not answered twice, follow-up history, history kept apart from the web, a short error message on failure, and a fresh start after 6 quiet hours. The secret check and message splitting have their own test. Nothing has talked to the real Telegram yet: that needs the owner's bot (see the ticket's owner steps).
+
+## Ticket 06: Daily insights and replies (2026-10-27)
+
+**What we built.** The 10pm message now goes to the **Daily insights** topic in your Telegram group. Reply to it, for example “why was rent so high?”, and the agent answers in that topic, knowing which message you replied to. You can also just ask a question there. Daily insights keeps its own conversation, separate from Ask anything.
+
+**Until Telegram is set up,** the 10pm message still goes to your own chat, as before. Nothing changes until the group settings exist.
+
+**How we checked.** Handler tests send fake Telegram updates: a reply, a plain message, a reply to a photo, and a message before the topic is set up. A test of the real daily job fakes Telegram and checks where the message lands; it fails on the old code.
+
+**Surprise.** In a topic, Telegram marks every message as a reply to the topic's first message. See chapter 3, lesson 16.
+
+## Ticket 27: Long answers no longer fail (2026-10-27)
+
+**The problem.** The first real Telegram questions worked, but “What was I spending so much on in May, June and April?” got “Sorry, I couldn't answer that”. The agent could only write about 900 words and look things up four times. A three-month question needs more, and running out failed the whole answer.
+
+**What we built.** More room (about 3,000 words) and eight lookups. If an answer still runs out, you get what was written, marked “cut short”, instead of an error. The agent is also told to keep answers short and to skip Markdown, because Telegram showed `**` as typed.
+
+**How we checked.** Agent tests: a cut-off answer is sent with the note, a cut-off answer with no text still fails, the agent gets eight lookup rounds, and the instructions ban Markdown. We could not see the real error, because Vercel's logs are out of reach, so the real check is asking the same question again.

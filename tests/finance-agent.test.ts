@@ -66,6 +66,26 @@ async function main() {
       /did not finish/
     )
   }
+  // A long answer that hits the output limit is sent, marked as cut short,
+  // instead of failing the whole question
+  const longRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const cut = await runFinanceAgent("What did I buy in May?", {
+    loadMemories: async () => [],
+    createMessage: async (params) => {
+      longRequests.push(params)
+      return response("max_tokens", [
+        { type: "text", text: "May: rent $1,200, Shopee", citations: null },
+      ])
+    },
+  })
+  assert.match(cut.text, /^May: rent \$1,200, Shopee/)
+  assert.match(cut.text, /cut short/)
+  assert.ok(longRequests[0].max_tokens >= 4000, "room for long answers")
+  assert.match(
+    JSON.stringify(longRequests[0].system),
+    /no Markdown/,
+    "Telegram shows ** and # as typed"
+  )
   await assert.rejects(
     runFinanceAgent("test", {
       loadMemories: async () => [],
@@ -78,7 +98,7 @@ async function main() {
     loadMemories: async () => [],
     createMessage: async (params) => {
       rounds++
-      if (rounds === 5) {
+      if (rounds === 9) {
         assert.deepEqual(params.tool_choice, { type: "none" })
         return done
       }
@@ -86,7 +106,7 @@ async function main() {
     },
     query: async () => ({ rows: [], total: 0, count: 0 }),
   })
-  assert.equal(rounds, 5)
+  assert.equal(rounds, 9, "eight lookup rounds, then one to answer")
   const measures: unknown[] = []
   const measureRequests: Anthropic.MessageCreateParamsNonStreaming[] = []
   await runFinanceAgent("Gross vs mine", {

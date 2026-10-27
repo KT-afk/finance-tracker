@@ -91,3 +91,26 @@ export async function sendTypingTo(target: {
     action: "typing",
   })
 }
+
+/**
+ * Where the 10pm message goes: the group's Daily insights topic once both
+ * ids are set, or null to keep using the owner's chat (TELEGRAM_CHAT_ID).
+ */
+export function dailyMessageTarget(
+  env: Record<string, string | undefined> = process.env
+): { chatId: number; threadId: number } | null {
+  const chatId = telegramId(env.TELEGRAM_GROUP_ID)
+  const threadId = telegramId(env.TELEGRAM_INSIGHTS_TOPIC_ID)
+  return chatId && threadId ? { chatId, threadId } : null
+}
+
+/**
+ * A Telegram id from a setting: a non-zero whole number, or null. Used for
+ * every Telegram id setting, so the webhook and the 10pm message agree.
+ */
+export function telegramId(value: string | undefined): number | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  const id = Number(trimmed)
+  return Number.isInteger(id) && id !== 0 ? id : null
+}

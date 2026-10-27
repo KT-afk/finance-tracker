@@ -3,7 +3,11 @@ import { buildDailySummary, formatDailyMessage } from "@/lib/daily-message"
 import { buildMonthlyRecap, formatMonthlyRecap } from "@/lib/monthly-recap"
 import { ingestPaymentAlerts } from "@/lib/payment-alerts/ingest"
 import { OutlookAuthError } from "@/lib/payment-alerts/outlook"
-import { sendTelegram } from "@/lib/telegram"
+import {
+  dailyMessageTarget,
+  sendTelegram,
+  sendTelegramTo,
+} from "@/lib/telegram"
 
 // Reading mail, categorising and sending can take a while
 export const maxDuration = 60
@@ -66,9 +70,14 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  // Daily insights in the group once configured, else the owner's chat
+  const target = dailyMessageTarget()
+  const send = (text: string) =>
+    target ? sendTelegramTo(text, target) : sendTelegram(text)
+
   const summary = await buildDailySummary(now, warnings)
   const message = formatDailyMessage(summary, appUrl())
-  if (!dryRun) await sendTelegram(message)
+  if (!dryRun) await send(message)
 
   // On the 1st, also recap the month that just ended
   let recap: string | null = null
@@ -80,7 +89,7 @@ export async function GET(req: NextRequest) {
     recap = formatMonthlyRecap(
       await buildMonthlyRecap(last.toISOString().slice(0, 7))
     )
-    if (!dryRun) await sendTelegram(recap)
+    if (!dryRun) await send(recap)
   }
 
   return NextResponse.json({ ingested, sent: !dryRun, message, recap })

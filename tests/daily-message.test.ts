@@ -131,6 +131,61 @@ async function main() {
       401
     )
 
+    // The 10pm message goes to the group's Daily insights topic once it is
+    // configured, and to the owner's chat until then
+    const realFetch = globalThis.fetch
+    const telegramCalls: { url: string; body: Record<string, unknown> }[] = []
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input)
+      if (!url.startsWith("https://api.telegram.org/"))
+        return realFetch(input, init)
+      telegramCalls.push({ url, body: JSON.parse(String(init?.body)) })
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }) as typeof fetch
+    const sendNow = async () =>
+      GET(
+        new NextRequest("http://localhost/api/cron/daily", {
+          headers: { authorization: "Bearer test-secret" },
+        })
+      )
+    try {
+      process.env.TELEGRAM_BOT_TOKEN = "test-token"
+      process.env.TELEGRAM_CHAT_ID = "4242"
+      delete process.env.TELEGRAM_GROUP_ID
+      delete process.env.TELEGRAM_INSIGHTS_TOPIC_ID
+      assert.equal((await sendNow()).status, 200)
+      const toChat = telegramCalls.filter((c) => c.url.endsWith("/sendMessage"))
+      assert.ok(toChat.length > 0)
+      assert.ok(toChat.every((c) => c.body.chat_id === "4242"))
+      assert.ok(toChat.every((c) => c.body.message_thread_id === undefined))
+
+      telegramCalls.length = 0
+      process.env.TELEGRAM_GROUP_ID = "-1001"
+      process.env.TELEGRAM_INSIGHTS_TOPIC_ID = "8"
+      assert.equal((await sendNow()).status, 200)
+      const toTopic = telegramCalls.filter((c) =>
+        c.url.endsWith("/sendMessage")
+      )
+      assert.ok(toTopic.length > 0)
+      assert.ok(
+        toTopic.every(
+          (c) => c.body.chat_id === -1001 && c.body.message_thread_id === 8
+        )
+      )
+    } finally {
+      globalThis.fetch = realFetch
+      for (const key of [
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
+        "TELEGRAM_GROUP_ID",
+        "TELEGRAM_INSIGHTS_TOPIC_ID",
+      ])
+        delete process.env[key]
+    }
+
     console.log("daily message test passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })
