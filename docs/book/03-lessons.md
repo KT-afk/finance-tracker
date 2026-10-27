@@ -112,3 +112,7 @@ Ticket 07's review found a race: a check, then a write that didn't repeat the ch
 ## 23. A copy script can overwrite live changes
 
 `db:copy-cloud` copies local rows to the cloud and updates rows that already exist. Once the owner can change data from Telegram, in the cloud, a copy from the Mac would overwrite those changes with the older local values. The copy no longer includes notes. Categories have the same risk; before running a copy, check the change log for recent changes made from Telegram.
+
+## 24. A date means a Singapore day
+
+Times are saved in UTC (`2026-10-26T17:00:00Z`), but the owner means Singapore days. Comparing a saved time with a bare date like `2026-10-27` starts the day at 8am Singapore time and misses anything earlier. Turn the date into Singapore midnight first: `new Date("2026-10-27T00:00:00+08:00")`.

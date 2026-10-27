@@ -69,6 +69,7 @@ async function main() {
     let now = new Date("2026-10-27T12:00:00Z")
     let failAgent = false
     const decided: { id: string; decision: string }[] = []
+    const undoAllowed: (boolean | undefined)[] = []
     const callbackAnswers: { id: string; text: string }[] = []
     const edits: { chatId: number; messageId: number; text: string }[] = []
     const deps = {
@@ -76,9 +77,13 @@ async function main() {
       now: () => now,
       runAgent: async (
         question: string,
-        options: { history: { question: string; answer: string }[] }
+        options: {
+          history: { question: string; answer: string }[]
+          allowUndo?: boolean
+        }
       ) => {
         asked.push({ question, history: options.history })
+        undoAllowed.push(options.allowUndo)
         if (failAgent) throw new Error("private database details")
         return { text: `Answer to ${question}` }
       },
@@ -175,6 +180,9 @@ async function main() {
       deps
     )
     const replyQuestion = asked.at(-1)!.question
+    // Quoted text may come from anyone, so undo is off for this question
+    assert.equal(undoAllowed.at(-1), false)
+    assert.equal(undoAllowed[0], true, "a plain question allows undo")
     assert.match(replyQuestion, /Oct so far: \$1,952/)
     assert.match(replyQuestion, /Why was rent so high\?/)
     assert.deepEqual(sent.at(-1), {
