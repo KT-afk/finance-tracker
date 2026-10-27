@@ -6,16 +6,18 @@
 
 **Blocked by:** 01, 07
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Setting or changing a budget is a confirmed, logged, undoable change
-- [ ] Budget status compares spending (the owner's share) with the limit
-- [ ] Pace compares share of budget used with share of month gone
-- [ ] Categories without a budget are not listed
-- [ ] Months are calendar months in Singapore time
+- [x] Setting or changing a budget is a confirmed, logged, undoable change
+- [x] Budget status compares spending (the owner's share) with the limit
+- [x] Pace compares share of budget used with share of month gone
+- [x] Categories without a budget are not listed
+- [x] Months are calendar months in Singapore time
 
 Spec: `.scratch/finance-agent/spec.md`
 
 ## Comments
 
 Triage (2026-10-25): ready for agent with calendar months in Singapore time, as written. The spec marks this as provisional pending a pay-cycle decision; keep the month boundary in one function so it is easy to change.
+
+Done (2026-10-27): the owner confirmed calendar months, 1st to the last day, in Singapore time. `budgetMonth` in `lib/budgets.ts` is the one place the boundary lives. Needs migration 0012 on the live database.

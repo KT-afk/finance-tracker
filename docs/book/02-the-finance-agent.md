@@ -186,3 +186,15 @@ Also: if your memories ever fail to load, the answer now ends with “(I couldn'
 - **Shares.** “Jane owes me $40 of that dinner” offers: “Share: Jane owes $40 of SUSHI TEI $120 on 5 Sept 2026”. Once confirmed, your spending counts only your $80, and Jane shows in Owed to you, exactly as if you'd split it in the app. The same checks apply: only money you paid from a bank, and not more than the payment.
 
 **How we checked.** A database test proposes, confirms, replaces and undoes rules and shares, checks a share lowers Food spending from $140 to $100 and undo brings it back, a share changed meanwhile, and the app's checks (income, a hand-entered row, too much, nothing). Agent tests cover both tools and their strict input.
+
+## Ticket 11: Budgets (2026-10-27)
+
+**What we built.** Say “cap food at $500” and the agent offers “Budget: Food & Drink $500 a month”, with ✅ and ❌. Changing one says what it replaces. Like every change it's in the change log and can be undone. Ask “how am I doing on my budgets?” and the agent gives each budget's spending, limit, what's left, and pace:
+
+- **on track:** you've used less of the budget than of the month
+- **ahead of pace:** you've used more of the budget than of the month (60% used on the 15th)
+- **over budget:** you've spent more than the limit
+
+Spending is your share, as everywhere. Budgets run by calendar month, the 1st to the last day, in Singapore time, as you chose. Nothing rolls over. Categories without a budget aren't listed. Only spending categories can have one (not Income or Transfer).
+
+**How we checked.** A database test sets two budgets, checks spending counts only your share and only this month, the three paces, a change and its undo, an undo refused because the budget changed since, October starting clean, and the refusals. Agent tests cover both tools.

@@ -11,6 +11,7 @@ import {
 import {
   agentProposals,
   aiMemory,
+  budgets,
   categoryRules,
   owedEntries,
   CATEGORIES,
@@ -189,6 +190,8 @@ export async function decideProposal(
   if (proposal.kind === "note") return applyNote(proposal, settle, lost, now)
   if (proposal.kind === "rule") return applyRule(proposal, settle, lost, now)
   if (proposal.kind === "share") return applyShare(proposal, settle, lost, now)
+  if (proposal.kind === "budget")
+    return applyBudget(proposal, settle, lost, now)
   return applyRecategorise(proposal, settle, lost, now)
 }
 
@@ -886,6 +889,176 @@ async function applyShare(
     outcome: "applied",
     message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
   }
+}
+
+// ---- Budgets: one monthly limit per spending category ----
+
+/** How a budget limit reads: "$500", or "none". */
+export function describeBudget(value: string) {
+  return value ? money(Number(value)) : "none"
+}
+
+async function currentBudget(category: string) {
+  const [row] = await db
+    .select({ limit: budgets.monthly_limit })
+    .from(budgets)
+    .where(eq(budgets.category, category))
+    .limit(1)
+  return row ? String(row.limit) : ""
+}
+
+/** Store a proposal to set or change one category's monthly budget. */
+export async function proposeBudget(input: {
+  category: string
+  amount: number
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<{ id: string; summary: string }> {
+  if (!(CATEGORIES as readonly string[]).includes(input.category))
+    throw new ProposalError("Use a category from the tool schema")
+  if (
+    !(SPEND_CATEGORIES as readonly string[]).includes(input.category) ||
+    OWED_CATEGORIES.includes(input.category)
+  )
+    throw new ProposalError("Budgets are for spending categories only")
+  let limit: number
+  try {
+    limit = cleanAmount(input.amount)
+  } catch (error) {
+    if (error instanceof OwedError) throw new ProposalError(error.message)
+    throw error
+  }
+  const before = await currentBudget(input.category)
+  const after = String(limit)
+  if (before === after)
+    throw new ProposalError(`The budget is already ${describeBudget(after)}`)
+  const summary =
+    `Budget: ${input.category} ${describeBudget(after)} a month` +
+    (before ? ` (replaces ${describeBudget(before)})` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "budget",
+    target: input.category,
+    before,
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyBudget(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that budget has changed since this was proposed.",
+  }
+  if ((await currentBudget(proposal.target)) !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const stamp = now.toISOString()
+  const write = proposal.before
+    ? db
+        .update(budgets)
+        .set({ monthly_limit: Number(proposal.after), updated_at: stamp })
+        .where(
+          and(
+            eq(budgets.category, proposal.target),
+            eq(budgets.monthly_limit, Number(proposal.before))
+          )
+        )
+    : db
+        .insert(budgets)
+        .values({
+          category: proposal.target,
+          monthly_limit: Number(proposal.after),
+          updated_at: stamp,
+        })
+        .onConflictDoNothing()
+  let entry: { id: number } | undefined
+  try {
+    const [, logged] = await db.batch([
+      write,
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${stamp}`.as("created_at"),
+              kind: sql`'budget'`.as("kind"),
+              target: budgets.category,
+              before: sql`${proposal.before}`.as("before"),
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(budgets)
+            // only the row this write touched carries this timestamp
+            .where(
+              and(
+                eq(budgets.category, proposal.target),
+                eq(budgets.updated_at, stamp)
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
+export const proposeBudgetTool = {
+  name: "propose_budget",
+  strict: true,
+  description:
+    "Propose setting or changing the monthly budget for one spending category (e.g. cap Food & Drink at $500). Budgets run by calendar month in Singapore and don't roll over. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      category: { type: "string", enum: [...CATEGORIES] },
+      amount: { type: "number", description: "Monthly limit in SGD" },
+    },
+    additionalProperties: false,
+    required: ["category", "amount"],
+  },
+} satisfies import("@anthropic-ai/sdk").default.Tool
+
+/** Strict check of the propose_budget input. */
+export function parseBudgetInput(input: unknown) {
+  const { category, amount } = strictObject(input, ["category", "amount"])
+  if (typeof category !== "string")
+    throw new ProposalError("category must be a string")
+  if (typeof amount !== "number" || !Number.isFinite(amount))
+    throw new ProposalError("amount must be a number")
+  return { category, amount }
 }
 
 /** A memory by name, ignoring case (older memories may use capitals). */

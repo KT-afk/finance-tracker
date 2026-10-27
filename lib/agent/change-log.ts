@@ -13,6 +13,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { db } from "../db"
 import {
   aiMemory,
+  budgets,
   categoryRules,
   changeLog,
   owedEntries,
@@ -21,12 +22,20 @@ import {
 } from "../schema"
 import {
   decodeShare,
+  describeBudget,
   describePayment,
   describeShare,
   ProposalError,
 } from "./proposals"
 
 type Entry = typeof changeLog.$inferSelect
+
+/** Shares ("person|amount") and budgets ("200") are stored raw; show words. */
+function shownValue(kind: Entry["kind"], value: string) {
+  if (kind === "share") return describeShare(value)
+  if (kind === "budget") return describeBudget(value)
+  return value
+}
 
 export type ChangeView = {
   id: number
@@ -64,12 +73,13 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
           ? `memory “${e.target}”`
           : e.kind === "rule"
             ? `rule “${e.target}”`
-            : tx
-              ? describePayment(tx)
-              : "a transaction that no longer exists",
-      // Shares are stored as "person|amount"; show them as words
-      before: e.kind === "share" ? describeShare(e.before) : e.before,
-      after: e.kind === "share" ? describeShare(e.after) : e.after,
+            : e.kind === "budget"
+              ? `budget for ${e.target}`
+              : tx
+                ? describePayment(tx)
+                : "a transaction that no longer exists",
+      before: shownValue(e.kind, e.before),
+      after: shownValue(e.kind, e.after),
       source: e.source,
       request: e.request,
       reverses_id: e.reverses_id,
@@ -189,6 +199,40 @@ export async function undoChange(
             .from(categoryRules)
             .where(eq(categoryRules.keyword, entry.target))
         )[0]?.value ?? ""
+  } else if (entry.kind === "budget") {
+    const stillAfter = and(
+      eq(budgets.category, entry.target),
+      eq(budgets.monthly_limit, Number(entry.after))
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: budgets.category, current: entry.after }))
+            .from(budgets)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      // A budget that didn't exist before is removed again
+      entry.before
+        ? db
+            .update(budgets)
+            .set({
+              monthly_limit: Number(entry.before),
+              updated_at: ctx.now.toISOString(),
+            })
+            .where(stillAfter)
+        : db.delete(budgets).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select({ limit: budgets.monthly_limit })
+        .from(budgets)
+        .where(eq(budgets.category, entry.target))
+      current = row ? String(row.limit) : ""
+    }
   } else if (entry.kind === "share") {
     const after = decodeShare(entry.after)
     const before = decodeShare(entry.before)
@@ -311,10 +355,10 @@ export async function undoChange(
       message:
         current === undefined
           ? `Nothing changed: ${view.what} no longer exists.`
-          : `Nothing changed: ${view.what} is now ${entry.kind === "share" ? describeShare(current) : shown(current)}, not ${entry.kind === "share" ? view.after : shown(entry.after)}, so #${entry.id} can't be undone.`,
+          : `Nothing changed: ${view.what} is now ${shown(shownValue(entry.kind, current))}, not ${shown(view.after)}, so #${entry.id} can't be undone.`,
     }
   }
-  const before = entry.kind === "share" ? view.before : entry.before || "none"
+  const before = view.before || "none"
   return {
     outcome: "undone",
     message: `Undid #${entry.id} on ${view.what}: back to ${before}. Change #${logged[0].id} in the change log.`,
@@ -325,7 +369,7 @@ export const listChangesTool = {
   name: "list_changes",
   strict: true,
   description:
-    "Read the change log: every change the owner confirmed (categories, notes, memories, rules, shares) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
+    "Read the change log: every change the owner confirmed (categories, notes, memories, rules, shares, budgets) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
   input_schema: {
     type: "object" as const,
     properties: {

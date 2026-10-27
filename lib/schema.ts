@@ -230,12 +230,14 @@ export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
 // note: target is a transaction id, before/after its note ("" = none).
 // rule: target is the keyword, before/after its category ("" = no rule).
 // share: target is a transaction id, before/after "person|amount" ("" = none).
+// budget: target is the category, before/after the monthly limit ("" = none).
 export const CHANGE_KINDS = [
   "recategorise",
   "memory",
   "note",
   "rule",
   "share",
+  "budget",
 ] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
@@ -270,4 +272,12 @@ export const changeLog = sqliteTable("change_log", {
   proposal_id: text("proposal_id"),
   // For an undo (ticket 09): the entry it reverses
   reverses_id: integer("reverses_id"),
+})
+
+// One monthly limit per spending category, measured on the owner's
+// spending for the month (lib/budgets.ts). Unspent budget doesn't roll over.
+export const budgets = sqliteTable("budgets", {
+  category: text("category").primaryKey(),
+  monthly_limit: real("monthly_limit").notNull(),
+  updated_at: text("updated_at").notNull(),
 })
