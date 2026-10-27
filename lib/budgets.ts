@@ -45,20 +45,24 @@ export type BudgetStatus = {
 export async function budgetStatus(now: Date): Promise<BudgetStatus[]> {
   const month = budgetMonth(now)
   const rows = await db.select().from(budgets).orderBy(asc(budgets.category))
+  // Today counts as gone: on the 15th of 30 days, half the month is used
   const monthShare = month.dayOfMonth / month.daysInMonth
   return Promise.all(
     rows.map(async (row) => {
       // Same calculation as everywhere else: the owner's share
-      const spent = (
-        await querySpending(row.category, month.start, month.today)
-      ).total
-      const used = spent / row.monthly_limit
+      const spent =
+        Math.round(
+          (await querySpending(row.category, month.start, month.today)).total *
+            100
+        ) / 100
+      // Proposals refuse 0, but a hand-edited row could still hold it
+      const used = row.monthly_limit > 0 ? spent / row.monthly_limit : Infinity
       return {
         category: row.category,
         limit: row.monthly_limit,
         spent,
         left: Math.round((row.monthly_limit - spent) * 100) / 100,
-        usedPct: Math.round(used * 100),
+        usedPct: Number.isFinite(used) ? Math.round(used * 100) : 100,
         monthPct: Math.round(monthShare * 100),
         pace:
           used > 1
