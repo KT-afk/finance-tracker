@@ -31,7 +31,7 @@ Resolved (2026-10-27): `lib/telegram-handler.ts` handles one update with injecte
 2. Create a group, open its settings and turn on **Topics**. Create two topics: **Daily insights** and **Ask anything**.
 3. Add the bot to the group and make it an admin. In @BotFather, `/setprivacy` → your bot → **Disable**, so it can read messages in the group.
 4. Send any message in each topic.
-5. Run migration 0008 on the cloud database, the same way as 0007 (chapter 3, lesson 15).
+5. ~~Run migration 0008 on the cloud database~~ Done: all 9 migrations are applied on the live database (checked 2026-10-27).
 6. On your Mac, with `TELEGRAM_BOT_TOKEN`, `APP_URL` and a new `TELEGRAM_WEBHOOK_SECRET` (letters, digits, `_`, `-`) set: `npm run telegram:setup`. It prints the group id, topic ids and your user id, and registers the webhook.
 7. In Vercel, set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_OWNER_ID`, `TELEGRAM_GROUP_ID`, `TELEGRAM_ASK_TOPIC_ID` and `TELEGRAM_INSIGHTS_TOPIC_ID`, then redeploy.
 8. Ask a question in **Ask anything**.
