@@ -88,3 +88,7 @@ In a group with topics, Telegram sets `reply_to_message` on every message in a t
 ## 17. Turning on Topics changes the Telegram group id
 
 Turning on Topics makes a basic group a supergroup, with a new id that starts with `-100`. `telegram:setup` then prints both ids. Use the `-100` one. Messages sent as an anonymous admin come from `GroupAnonymousBot`, not the owner, so the bot ignores them.
+
+## 18. Real questions are bigger than test questions
+
+Tests asked about one month. The owner's first real follow-up asked about three months at once, and hit both the answer-length limit and the lookup limit. When a limit is reached, give back what you have and say so; don't throw it all away. Try a few real questions soon after anything goes live.

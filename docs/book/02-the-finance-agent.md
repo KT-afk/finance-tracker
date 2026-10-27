@@ -113,3 +113,11 @@ We then ran the whole app with its browser tests. All 8 Ask page tests passed. 1
 **How we checked.** Handler tests send fake Telegram updates: a reply, a plain message, a reply to a photo, and a message before the topic is set up. A test of the real daily job fakes Telegram and checks where the message lands; it fails on the old code.
 
 **Surprise.** In a topic, Telegram marks every message as a reply to the topic's first message. See chapter 3, lesson 16.
+
+## Ticket 27: Long answers no longer fail (2026-10-27)
+
+**The problem.** The first real Telegram questions worked, but “What was I spending so much on in May, June and April?” got “Sorry, I couldn't answer that”. The agent could only write about 900 words and look things up four times. A three-month question needs more, and running out failed the whole answer.
+
+**What we built.** More room (about 3,000 words) and eight lookups. If an answer still runs out, you get what was written, marked “cut short”, instead of an error. The agent is also told to keep answers short and to skip Markdown, because Telegram showed `**` as typed.
+
+**How we checked.** Agent tests: a cut-off answer is sent with the note, a cut-off answer with no text still fails, the agent gets eight lookup rounds, and the instructions ban Markdown. We could not see the real error, because Vercel's logs are out of reach, so the real check is asking the same question again.

@@ -17,12 +17,13 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (pu
 - Ticket 25: balances keep their statement date. Migration 0007 is applied to the cloud database (2026-10-27).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
 - Ticket 05: ask the agent from Telegram (pull request #29, merged). Migration 0008 is applied to the live database (checked 2026-10-27). The setup script ran on 2026-10-27 and registered the webhook at `https://finance-tracker-latest-xi.vercel.app/api/telegram`. Ids: `TELEGRAM_GROUP_ID=-1004480176355`, `TELEGRAM_INSIGHTS_TOPIC_ID=3`, `TELEGRAM_ASK_TOPIC_ID=4`, `TELEGRAM_OWNER_ID=730041802`. **Live since 2026-10-27 09:55 SGT:** the Vercel settings are in and the SpendingInsights bot answers in Ask anything.
+- Ticket 27: long answers no longer fail (more room, eight lookups, “cut short” instead of an error).
 - Ticket 06: the 10pm message goes to Daily insights, and replies there are answered with the message as context. Same setup as ticket 05; nothing extra.
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge the pull request for ticket 06** (#30).
+1. **After #30 deploys:** ask “What was I spending so much on in May, June and April 2026” in Ask anything to check ticket 27, and reply to tonight's 10pm message in Daily insights to check ticket 06.
 2. **Owner:** remove the spare bot (AskAnythingBotForFinance) from the group, and remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
 3. **Ticket 07:** proposed changes and the change log (now unblocked: 02 and 05 are done).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
