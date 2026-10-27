@@ -20,7 +20,8 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Ticket 27: long answers no longer fail (more room, eight lookups, “cut short” instead of an error).
 - Ticket 06: the 10pm message goes to Daily insights, and replies there are answered with the message as context. Same setup as ticket 05; nothing extra.
 - Ticket 07: the agent proposes category fixes with Confirm and Reject, and confirmed changes go in the change log. Ticket 17 (no more “read-only”) is done with it. **Confirmed working in Telegram by the owner on 2026-10-27.**
-- Ticket 08: the agent offers to remember facts; saved only on ✅, logged in the change log. Needs migration 0010 on the live database before it deploys.
+- Ticket 08: the agent offers to remember facts; saved only on ✅, logged in the change log. Migration 0010 applied 2026-10-27.
+- Ticket 30: notes on payments (migration 0011), so facts about one payment come back with it in every lookup; the answer says so when memories fail to load.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 

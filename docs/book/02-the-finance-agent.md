@@ -157,3 +157,13 @@ A button does nothing, and says so, when:
 **Found in review.** The save could overwrite a memory changed at the same moment, the same kind of race we fixed in ticket 07 (lesson 22); now the save itself checks. Older memories with capitals (“Rent”) would have been duplicated instead of replaced; now names are compared without case.
 
 **How we checked.** Database tests: a new memory, a replacement, yours versus suggested, reject, a memory changed or deleted meanwhile, an older memory with capitals, and refusals (no name, too long, already remembered). Agent tests: the tool, its strict input, and instructions that never say “saved” before you confirm.
+
+## Ticket 30: Notes on payments (2026-10-27)
+
+**The problem.** A memory only helps if the agent connects it to your question. “Why was June so high?” might not bring up a memory about a ring.
+
+**What we built.** A fact about one payment now goes on the payment itself, as your **note**. Say “that $1,277 transfer was my wedding ring” and the agent offers: “Note on YOXX THIXX $1,277 on 8 Jun 2026: Wedding ring”, with ✅ and ❌. Once saved, the note comes back with that payment in every lookup, as “(your note: Wedding ring)”, so the agent can't miss it. Searching for “ring” finds it too, and the Transactions page shows it under the payment. General facts (“rent is split with Jane”) are still memories.
+
+Also: if your memories ever fail to load, the answer now ends with “(I couldn't load your saved memories for this answer.)”, instead of quietly answering without them.
+
+**How we checked.** Database tests for proposing, confirming, replacing, rejecting and a note changed meanwhile. A search test: the note comes back, shows in the line, and “ring” finds it. Agent tests for the new tool and the memory notice. In the browser, the Transactions page shows the note. The full browser suite passed: 62 passed, 3 skipped.

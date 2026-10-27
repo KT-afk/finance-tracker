@@ -74,7 +74,10 @@ export const transactions = sqliteTable("transactions", {
   // Payment Alert details; null for Statement-only rows
   time: text("time"), // HH:MM, Singapore time
   payee: text("payee"),
-  memo: text("memo"),
+  memo: text("memo"), // the bank's text
+  // The owner's own note, e.g. "wedding ring"; set through a confirmed
+  // proposal, and returned with the payment in every agent lookup
+  note: text("note"),
   foreign_amount: real("foreign_amount"),
   currency: text("currency"),
   // Set when a Statement Line has matched this alert (Confirmed Transaction)
@@ -224,7 +227,8 @@ export const PROPOSAL_STATUSES = [
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
 // recategorise: target is a transaction id, before/after are categories.
 // memory: target is the memory's key, before/after its text ("" = none).
-export const CHANGE_KINDS = ["recategorise", "memory"] as const
+// note: target is a transaction id, before/after its note ("" = none).
+export const CHANGE_KINDS = ["recategorise", "memory", "note"] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
 export const agentProposals = sqliteTable("agent_proposals", {

@@ -86,6 +86,7 @@ const tables: TableCopy[] = [
       "is_corrected",
       "hash",
       "uploaded_at",
+      "note",
     ],
     conflictColumn: "hash",
   },

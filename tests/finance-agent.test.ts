@@ -167,6 +167,7 @@ async function main() {
       "get_balances",
       "propose_recategorise",
       "propose_memory",
+      "propose_note",
     ]
   )
   const searchResults = searchRequests[1].messages[2]
@@ -315,7 +316,11 @@ async function main() {
     },
     createMessage: async () => done,
   })
-  assert.equal(failedMemory.text, "Finished.", "answers without memories")
+  assert.equal(
+    failedMemory.text,
+    "Finished.\n\n(I couldn’t load your saved memories for this answer.)",
+    "answers without memories, and says so"
+  )
   // Proposing a change: stored through the propose dependency with the
   // question and source, returned to the caller, never applied by the agent
   const proposed: unknown[] = []
@@ -479,8 +484,55 @@ async function main() {
   )
   const memoryInstructions = JSON.stringify(memoryReqs[0].system)
   assert.match(memoryInstructions, /propose_memory/)
-  assert.match(memoryInstructions, /never say it was saved/)
+  assert.match(memoryInstructions, /never say they were saved/)
   assert.doesNotMatch(memoryInstructions, /or save memories/)
+  // A fact about one payment becomes a proposed note on that payment
+  const noted: unknown[] = []
+  const noteReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const withNote = await runFinanceAgent("that was my wedding ring", {
+    loadMemories: async () => [],
+    source: "telegram",
+    createMessage: async (params) => {
+      noteReqs.push(structuredClone(params))
+      if (noteReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "n1",
+            { transaction_id: "yoon", note: "Wedding ring" },
+            "propose_note"
+          ),
+          call("n2", { transaction_id: "yoon" }, "propose_note"),
+        ])
+      return done
+    },
+    proposeNote: async (input) => {
+      noted.push({
+        id: input.transactionId,
+        note: input.note,
+        source: input.source,
+      })
+      return {
+        id: "note1",
+        summary: "Note on YOXX THIXX $1,277: “Wedding ring”",
+      }
+    },
+  })
+  assert.deepEqual(noted, [
+    { id: "yoon", note: "Wedding ring", source: "telegram" },
+  ])
+  assert.equal(withNote.proposals[0].id, "note1")
+  const noteResults = noteReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    noteResults.map((r) => r.is_error),
+    [undefined, true]
+  )
+  assert.match(JSON.stringify(noteReqs[0].system), /propose_note/)
+  assert.doesNotMatch(
+    withNote.text,
+    /couldn’t load/,
+    "no notice when memories load"
+  )
   console.log("finance-agent: passed")
 }
 

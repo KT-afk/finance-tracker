@@ -4,10 +4,13 @@ import type { ConversationSource } from "../schema"
 import type { Exchange } from "./conversation"
 import {
   parseMemoryInput,
+  parseNoteInput,
   parseProposeInput,
   ProposalError,
   proposeMemory,
   proposeMemoryTool,
+  proposeNote,
+  proposeNoteTool,
   proposeRecategorise,
   proposeRecategoriseTool,
 } from "./proposals"
@@ -110,7 +113,7 @@ function checkNoInput(input: unknown) {
 }
 
 const INSTRUCTIONS =
-  "You are a personal finance assistant. Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments); give gross spending only when asked for it, and say which one you are giving. Use query_cash_flow for income and savings (income minus spending) over a period. Use get_balances for balances and always give each balance with its as_of date, for example “$9,500 in DBS as of 30 Sep”; when exact is false, say it was saved that day and may be older; never call a balance current. When asked whether the owner can afford something, never answer yes or no: give how the cost compares with spending so far in that category this month, savings so far this month, and the latest dated balances, and leave the decision to the owner. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total (the owner's spending, plus gross_total when it differs), say the totals cover every match, and when more is above 0 say how many more matched. You can change data only by proposing: when the owner says a transaction is in the wrong category, find it with search_transactions and call propose_recategorise; the owner then confirms or rejects it with a button. Say it is proposed and waiting for their tap; never say it was changed, because nothing changes until they confirm. If several transactions could match, ask which one instead of guessing. When the owner says “remember that…”, or tells you a lasting fact worth keeping (such as what a payment was for), call propose_memory; it is saved only when they confirm, so never say it was saved. You cannot delete transactions, change amounts or dates, or touch uploads; say so when asked. If no matching transactions are found, say so without guessing why. Earlier messages are recent conversation; if a follow-up such as “and last month?” depends on context you do not have, ask what the owner means instead of guessing. Answer in plain text with no Markdown (no **, # or tables), because Telegram shows those characters as typed. Keep answers short: for a long period or many payments, give the totals and the top few items, then offer more."
+  "You are a personal finance assistant. Use query_spending for spending facts and base amounts only on its results. Its totals are the owner's spending (their share of shared payments); give gross spending only when asked for it, and say which one you are giving. Use query_cash_flow for income and savings (income minus spending) over a period. Use get_balances for balances and always give each balance with its as_of date, for example “$9,500 in DBS as of 30 Sep”; when exact is false, say it was saved that day and may be older; never call a balance current. When asked whether the owner can afford something, never answer yes or no: give how the cost compares with spending so far in that category this month, savings so far this month, and the latest dated balances, and leave the decision to the owner. Use search_transactions to show which payments are behind a number: list them newest first using each display line, give the total (the owner's spending, plus gross_total when it differs), say the totals cover every match, and when more is above 0 say how many more matched. You can change data only by proposing: when the owner says a transaction is in the wrong category, find it with search_transactions and call propose_recategorise; the owner then confirms or rejects it with a button. Say it is proposed and waiting for their tap; never say it was changed, because nothing changes until they confirm. If several transactions could match, ask which one instead of guessing. When the owner tells you a fact about one payment (such as what it was for), find it with search_transactions and call propose_note, so the note comes back with that payment in every lookup; payments with a note show it as “(your note: …)”. For a general fact, or when they say “remember that…” about something not tied to one payment, call propose_memory. Both are saved only when they confirm, so never say they were saved. You cannot delete transactions, change amounts or dates, or touch uploads; say so when asked. If no matching transactions are found, say so without guessing why. Earlier messages are recent conversation; if a follow-up such as “and last month?” depends on context you do not have, ask what the owner means instead of guessing. Answer in plain text with no Markdown (no **, # or tables), because Telegram shows those characters as typed. Keep answers short: for a long period or many payments, give the totals and the top few items, then offer more."
 
 function formatMemories(memories: Memory[]): string {
   if (!memories.length) return "No saved memories."
@@ -139,6 +142,7 @@ type Dependencies = {
   loadMemories: () => Promise<Memory[]>
   propose: typeof proposeRecategorise
   proposeMemory: typeof proposeMemory
+  proposeNote: typeof proposeNote
   now: () => Date
 }
 
@@ -156,6 +160,7 @@ export async function runFinanceAgent(
 ) {
   const propose = overrides.propose ?? proposeRecategorise
   const proposeMem = overrides.proposeMemory ?? proposeMemory
+  const proposeTxNote = overrides.proposeNote ?? proposeNote
   const now = overrides.now ?? (() => new Date())
   // Proposals made while answering, for the caller to show with buttons
   const proposals: AgentProposal[] = []
@@ -172,13 +177,20 @@ export async function runFinanceAgent(
   const search = overrides.search ?? searchTransactions
   const cashFlow = overrides.cashFlow ?? queryCashFlow
   const balances = overrides.balances ?? getBalances
-  // A memory fault shouldn't block every question: answer without them
+  // A memory fault shouldn't block every question: answer without them,
+  // but say so, so the owner knows this answer may miss what they taught it
+  let memoriesMissing = false
   const memories = await (overrides.loadMemories ?? loadMemories)().catch(
     (error) => {
       console.error("Could not load memories", error)
+      memoriesMissing = true
       return []
     }
   )
+  const withNotices = (text: string) =>
+    memoriesMissing
+      ? text + "\n\n(I couldn’t load your saved memories for this answer.)"
+      : text
   // Fixed instructions, tools and memories rarely change, so they are cached;
   // the date and the conversation come after the cache mark
   const system: Anthropic.TextBlockParam[] = [
@@ -224,6 +236,7 @@ export async function runFinanceAgent(
         getBalancesTool,
         proposeRecategoriseTool,
         proposeMemoryTool,
+        proposeNoteTool,
       ],
       ...(round === maxToolRounds
         ? { tool_choice: { type: "none" as const } }
@@ -234,7 +247,7 @@ export async function runFinanceAgent(
       const text = answerText(claudeResponse.content)
       if (!text) throw new Error("Agent returned an empty answer")
       return {
-        text,
+        text: withNotices(text),
         answer_data: null,
         proposals,
         stop_reason: claudeResponse.stop_reason,
@@ -246,9 +259,10 @@ export async function runFinanceAgent(
       const text = answerText(claudeResponse.content)
       if (!text) throw new Error("Agent did not finish: max_tokens")
       return {
-        text:
+        text: withNotices(
           text +
-          "\n\n(Answer cut short. Ask about a narrower period for the rest.)",
+            "\n\n(Answer cut short. Ask about a narrower period for the rest.)"
+        ),
         answer_data: null,
         proposals,
         stop_reason: claudeResponse.stop_reason,
@@ -350,6 +364,35 @@ export async function runFinanceAgent(
             }
           }
         }
+        if (toolUse.name === "propose_note") {
+          try {
+            const { transaction_id, note } = parseNoteInput(toolUse.input)
+            const proposal = await proposeTxNote({
+              transactionId: transaction_id,
+              note,
+              source: overrides.source ?? "web",
+              request: question,
+              now: now(),
+            })
+            proposals.push(proposal)
+            return {
+              ...result,
+              content: JSON.stringify({
+                status: "proposed, waiting for the owner to confirm",
+                summary: proposal.summary,
+              }),
+            }
+          } catch (error) {
+            return {
+              ...result,
+              is_error: true,
+              content:
+                error instanceof ProposalError
+                  ? error.message
+                  : "Could not store the proposal. Nothing was proposed or saved.",
+            }
+          }
+        }
         if (toolUse.name === "propose_memory") {
           try {
             const { name, fact, owner_asked } = parseMemoryInput(toolUse.input)
@@ -406,7 +449,7 @@ export async function runFinanceAgent(
             ...result,
             is_error: true,
             content:
-              "Unsupported tool. Use query_spending, search_transactions, query_cash_flow, get_balances, propose_recategorise or propose_memory.",
+              "Unsupported tool. Use query_spending, search_transactions, query_cash_flow, get_balances, propose_recategorise, propose_memory or propose_note.",
           }
         let filters: QueryInput
         try {

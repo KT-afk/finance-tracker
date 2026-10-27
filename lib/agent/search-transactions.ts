@@ -22,6 +22,7 @@ export type FoundTransaction = {
   category: string
   amount: number // full payment
   your_share?: number // only when someone else covers part of it
+  note?: string // the owner's own note on this payment
   display: string
 }
 
@@ -131,7 +132,7 @@ export async function searchTransactions(
       continue
     if (
       text &&
-      ![row.description, row.payee, row.memo].some((field) =>
+      ![row.description, row.payee, row.memo, row.note].some((field) =>
         field?.toLowerCase().includes(text)
       )
     )
@@ -150,9 +151,11 @@ export async function searchTransactions(
       category: classification.category,
       amount,
       ...(shared ? { your_share: share } : {}),
+      ...(row.note ? { note: row.note } : {}),
       display:
         `${title} ${formatMoney(amount)}` +
-        (shared ? ` (your share ${formatMoney(share)})` : ""),
+        (shared ? ` (your share ${formatMoney(share)})` : "") +
+        (row.note ? ` (your note: ${row.note})` : ""),
     })
   }
 
@@ -172,7 +175,7 @@ export const searchTransactionsTool = {
   name: "search_transactions",
   strict: true,
   description:
-    "Find the payments behind a number. Matches text in the merchant, description or memo, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
+    "Find the payments behind a number. Matches text in the merchant, description, memo or the owner's note, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
   input_schema: {
     type: "object" as const,
     properties: {

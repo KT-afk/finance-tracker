@@ -27,6 +27,8 @@ interface Transaction {
   category: string
   is_corrected: boolean
   is_manual?: boolean
+  // The owner's own note, saved through a confirmed agent proposal
+  note?: string | null
   owed: OwedInfo | null
 }
 
@@ -675,6 +677,13 @@ function TransactionsView() {
                             : "Show full description"}
                         </span>
                       </button>
+                      {t.note && (
+                        <p className="text-xs text-amber-200/80 leading-snug mt-0.5 break-words">
+                          <span className="sr-only">Your note: </span>
+                          <span aria-hidden="true">✎ </span>
+                          {t.note}
+                        </p>
+                      )}
                       <div className="flex items-center gap-1.5 mt-1">
                         <Badge
                           className="text-[10px] px-1 py-0 font-normal border-0 h-4"
