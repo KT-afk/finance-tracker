@@ -1,0 +1,1 @@
+ALTER TABLE `agent_proposals` ADD `memory_source` text;

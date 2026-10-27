@@ -222,7 +222,9 @@ export const PROPOSAL_STATUSES = [
   "conflict",
 ] as const
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
-export const CHANGE_KINDS = ["recategorise"] as const
+// recategorise: target is a transaction id, before/after are categories.
+// memory: target is the memory's key, before/after its text ("" = none).
+export const CHANGE_KINDS = ["recategorise", "memory"] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
 export const agentProposals = sqliteTable("agent_proposals", {
@@ -234,6 +236,8 @@ export const agentProposals = sqliteTable("agent_proposals", {
   summary: text("summary").notNull(), // what the owner saw, e.g. "SHOPEE $80 …"
   source: text("source", { enum: CONVERSATION_SOURCES }).notNull(),
   request: text("request").notNull(), // the owner's message that led to it
+  // For a memory: "user" if the owner asked, "inferred" if the agent noticed
+  memory_source: text("memory_source", { enum: ["user", "inferred"] }),
   status: text("status", { enum: PROPOSAL_STATUSES })
     .notNull()
     .default("pending"),

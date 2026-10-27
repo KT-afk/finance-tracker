@@ -147,3 +147,11 @@ A button does nothing, and says so, when:
 **What we built.** The two fonts are now files in `app/fonts`, with their free licence, and the app loads them from there. The site looks the same, and builds no longer need Google.
 
 **How we checked.** We built the old and new code with the internet cut off. The old code failed with the same error as Vercel; the new code built.
+
+## Ticket 08: The agent can remember things (2026-10-27)
+
+**The problem.** You told the bot “that $1,277 transfer was my wedding ring”, and it had to say it couldn't remember that.
+
+**What we built.** Now it offers: “Remember: The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring”, with ✅ and ❌. It does the same when you say “remember that…”. Tap ✅ and it's saved, and the change log records it; after that, the agent uses it in every answer. It's saved as yours if you asked, or as the agent's suggestion if it noticed. Using the same short name again replaces the old memory, and the offer tells you what it replaces.
+
+**How we checked.** Database tests: a new memory, a replacement, yours versus suggested, reject, a memory changed meanwhile, and refusals (no name, too long, already remembered). Agent tests: the tool, its strict input, and instructions that never say “saved” before you confirm.

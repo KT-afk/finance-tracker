@@ -34,10 +34,10 @@ async function main() {
   delete process.env.DATABASE_AUTH_TOKEN
 
   try {
-    const { proposeRecategorise, decideProposal } =
+    const { proposeRecategorise, proposeMemory, decideProposal } =
       await import("../lib/agent/proposals")
     const { db } = await import("../lib/db")
-    const { transactions, changeLog, agentProposals } =
+    const { transactions, changeLog, agentProposals, aiMemory } =
       await import("../lib/schema")
     const { eq } = await import("drizzle-orm")
     const category = async (id: string) =>
@@ -216,6 +216,146 @@ async function main() {
       (await decideProposal("nope", "confirm", t0)).outcome,
       "not_found"
     )
+
+    // Memories: proposed, saved only on confirm, as user or inferred
+    const memories = async () =>
+      (
+        await db
+          .select({
+            key: aiMemory.key,
+            value: aiMemory.value,
+            source: aiMemory.source,
+          })
+          .from(aiMemory)
+          .orderBy(aiMemory.key)
+      ).map((m) => ({ ...m }))
+    const logCount = async () => (await db.select().from(changeLog)).length
+    const logsBefore = await logCount()
+
+    const m1 = await proposeMemory({
+      key: " Wedding ring ",
+      value:
+        "  The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring ",
+      ownerAsked: true,
+      source: "telegram",
+      request: "Oh that is for my wedding ring to my wife",
+      now: t0,
+    })
+    assert.equal(
+      m1.summary,
+      "Remember: The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring"
+    )
+    assert.deepEqual(await memories(), [], "nothing saved before confirm")
+    const saved = await decideProposal(m1.id, "confirm", t0)
+    assert.equal(saved.outcome, "applied")
+    assert.match(saved.message, /^Saved: The \$1,277 transfer/)
+    assert.deepEqual(await memories(), [
+      {
+        key: "wedding ring",
+        value:
+          "The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring",
+        source: "user",
+      },
+    ])
+    const [memLog] = (await db.select().from(changeLog)).slice(-1)
+    assert.deepEqual(
+      {
+        kind: memLog.kind,
+        target: memLog.target,
+        before: memLog.before,
+        after: memLog.after,
+      },
+      {
+        kind: "memory",
+        target: "wedding ring",
+        before: "",
+        after:
+          "The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring",
+      }
+    )
+
+    // An agent-suggested memory is saved as inferred; replacing one says so
+    const m2 = await proposeMemory({
+      key: "wedding ring",
+      value: "Wedding ring: $1,277 to Yoon Thiri, 8 Jun 2026",
+      ownerAsked: false,
+      source: "web",
+      request: "June spending",
+      now: t0,
+    })
+    assert.match(m2.summary, /\(replaces: The \$1,277 transfer/)
+    assert.equal(
+      (await decideProposal(m2.id, "confirm", t0)).outcome,
+      "applied"
+    )
+    assert.deepEqual(await memories(), [
+      {
+        key: "wedding ring",
+        value: "Wedding ring: $1,277 to Yoon Thiri, 8 Jun 2026",
+        source: "inferred",
+      },
+    ])
+
+    // Reject saves nothing
+    const m3 = await proposeMemory({
+      key: "gym",
+      value: "The $150 gym payment each month is expected",
+      ownerAsked: true,
+      source: "web",
+      request: "remember the gym is expected",
+      now: t0,
+    })
+    assert.equal(
+      (await decideProposal(m3.id, "reject", t0)).outcome,
+      "rejected"
+    )
+    assert.equal((await memories()).length, 1)
+
+    // The memory changed since the proposal: nothing changes
+    const m4 = await proposeMemory({
+      key: "gym",
+      value: "Gym is $150 a month",
+      ownerAsked: true,
+      source: "web",
+      request: "remember gym",
+      now: t0,
+    })
+    await db.insert(aiMemory).values({
+      key: "gym",
+      value: "Gym is $120 a month",
+      source: "user",
+      created_at: t0.toISOString(),
+    })
+    const staleMemory = await decideProposal(m4.id, "confirm", t0)
+    assert.equal(staleMemory.outcome, "conflict")
+    assert.match(staleMemory.message, /changed since/)
+    assert.equal(
+      (await memories()).find((m) => m.key === "gym")?.value,
+      "Gym is $120 a month"
+    )
+    assert.equal(await logCount(), logsBefore + 2, "two saves logged")
+
+    // Refused before anything is stored
+    for (const [key, value, why] of [
+      ["", "x", /short name/i],
+      ["k".repeat(61), "x", /short name/i],
+      ["note", "", /what to remember/i],
+      ["note", "v".repeat(301), /300/],
+      ["gym", "Gym is $120 a month", /already/i],
+    ] as const) {
+      await assert.rejects(
+        proposeMemory({
+          key,
+          value,
+          ownerAsked: true,
+          source: "web",
+          request: "x",
+          now: t0,
+        }),
+        why,
+        `${key} = ${value}`
+      )
+    }
 
     console.log("proposals: passed")
   } finally {

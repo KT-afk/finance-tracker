@@ -20,6 +20,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Ticket 27: long answers no longer fail (more room, eight lookups, “cut short” instead of an error).
 - Ticket 06: the 10pm message goes to Daily insights, and replies there are answered with the message as context. Same setup as ticket 05; nothing extra.
 - Ticket 07: the agent proposes category fixes with Confirm and Reject, and confirmed changes go in the change log. Ticket 17 (no more “read-only”) is done with it. **Confirmed working in Telegram by the owner on 2026-10-27.**
+- Ticket 08: the agent offers to remember facts; saved only on ✅, logged in the change log. Needs migration 0010 on the live database before it deploys.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
@@ -27,7 +28,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 
 1. **Check:** ask “What was I spending so much on in May, June and April 2026” in Ask anything to check ticket 27, and reply to tonight's 10pm message in Daily insights to check ticket 06.
 2. **Owner:** remove the spare bot (AskAnythingBotForFinance) from the group, and remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
-3. **Next tickets:** 08 (memory suggestions: the owner wants the bot to remember facts like “the $1,277 transfer to Yoon Thiri was my wedding ring”) and 09 (change log and undo) are unblocked by 07.
+3. **Next ticket:** 09 (read the change log and undo).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
