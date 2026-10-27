@@ -13,13 +13,29 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { db } from "../db"
 import {
   aiMemory,
+  budgets,
+  categoryRules,
   changeLog,
+  owedEntries,
   transactions,
   type ConversationSource,
 } from "../schema"
-import { describePayment, ProposalError } from "./proposals"
+import {
+  decodeShare,
+  describeBudget,
+  describePayment,
+  describeShare,
+  ProposalError,
+} from "./proposals"
 
 type Entry = typeof changeLog.$inferSelect
+
+/** Shares ("person|amount") and budgets ("200") are stored raw; show words. */
+function shownValue(kind: Entry["kind"], value: string) {
+  if (kind === "share") return describeShare(value)
+  if (kind === "budget") return describeBudget(value)
+  return value
+}
 
 export type ChangeView = {
   id: number
@@ -35,7 +51,10 @@ export type ChangeView = {
 
 /** Readable names for what each entry changed, looked up in one go. */
 async function describe(entries: Entry[]): Promise<ChangeView[]> {
-  const txIds = entries.filter((e) => e.kind !== "memory").map((e) => e.target)
+  // Memories and rules are named by their key; the rest are payments
+  const onPayment = (e: Entry) =>
+    e.kind === "recategorise" || e.kind === "note" || e.kind === "share"
+  const txIds = entries.filter(onPayment).map((e) => e.target)
   const txs = txIds.length
     ? await db
         .select()
@@ -52,11 +71,15 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
       what:
         e.kind === "memory"
           ? `memory “${e.target}”`
-          : tx
-            ? describePayment(tx)
-            : "a transaction that no longer exists",
-      before: e.before,
-      after: e.after,
+          : e.kind === "rule"
+            ? `rule “${e.target}”`
+            : e.kind === "budget"
+              ? `budget for ${e.target}`
+              : tx
+                ? describePayment(tx)
+                : "a transaction that no longer exists",
+      before: shownValue(e.kind, e.before),
+      after: shownValue(e.kind, e.after),
       source: e.source,
       request: e.request,
       reverses_id: e.reverses_id,
@@ -142,7 +165,123 @@ export async function undoChange(
 
   let logged: { id: number }[]
   let current: string | undefined
-  if (entry.kind === "memory") {
+  if (entry.kind === "rule") {
+    const stillAfter = and(
+      eq(categoryRules.keyword, entry.target),
+      eq(categoryRules.category, entry.after)
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(
+              logRow({ target: categoryRules.keyword, current: entry.after })
+            )
+            .from(categoryRules)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      // A rule that didn't exist before is removed again
+      entry.before
+        ? db
+            .update(categoryRules)
+            .set({ category: entry.before })
+            .where(stillAfter)
+        : db.delete(categoryRules).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length)
+      current =
+        (
+          await db
+            .select({ value: categoryRules.category })
+            .from(categoryRules)
+            .where(eq(categoryRules.keyword, entry.target))
+        )[0]?.value ?? ""
+  } else if (entry.kind === "budget") {
+    const stillAfter = and(
+      eq(budgets.category, entry.target),
+      eq(budgets.monthly_limit, Number(entry.after))
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: budgets.category, current: entry.after }))
+            .from(budgets)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      // A budget that didn't exist before is removed again
+      entry.before
+        ? db
+            .update(budgets)
+            .set({
+              monthly_limit: Number(entry.before),
+              updated_at: ctx.now.toISOString(),
+            })
+            .where(stillAfter)
+        : db.delete(budgets).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select({ limit: budgets.monthly_limit })
+        .from(budgets)
+        .where(eq(budgets.category, entry.target))
+      current = row ? String(row.limit) : ""
+    }
+  } else if (entry.kind === "share") {
+    const after = decodeShare(entry.after)
+    const before = decodeShare(entry.before)
+    const stillAfter = and(
+      eq(owedEntries.transaction_id, entry.target),
+      eq(owedEntries.kind, "share"),
+      ...(after
+        ? [
+            eq(owedEntries.person, after.person),
+            eq(owedEntries.amount, after.amount),
+          ]
+        : [sql`0`])
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(
+              logRow({
+                target: owedEntries.transaction_id,
+                current: entry.after,
+              })
+            )
+            .from(owedEntries)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      before
+        ? db
+            .update(owedEntries)
+            .set({ person: before.person, amount: before.amount })
+            .where(stillAfter)
+        : db.delete(owedEntries).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select({ person: owedEntries.person, amount: owedEntries.amount })
+        .from(owedEntries)
+        .where(
+          and(
+            eq(owedEntries.transaction_id, entry.target),
+            eq(owedEntries.kind, "share")
+          )
+        )
+      current = row ? `${row.person}|${row.amount}` : ""
+    }
+  } else if (entry.kind === "memory") {
     const stillAfter = and(
       eq(aiMemory.key, entry.target),
       eq(aiMemory.value, entry.after)
@@ -216,10 +355,10 @@ export async function undoChange(
       message:
         current === undefined
           ? `Nothing changed: ${view.what} no longer exists.`
-          : `Nothing changed: ${view.what} is now ${shown(current)}, not ${shown(entry.after)}, so #${entry.id} can't be undone.`,
+          : `Nothing changed: ${view.what} is now ${shown(shownValue(entry.kind, current))}, not ${shown(view.after)}, so #${entry.id} can't be undone.`,
     }
   }
-  const before = entry.before || "none"
+  const before = view.before || "none"
   return {
     outcome: "undone",
     message: `Undid #${entry.id} on ${view.what}: back to ${before}. Change #${logged[0].id} in the change log.`,
@@ -230,7 +369,7 @@ export const listChangesTool = {
   name: "list_changes",
   strict: true,
   description:
-    "Read the change log: every change the owner confirmed (categories, notes, memories) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
+    "Read the change log: every change the owner confirmed (categories, notes, memories, rules, shares, budgets) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
   input_schema: {
     type: "object" as const,
     properties: {

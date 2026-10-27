@@ -23,6 +23,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Ticket 08: the agent offers to remember facts; saved only on ✅, logged in the change log. Migration 0010 applied 2026-10-27.
 - Ticket 30: notes on payments (migration 0011), so facts about one payment come back with it in every lookup; the answer says so when memories fail to load.
 - Ticket 09: ask what changed, and undo (“undo the last change”, “undo #12”). No migration.
+- Tickets 10 and 11 (PR #36): category rules, shares and monthly budgets from chat. Budgets need migration 0012 on the live database before merging.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
@@ -30,14 +31,13 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 
 1. **Check:** ask “What was I spending so much on in May, June and April 2026” in Ask anything to check ticket 27, and reply to tonight's 10pm message in Daily insights to check ticket 06.
 2. **Owner:** remove the spare bot (AskAnythingBotForFinance) from the group, and remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
-3. **Next ticket:** 10 (category rules and shares from chat), now unblocked by 07; then budgets (11).
+3. **Next ticket:** 12 (budget pace in the 10pm message), then 13 (weekly and monthly reviews).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
 
 ## Open questions for the owner
 
-- Ticket 11 (budgets) uses calendar months. Change it if you would rather use pay cycles.
 - Ticket 19 defaults: remove the unused `/api/agent` route, and widen "Topic" in `GLOSSARY.md`. Overrule before it is picked up if you disagree.
 - A card payment to Railway ($6.37 on 2026-05-06) appears in a bank statement used by a test. Check for an old Railway plan still charging you.
 

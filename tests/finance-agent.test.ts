@@ -168,6 +168,10 @@ async function main() {
       "propose_recategorise",
       "propose_memory",
       "propose_note",
+      "propose_rule",
+      "propose_share",
+      "propose_budget",
+      "budget_status",
       "list_changes",
       "undo_change",
     ]
@@ -606,6 +610,110 @@ async function main() {
   )[0]
   assert.equal(quotedResult.is_error, true)
   assert.match(String(quotedResult.content), /Nothing was changed/)
+  // Rules and shares: stored through their propose dependencies
+  const ruleShare: unknown[] = []
+  const rsReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const withRS = await runFinanceAgent("grab is transport; jane owes 40", {
+    loadMemories: async () => [],
+    source: "web",
+    createMessage: async (params) => {
+      rsReqs.push(structuredClone(params))
+      if (rsReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "r1",
+            { keyword: "grab", category: "Transport" },
+            "propose_rule"
+          ),
+          call(
+            "s1",
+            { transaction_id: "dinner", person: "Jane", amount: 40 },
+            "propose_share"
+          ),
+          call(
+            "s2",
+            { transaction_id: "dinner", person: "Jane", amount: "40" },
+            "propose_share"
+          ),
+          call("r2", { keyword: "grab" }, "propose_rule"),
+        ])
+      return done
+    },
+    proposeRule: async (input) => {
+      ruleShare.push(["rule", input.keyword, input.category, input.source])
+      return { id: "rule1", summary: "Rule: grab → Transport" }
+    },
+    proposeShare: async (input) => {
+      ruleShare.push(["share", input.transactionId, input.person, input.amount])
+      return { id: "share1", summary: "Share: Jane owes $40" }
+    },
+  })
+  assert.deepEqual(ruleShare, [
+    ["rule", "grab", "Transport", "web"],
+    ["share", "dinner", "Jane", 40],
+  ])
+  assert.deepEqual(
+    withRS.proposals.map((p) => p.id),
+    ["rule1", "share1"]
+  )
+  const rsResults = rsReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    rsResults.map((r) => r.is_error),
+    [undefined, undefined, true, true]
+  )
+  const rsInstructions = JSON.stringify(rsReqs[0].system)
+  assert.match(rsInstructions, /propose_rule/)
+  assert.match(rsInstructions, /propose_share/)
+
+  // Budgets: a proposal on a strict input, and the month's status
+  const budgetReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const budgetCalls: unknown[] = []
+  const withBudget = await runFinanceAgent("cap food at 500, how am I doing?", {
+    loadMemories: async () => [],
+    now: () => new Date("2026-09-15T12:00:00Z"),
+    createMessage: async (params) => {
+      budgetReqs.push(structuredClone(params))
+      if (budgetReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "b1",
+            { category: "Food & Drink", amount: 500 },
+            "propose_budget"
+          ),
+          call(
+            "b2",
+            { category: "Food & Drink", amount: "500" },
+            "propose_budget"
+          ),
+          call("b3", {}, "budget_status"),
+        ])
+      return done
+    },
+    proposeBudget: async (input) => {
+      budgetCalls.push(["budget", input.category, input.amount, input.source])
+      return { id: "budget1", summary: "Budget: Food & Drink $500 a month" }
+    },
+    budgetStatus: async (at) => {
+      budgetCalls.push(["status", at.toISOString()])
+      return []
+    },
+  })
+  assert.deepEqual(budgetCalls, [
+    ["budget", "Food & Drink", 500, "web"],
+    ["status", "2026-09-15T12:00:00.000Z"],
+  ])
+  assert.deepEqual(
+    withBudget.proposals.map((p) => p.id),
+    ["budget1"]
+  )
+  const budgetResults = budgetReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    budgetResults.map((r) => r.is_error),
+    [undefined, true, undefined]
+  )
+  assert.match(JSON.stringify(budgetReqs[0].system), /calendar month/)
   console.log("finance-agent: passed")
 }
 

@@ -85,6 +85,13 @@
       "when": 1793113199297,
       "tag": "0011_transaction_note",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793117331207,
+      "tag": "0012_budgets",
+      "breakpoints": true
     }
   ]
 }
