@@ -99,10 +99,18 @@ export async function sendTypingTo(target: {
 export function dailyMessageTarget(
   env: Record<string, string | undefined> = process.env
 ): { chatId: number; threadId: number } | null {
-  const chatId = Number(env.TELEGRAM_GROUP_ID?.trim())
-  const threadId = Number(env.TELEGRAM_INSIGHTS_TOPIC_ID?.trim())
-  if (!env.TELEGRAM_GROUP_ID?.trim() || !env.TELEGRAM_INSIGHTS_TOPIC_ID?.trim())
-    return null
-  if (!Number.isInteger(chatId) || !Number.isInteger(threadId)) return null
-  return { chatId, threadId }
+  const chatId = telegramId(env.TELEGRAM_GROUP_ID)
+  const threadId = telegramId(env.TELEGRAM_INSIGHTS_TOPIC_ID)
+  return chatId && threadId ? { chatId, threadId } : null
+}
+
+/**
+ * A Telegram id from a setting: a non-zero whole number, or null. Used for
+ * every Telegram id setting, so the webhook and the 10pm message agree.
+ */
+export function telegramId(value: string | undefined): number | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  const id = Number(trimmed)
+  return Number.isInteger(id) && id !== 0 ? id : null
 }

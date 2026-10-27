@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server"
 import { timingSafeEqual } from "node:crypto"
 import { runFinanceAgent } from "@/lib/agent/run-finance-agent"
-import { sendTelegramTo, sendTypingTo } from "@/lib/telegram"
+import { sendTelegramTo, sendTypingTo, telegramId } from "@/lib/telegram"
 import {
   handleTelegramUpdate,
   type TelegramConfig,
@@ -23,20 +23,17 @@ export function isTelegramRequest(req: Request): boolean {
 }
 
 function telegramConfig(): TelegramConfig | null {
-  const ownerId = Number(process.env.TELEGRAM_OWNER_ID)
-  const groupId = Number(process.env.TELEGRAM_GROUP_ID)
-  const askTopicId = Number(process.env.TELEGRAM_ASK_TOPIC_ID)
-  const insightsTopicId = Number(process.env.TELEGRAM_INSIGHTS_TOPIC_ID)
-  if (![ownerId, groupId, askTopicId].every((n) => Number.isInteger(n) && n))
-    return null
+  const ownerId = telegramId(process.env.TELEGRAM_OWNER_ID)
+  const groupId = telegramId(process.env.TELEGRAM_GROUP_ID)
+  const askTopicId = telegramId(process.env.TELEGRAM_ASK_TOPIC_ID)
+  const insightsTopicId = telegramId(process.env.TELEGRAM_INSIGHTS_TOPIC_ID)
+  if (!ownerId || !groupId || !askTopicId) return null
   return {
     ownerId,
     groupId,
     askTopicId,
     // Optional: replies in Daily insights work once it is set
-    ...(Number.isInteger(insightsTopicId) && insightsTopicId
-      ? { insightsTopicId }
-      : {}),
+    ...(insightsTopicId ? { insightsTopicId } : {}),
   }
 }
 

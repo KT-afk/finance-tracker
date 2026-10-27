@@ -92,9 +92,10 @@ export async function handleTelegramUpdate(
 
   const target = { chatId: config.groupId, threadId: message.message_thread_id }
   const context = repliedText(message)
-  // The context is data for the agent, not part of what is saved
+  // Saved with the question, so follow-ups still know what was replied to.
+  // The quoted text may come from anyone in the group: it can't close the quote
   const prompt = context
-    ? `The owner is replying to this message:\n"""\n${context}\n"""\n\n${question}`
+    ? `The owner is replying to this message:\n"""\n${context.replaceAll('"""', "''")}\n"""\n\n${question}`
     : question
   // The indicator is a nicety; never let it stop the answer
   await deps.sendTyping(target).catch(() => {})
@@ -112,7 +113,7 @@ export async function handleTelegramUpdate(
   }
   await deps.send(answer, target)
   await saveExchange({
-    question,
+    question: prompt,
     answer,
     source: "telegram",
     topic,
