@@ -2,7 +2,7 @@
 
 This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
 
-Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
+Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3`.
 
 ## Done
 
@@ -16,14 +16,16 @@ Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
 - pstack skills are global, with Codex reviews at low effort (pull request #25).
 - Ticket 25: balances keep their statement date. Migration 0007 is applied to the cloud database (2026-10-27).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
-- Ticket 05: ask the agent from Telegram (needs migration 0008 and the owner's setup).
+- Ticket 05: ask the agent from Telegram (pull request #29, merged). Needs migration 0008 and the owner's setup.
+- Ticket 06: the 10pm message goes to Daily insights, and replies there are answered with the message as context. Same setup as ticket 05; nothing extra.
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge pull request for ticket 05**, then the owner follows the steps at the end of `.scratch/finance-agent/issues/05-telegram-ask-anything.md` (bot, group, migration 0008, setup script, Vercel settings).
-2. **Ticket 06:** Daily insights topic (the 10pm message moves to the group).
-3. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
+1. **Merge the pull request for ticket 06.**
+2. **Owner: set up Telegram.** Follow the steps at the end of `.scratch/finance-agent/issues/05-telegram-ask-anything.md` (bot, group, migration 0008, setup script, Vercel settings). The Vercel step is blocked while the owner can't reach Vercel.
+3. **Ticket 07:** proposed changes and the change log (now unblocked: 02 and 05 are done).
+4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
 

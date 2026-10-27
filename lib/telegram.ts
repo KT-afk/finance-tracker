@@ -91,3 +91,18 @@ export async function sendTypingTo(target: {
     action: "typing",
   })
 }
+
+/**
+ * Where the 10pm message goes: the group's Daily insights topic once both
+ * ids are set, or null to keep using the owner's chat (TELEGRAM_CHAT_ID).
+ */
+export function dailyMessageTarget(
+  env: Record<string, string | undefined> = process.env
+): { chatId: number; threadId: number } | null {
+  const chatId = Number(env.TELEGRAM_GROUP_ID?.trim())
+  const threadId = Number(env.TELEGRAM_INSIGHTS_TOPIC_ID?.trim())
+  if (!env.TELEGRAM_GROUP_ID?.trim() || !env.TELEGRAM_INSIGHTS_TOPIC_ID?.trim())
+    return null
+  if (!Number.isInteger(chatId) || !Number.isInteger(threadId)) return null
+  return { chatId, threadId }
+}

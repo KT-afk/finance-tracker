@@ -17,12 +17,21 @@ const config = {
   ownerId: 111,
   groupId: -1001,
   askTopicId: 7,
+  insightsTopicId: 8,
 }
+
+// The 10pm message the bot posted in Daily insights
+const DAILY = { message_id: 500, text: "Oct so far: $1,952 (rent $1,200)" }
 
 function message(
   updateId: number,
   text: string,
-  overrides: { from?: number; chat?: number; thread?: number } = {}
+  overrides: {
+    from?: number
+    chat?: number
+    thread?: number
+    replyTo?: { message_id: number; text?: string }
+  } = {}
 ) {
   return {
     update_id: updateId,
@@ -33,6 +42,7 @@ function message(
       from: { id: overrides.from ?? config.ownerId },
       chat: { id: overrides.chat ?? config.groupId },
       text,
+      ...(overrides.replyTo ? { reply_to_message: overrides.replyTo } : {}),
     },
   }
 }
@@ -135,6 +145,98 @@ async function main() {
     now = new Date("2026-10-27T19:00:00Z")
     await handleTelegramUpdate(message(9, "Groceries?"), deps)
     assert.deepEqual(asked.at(-1)!.history, [])
+
+    // Daily insights: a reply to the 10pm message is answered in that topic,
+    // with the replied-to message as context
+    const daily = { thread: 8, replyTo: DAILY }
+    await handleTelegramUpdate(
+      message(20, "Why was rent so high?", daily),
+      deps
+    )
+    const replyQuestion = asked.at(-1)!.question
+    assert.match(replyQuestion, /Oct so far: \$1,952/)
+    assert.match(replyQuestion, /Why was rent so high\?/)
+    assert.deepEqual(sent.at(-1), {
+      text: `Answer to ${replyQuestion}`,
+      chatId: config.groupId,
+      threadId: 8,
+    })
+    assert.deepEqual(typing.at(-1), { chatId: config.groupId, threadId: 8 })
+
+    // Daily insights keeps its own conversation, saved without the context
+    const dailyHistory = await loadHistory("telegram", "daily", now)
+    assert.deepEqual(
+      dailyHistory.map((e) => e.question),
+      ["Why was rent so high?"]
+    )
+    assert.ok(
+      (await loadHistory("telegram", "ask", now)).every(
+        (e) => e.question !== "Why was rent so high?"
+      ),
+      "Ask anything history does not include Daily insights"
+    )
+
+    // A plain message in Daily insights is answered as a question. Telegram
+    // points topic messages at the topic's first message; that is not a reply
+    await handleTelegramUpdate(
+      message(21, "Spending this week?", {
+        thread: 8,
+        replyTo: { message_id: 8 },
+      }),
+      deps
+    )
+    assert.equal(asked.at(-1)!.question, "Spending this week?")
+    assert.equal(sent.at(-1)!.threadId, 8)
+    assert.deepEqual(asked.at(-1)!.history, [
+      {
+        question: "Why was rent so high?",
+        answer: `Answer to ${replyQuestion}`,
+      },
+    ])
+
+    // A reply to a message with no text (a photo, say) has no context to add
+    await handleTelegramUpdate(
+      message(22, "What is this?", { thread: 8, replyTo: { message_id: 600 } }),
+      deps
+    )
+    assert.equal(asked.at(-1)!.question, "What is this?")
+
+    // A reply in Ask anything also uses the replied-to message
+    await handleTelegramUpdate(
+      message(23, "and this?", {
+        replyTo: { message_id: 90, text: "Rent $1,200" },
+      }),
+      deps
+    )
+    assert.match(asked.at(-1)!.question, /Rent \$1,200/)
+    assert.equal(sent.at(-1)!.threadId, 7)
+
+    // Until the Daily insights topic is configured, it is ignored
+    const before = asked.length
+    await handleTelegramUpdate(message(24, "hi", { thread: 8 }), {
+      ...deps,
+      config: { ...config, insightsTopicId: undefined },
+    })
+    assert.equal(asked.length, before)
+
+    // The 10pm message goes to Daily insights once the group is configured,
+    // and to the owner's chat until then
+    const { dailyMessageTarget } = await import("../lib/telegram")
+    assert.deepEqual(
+      dailyMessageTarget({
+        TELEGRAM_GROUP_ID: "-1001",
+        TELEGRAM_INSIGHTS_TOPIC_ID: " 8 ",
+      }),
+      { chatId: -1001, threadId: 8 }
+    )
+    assert.equal(dailyMessageTarget({ TELEGRAM_GROUP_ID: "-1001" }), null)
+    assert.equal(
+      dailyMessageTarget({
+        TELEGRAM_GROUP_ID: "x",
+        TELEGRAM_INSIGHTS_TOPIC_ID: "8",
+      }),
+      null
+    )
 
     console.log("telegram-handler: passed")
   } finally {

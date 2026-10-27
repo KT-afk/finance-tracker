@@ -26,9 +26,18 @@ function telegramConfig(): TelegramConfig | null {
   const ownerId = Number(process.env.TELEGRAM_OWNER_ID)
   const groupId = Number(process.env.TELEGRAM_GROUP_ID)
   const askTopicId = Number(process.env.TELEGRAM_ASK_TOPIC_ID)
+  const insightsTopicId = Number(process.env.TELEGRAM_INSIGHTS_TOPIC_ID)
   if (![ownerId, groupId, askTopicId].every((n) => Number.isInteger(n) && n))
     return null
-  return { ownerId, groupId, askTopicId }
+  return {
+    ownerId,
+    groupId,
+    askTopicId,
+    // Optional: replies in Daily insights work once it is set
+    ...(Number.isInteger(insightsTopicId) && insightsTopicId
+      ? { insightsTopicId }
+      : {}),
+  }
 }
 
 /**

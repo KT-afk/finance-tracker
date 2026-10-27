@@ -80,3 +80,7 @@ The lockout test locked out every test after it, so their own bugs never showed.
 The real data (about 1,800 transactions) is in the Turso cloud database. The local `finance.db` on the owner's Mac only holds the 25 demo transactions. Its settings are not on the Mac, so to change the cloud database the owner makes a short-lived token at app.turso.tech and runs `TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:migrate` in their own terminal. `drizzle-kit migrate` can finish without printing “applied”, so check afterwards: count the rows in `__drizzle_migrations`.
 
 Never paste the token into the chat. If it happens, delete the token in Turso.
+
+## 16. In Telegram topics, every message looks like a reply
+
+In a group with topics, Telegram sets `reply_to_message` on every message in a topic. When the owner did not reply to anything, it points at the message that opened the topic, and its id equals the topic id (`message_thread_id`). Only count a message as a reply when `reply_to_message.message_id` is different from `message_thread_id`.
