@@ -678,7 +678,9 @@ function TransactionsView() {
                         </span>
                       </button>
                       {t.note && (
-                        <p className="text-xs text-amber-200/80 leading-snug mt-0.5 break-words">
+                        <p
+                          className={`text-xs text-amber-200 leading-snug mt-0.5 break-words ${expanded ? "" : "line-clamp-2"}`}
+                        >
                           <span className="sr-only">Your note: </span>
                           <span aria-hidden="true">✎ </span>
                           {t.note}

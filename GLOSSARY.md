@@ -44,6 +44,10 @@ _Avoid_: Cap, allowance
 The assistant that answers the owner's questions about their money and can make changes on their behalf once the owner confirms each one.
 _Avoid_: Bot, AI, assistant
 
+**Note**:
+The owner's own words on one transaction, such as “wedding ring”. Saved through a confirmed proposal, shown with the payment everywhere, and given to the finance agent whenever it looks the payment up. Not the bank's memo, which is the text the bank sent.
+_Avoid_: Memo, comment, remark
+
 **Proposal**:
 A change the finance agent suggests but has not made, such as moving one transaction to another category. It shows exactly what would change, from what to what. Nothing changes until the owner confirms it; it can also be rejected, and it expires after 24 hours. Confirming does nothing if the data changed since it was proposed.
 _Avoid_: Suggestion, pending change, draft

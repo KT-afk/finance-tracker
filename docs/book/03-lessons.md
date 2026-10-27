@@ -108,3 +108,7 @@ To make a button count once, we first used a database transaction. With two taps
 ## 22. Reuse a fix everywhere the same shape appears
 
 Ticket 07's review found a race: a check, then a write that didn't repeat the check. We fixed it for categories, then wrote the same race again for memories in ticket 08, and review caught it again. When a fix is about a pattern (check, then write), search for the pattern, not just the line. Also: SQLite's `unique` is case-sensitive, so “Rent” and “rent” are two different memories unless you compare with `lower()`.
+
+## 23. A copy script can overwrite live changes
+
+`db:copy-cloud` copies local rows to the cloud and updates rows that already exist. Once the owner can change data from Telegram, in the cloud, a copy from the Mac would overwrite those changes with the older local values. The copy no longer includes notes. Categories have the same risk; before running a copy, check the change log for recent changes made from Telegram.
