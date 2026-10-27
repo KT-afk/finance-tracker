@@ -24,7 +24,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (ti
 
 ## Next, in order
 
-1. **Before ticket 07 deploys:** run migration 0009 on the live database, then re-run `npm run telegram:setup` so Telegram sends button taps (`callback_query`).
+1. **Try ticket 07:** in Ask anything, say a category is wrong (e.g. “that $80 Shopee was a gift”), then tap ✅ or ❌. Migration 0009 is on the live database and the webhook sends button taps (both done 2026-10-27).
 2. **After #30 deploys:** ask “What was I spending so much on in May, June and April 2026” in Ask anything to check ticket 27, and reply to tonight's 10pm message in Daily insights to check ticket 06.
 3. **Owner:** remove the spare bot (AskAnythingBotForFinance) from the group, and remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
 4. **Next tickets:** 08 (memory suggestions) and 09 (change log and undo) are unblocked by 07.
