@@ -14,14 +14,15 @@ Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
 - Pull request #24 merged the finance agent branch into `main`. The merged code passed the type check and the unit tests first.
 - Ticket 23: all browser tests pass, and the `verify-finance-tracker` skill runs the app safely (see chapter 2).
 - pstack skills are global, with Codex reviews at low effort (pull request #25).
-- Ticket 25: balances keep their statement date (needs migration 0007).
+- Ticket 25: balances keep their statement date. Migration 0007 is applied to the cloud database (2026-10-27).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
+- Ticket 05: ask the agent from Telegram (needs migration 0008 and the owner's setup).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Run migration 0007** on the live database (`npm run db:migrate`) before deploying, and on the cloud database before the next `db:copy-cloud`.
-2. **Ticket 05:** Telegram. Ready. The owner must create the bot, the group and its two topics.
+1. **Merge pull request for ticket 05**, then the owner follows the steps at the end of `.scratch/finance-agent/issues/05-telegram-ask-anything.md` (bot, group, migration 0008, setup script, Vercel settings).
+2. **Ticket 06:** Daily insights topic (the 10pm message moves to the group).
 3. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.

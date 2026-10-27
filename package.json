@@ -19,6 +19,7 @@
     "db:backup": "bash scripts/backup-db.sh",
     "outlook:login": "tsx scripts/outlook-login.ts",
     "alerts:ingest": "tsx scripts/ingest-alerts.ts",
+    "telegram:setup": "tsx scripts/telegram-setup.ts",
     "cloud:preflight": "bash scripts/cloud-preflight.sh",
     "phone:configure": "bash scripts/configure-phone-access.sh",
     "phone:setup-service": "bash scripts/setup-autostart.sh",
