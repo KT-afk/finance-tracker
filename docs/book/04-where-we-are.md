@@ -2,7 +2,7 @@
 
 This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
 
-Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3`.
+Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (pull request #30).
 
 ## Done
 
@@ -16,14 +16,14 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3`.
 - pstack skills are global, with Codex reviews at low effort (pull request #25).
 - Ticket 25: balances keep their statement date. Migration 0007 is applied to the cloud database (2026-10-27).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
-- Ticket 05: ask the agent from Telegram (pull request #29, merged). Migration 0008 is applied to the live database (checked 2026-10-27). Needs the owner's Telegram setup.
+- Ticket 05: ask the agent from Telegram (pull request #29, merged). Migration 0008 is applied to the live database (checked 2026-10-27). The setup script ran on 2026-10-27 and registered the webhook at `https://finance-tracker-latest-xi.vercel.app/api/telegram`. Ids: `TELEGRAM_GROUP_ID=-1004480176355`, `TELEGRAM_INSIGHTS_TOPIC_ID=3`, `TELEGRAM_ASK_TOPIC_ID=4`, `TELEGRAM_OWNER_ID=730041802`.
 - Ticket 06: the 10pm message goes to Daily insights, and replies there are answered with the message as context. Same setup as ticket 05; nothing extra.
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge the pull request for ticket 06.**
-2. **Owner: set up Telegram.** Follow the steps at the end of `.scratch/finance-agent/issues/05-telegram-ask-anything.md` (the bot and group exist; still to do: bot as admin with privacy off, a message in each topic, the setup script, Vercel settings). Migration 0008 is done. The Vercel step is blocked while the owner can't reach Vercel.
+1. **Merge the pull request for ticket 06** (#30).
+2. **Finish Telegram (owner, blocked on Vercel access):** set the six `TELEGRAM_*` settings in Vercel (ids above; the token and webhook secret are in the owner's password manager), redeploy, then ask a question in Ask anything. Post as yourself, not anonymously, or the bot ignores you (lesson 17). Then remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
 3. **Ticket 07:** proposed changes and the change log (now unblocked: 02 and 05 are done).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
