@@ -4,6 +4,7 @@ import { db } from "../db"
 import { describeTransaction } from "../describe-transaction"
 import {
   agentProposals,
+  aiMemory,
   CATEGORIES,
   changeLog,
   OFF_BANK,
@@ -165,6 +166,41 @@ export async function decideProposal(
     return { outcome: "rejected", message: "Rejected. Nothing changed." }
   }
 
+  return proposal.kind === "memory"
+    ? applyMemory(proposal, settle, lost, now)
+    : applyRecategorise(proposal, settle, lost, now)
+}
+
+type Proposal = typeof agentProposals.$inferSelect
+type Settle = (status: ProposalStatus) => Promise<boolean>
+type Lost = { outcome: "used"; message: string }
+type Result = { outcome: DecisionOutcome; message: string }
+
+/** The batch failed: let the owner tap again, unless it in fact landed. */
+async function reopenIfNothingWritten(proposal: Proposal) {
+  const written = await db
+    .select({ id: changeLog.id })
+    .from(changeLog)
+    .where(eq(changeLog.proposal_id, proposal.id))
+    .catch(() => [{ id: 0 }])
+  if (written.length === 0)
+    await db
+      .update(agentProposals)
+      .set({ status: "pending", decided_at: null })
+      .where(
+        and(
+          eq(agentProposals.id, proposal.id),
+          eq(agentProposals.status, "confirmed")
+        )
+      )
+}
+
+async function applyRecategorise(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
   const [target] = await db
     .select()
     .from(transactions)
@@ -224,20 +260,7 @@ export async function decideProposal(
     ])
     entry = logged[0]
   } catch (error) {
-    // Let the owner tap again, but only if nothing was written: the batch
-    // may have committed before the error reached us
-    const written = await db
-      .select({ id: changeLog.id })
-      .from(changeLog)
-      .where(eq(changeLog.proposal_id, proposal.id))
-      .catch(() => [{ id: 0 }])
-    if (written.length === 0)
-      await db
-        .update(agentProposals)
-        .set({ status: "pending", decided_at: null })
-        .where(
-          and(eq(agentProposals.id, id), eq(agentProposals.status, "confirmed"))
-        )
+    await reopenIfNothingWritten(proposal)
     throw error
   }
   if (!entry) {
@@ -245,7 +268,7 @@ export async function decideProposal(
     await db
       .update(agentProposals)
       .set({ status: "conflict" })
-      .where(eq(agentProposals.id, id))
+      .where(eq(agentProposals.id, proposal.id))
     return {
       outcome: "conflict",
       message: `Nothing changed: it is no longer ${proposal.before}, since this was proposed.`,
@@ -255,6 +278,162 @@ export async function decideProposal(
     outcome: "applied",
     message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
   }
+}
+
+async function applyMemory(
+  proposal: Proposal,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that memory has changed since this was proposed.",
+  }
+  const [current] = await db
+    .select({ value: aiMemory.value })
+    .from(aiMemory)
+    .where(eq(aiMemory.key, proposal.target))
+    .limit(1)
+  if ((current?.value ?? "") !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const source = proposal.memory_source ?? "user"
+  // The write only happens if the memory still has its "before" text (or
+  // still doesn't exist), and the log row only if the write happened: a
+  // change made a moment ago is never overwritten
+  const write = proposal.before
+    ? db
+        .update(aiMemory)
+        .set({ value: proposal.after, source })
+        .where(
+          and(
+            eq(aiMemory.key, proposal.target),
+            eq(aiMemory.value, proposal.before)
+          )
+        )
+    : db
+        .insert(aiMemory)
+        .values({
+          key: proposal.target,
+          value: proposal.after,
+          source,
+          created_at: now.toISOString(),
+        })
+        .onConflictDoNothing()
+  let entry: { id: number } | undefined
+  try {
+    const [, logged] = await db.batch([
+      write,
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${now.toISOString()}`.as("created_at"),
+              kind: sql`'memory'`.as("kind"),
+              target: aiMemory.key,
+              before: sql`${proposal.before}`.as("before"),
+              after: aiMemory.value,
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(aiMemory)
+            .where(
+              and(
+                eq(aiMemory.key, proposal.target),
+                eq(aiMemory.value, proposal.after),
+                // A new memory: only the row this write created carries
+                // this timestamp, so an equal row saved elsewhere won't log
+                proposal.before
+                  ? undefined
+                  : eq(aiMemory.created_at, now.toISOString())
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Saved: ${proposal.after}. Change #${entry.id} in the change log.`,
+  }
+}
+
+/** A memory by name, ignoring case (older memories may use capitals). */
+async function findMemory(key: string) {
+  const [row] = await db
+    .select({ key: aiMemory.key, value: aiMemory.value })
+    .from(aiMemory)
+    .where(sql`lower(${aiMemory.key}) = ${key.toLowerCase()}`)
+    .limit(1)
+  return row
+}
+
+// Memories go into every request, so keep them short
+const MAX_MEMORY_KEY = 60
+const MAX_MEMORY_VALUE = 300
+
+/**
+ * Store a proposal to save a memory. ownerAsked: the owner said "remember
+ * that…" (saved as "user"); otherwise the agent noticed it ("inferred").
+ */
+export async function proposeMemory(input: {
+  key: string
+  value: string
+  ownerAsked: boolean
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<{ id: string; summary: string }> {
+  const key = input.key.replace(/\s+/g, " ").trim().toLowerCase()
+  const value = input.value.replace(/\s+/g, " ").trim()
+  if (!key || key.length > MAX_MEMORY_KEY)
+    throw new ProposalError(
+      `Give the memory a short name, up to ${MAX_MEMORY_KEY} characters`
+    )
+  if (!value) throw new ProposalError("Say what to remember")
+  if (value.length > MAX_MEMORY_VALUE)
+    throw new ProposalError(
+      `Keep a memory to ${MAX_MEMORY_VALUE} characters; split it if needed`
+    )
+  const current = await findMemory(key)
+  const before = current?.value ?? ""
+  if (before === value) throw new ProposalError("That is already remembered")
+  const summary =
+    `Remember: ${value}` + (before ? ` (replaces: ${before})` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "memory",
+    // Replace an existing memory under its own name
+    target: current?.key ?? key,
+    before,
+    after: value,
+    summary,
+    source: input.source,
+    request: input.request,
+    memory_source: input.ownerAsked ? "user" : "inferred",
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
 }
 
 export const proposeRecategoriseTool = {
@@ -295,4 +474,51 @@ export function parseProposeInput(input: unknown): {
   if (typeof category !== "string")
     throw new ProposalError("category must be a string")
   return { transaction_id: transaction_id.trim(), category }
+}
+
+export const proposeMemoryTool = {
+  name: "propose_memory",
+  strict: true,
+  description:
+    "Propose saving a memory: a lasting fact to use in later answers, such as what a payment was for or that a monthly payment is expected. Use it when the owner says “remember that…” (owner_asked true), or when they tell you something worth keeping (owner_asked false). Reuse an existing memory's name to replace it. This stores a proposal and saves nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      name: {
+        type: "string",
+        description: "Short name, e.g. wedding ring or gym payment",
+      },
+      fact: {
+        type: "string",
+        description:
+          "The fact in one sentence, with dates and amounts, e.g. The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring",
+      },
+      owner_asked: {
+        type: "boolean",
+        description: "True only if the owner asked you to remember it",
+      },
+    },
+    additionalProperties: false,
+    required: ["name", "fact", "owner_asked"],
+  },
+} satisfies import("@anthropic-ai/sdk").default.Tool
+
+/** Strict check of the propose_memory input. */
+export function parseMemoryInput(input: unknown): {
+  name: string
+  fact: string
+  owner_asked: boolean
+} {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new ProposalError("Tool input must be an object")
+  const values = input as Record<string, unknown>
+  for (const key of Object.keys(values))
+    if (!["name", "fact", "owner_asked"].includes(key))
+      throw new ProposalError("Unknown field " + key)
+  const { name, fact, owner_asked } = values
+  if (typeof name !== "string" || typeof fact !== "string")
+    throw new ProposalError("name and fact must be strings")
+  if (typeof owner_asked !== "boolean")
+    throw new ProposalError("owner_asked must be true or false")
+  return { name, fact, owner_asked }
 }

@@ -166,6 +166,7 @@ async function main() {
       "query_cash_flow",
       "get_balances",
       "propose_recategorise",
+      "propose_memory",
     ]
   )
   const searchResults = searchRequests[1].messages[2]
@@ -417,6 +418,69 @@ async function main() {
       return { id: "w1", summary: "x" }
     },
   })
+  // Remembering: stored through proposeMemory as a proposal, never saved by
+  // the agent; owner_asked decides user or inferred
+  const remembered: unknown[] = []
+  const memoryReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const withMemory = await runFinanceAgent("Oh that is for my wedding ring", {
+    loadMemories: async () => [],
+    source: "telegram",
+    now: () => new Date("2026-09-12T17:00:00Z"),
+    createMessage: async (params) => {
+      memoryReqs.push(structuredClone(params))
+      if (memoryReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "m1",
+            {
+              name: "wedding ring",
+              fact: "The $1,277 transfer to Yoon Thiri was my wedding ring",
+              owner_asked: false,
+            },
+            "propose_memory"
+          ),
+          call(
+            "m2",
+            { name: "x", fact: "y", owner_asked: "yes" },
+            "propose_memory"
+          ),
+          call("m3", { name: "x", fact: "y" }, "propose_memory"),
+        ])
+      return done
+    },
+    proposeMemory: async (input) => {
+      remembered.push({ ...input, now: undefined })
+      return { id: "mem123", summary: `Remember: ${input.value}` }
+    },
+  })
+  assert.deepEqual(remembered, [
+    {
+      key: "wedding ring",
+      value: "The $1,277 transfer to Yoon Thiri was my wedding ring",
+      ownerAsked: false,
+      source: "telegram",
+      request: "Oh that is for my wedding ring",
+      now: undefined,
+    },
+  ])
+  assert.deepEqual(withMemory.proposals, [
+    {
+      id: "mem123",
+      summary:
+        "Remember: The $1,277 transfer to Yoon Thiri was my wedding ring",
+    },
+  ])
+  const memoryResults = memoryReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    memoryResults.map((r) => r.is_error),
+    [undefined, true, true],
+    "owner_asked must be a boolean and is required"
+  )
+  const memoryInstructions = JSON.stringify(memoryReqs[0].system)
+  assert.match(memoryInstructions, /propose_memory/)
+  assert.match(memoryInstructions, /never say it was saved/)
+  assert.doesNotMatch(memoryInstructions, /or save memories/)
   console.log("finance-agent: passed")
 }
 
