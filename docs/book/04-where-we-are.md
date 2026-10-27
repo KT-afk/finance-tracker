@@ -2,7 +2,7 @@
 
 This chapter is the hand-over note. It says what is done, what is next, and what to watch out for. Update it at the end of each working session, so the next session (on any computer, with any account) can start from here.
 
-Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
+Last updated: 2026-10-27, on branch `claude/telegram-bot-setup-docs-1sh79b`.
 
 ## Done
 
@@ -16,12 +16,12 @@ Last updated: 2026-10-26, on branch `ticket-23-e2e-fixes`.
 - pstack skills are global, with Codex reviews at low effort (pull request #25).
 - Ticket 25: balances keep their statement date. Migration 0007 is applied to the cloud database (2026-10-27).
 - Ticket 14: the agent answers about income, savings and balances (see chapter 2).
-- Ticket 05: ask the agent from Telegram (needs migration 0008 and the owner's setup).
+- Ticket 05: ask the agent from Telegram. The setup script ran on 2026-10-27 and registered the webhook at `https://finance-tracker-latest-xi.vercel.app/api/telegram`. Ids: `TELEGRAM_GROUP_ID=-1004480176355`, `TELEGRAM_INSIGHTS_TOPIC_ID=3`, `TELEGRAM_ASK_TOPIC_ID=4`, `TELEGRAM_OWNER_ID=730041802`.
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
 ## Next, in order
 
-1. **Merge pull request for ticket 05**, then the owner follows the steps at the end of `.scratch/finance-agent/issues/05-telegram-ask-anything.md` (bot, group, migration 0008, setup script, Vercel settings).
+1. **Finish ticket 05 (owner):** run migration 0008 on the cloud database if not done, set the six `TELEGRAM_*` settings in Vercel (ids above), redeploy, then ask a question in Ask anything. Post as yourself, not anonymously, or the bot ignores you.
 2. **Ticket 06:** Daily insights topic (the 10pm message moves to the group).
 3. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 

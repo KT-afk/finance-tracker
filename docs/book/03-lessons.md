@@ -80,3 +80,7 @@ The lockout test locked out every test after it, so their own bugs never showed.
 The real data (about 1,800 transactions) is in the Turso cloud database. The local `finance.db` on the owner's Mac only holds the 25 demo transactions. Its settings are not on the Mac, so to change the cloud database the owner makes a short-lived token at app.turso.tech and runs `TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:migrate` in their own terminal. `drizzle-kit migrate` can finish without printing “applied”, so check afterwards: count the rows in `__drizzle_migrations`.
 
 Never paste the token into the chat. If it happens, delete the token in Turso.
+
+## 16. Turning on Topics changes the Telegram group id
+
+Turning on Topics makes a basic group a supergroup, with a new id that starts with `-100`. `telegram:setup` then prints both ids. Use the `-100` one. Messages sent as an anonymous admin come from `GroupAnonymousBot`, not the owner, so the bot ignores them.
