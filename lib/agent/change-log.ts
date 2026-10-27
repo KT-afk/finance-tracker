@@ -1,4 +1,14 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm"
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  sql,
+} from "drizzle-orm"
 import type Anthropic from "@anthropic-ai/sdk"
 import { db } from "../db"
 import {
@@ -54,7 +64,12 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
   })
 }
 
-/** Change log entries, newest first. since is a YYYY-MM-DD date. */
+/** Start of a Singapore day as a UTC timestamp, to compare with created_at. */
+function singaporeMidnight(date: string): string {
+  return new Date(`${date}T00:00:00+08:00`).toISOString()
+}
+
+/** Change log entries, newest first. since is a YYYY-MM-DD date in Singapore. */
 export async function listChanges(options: {
   since?: string
   limit?: number
@@ -62,7 +77,11 @@ export async function listChanges(options: {
   const rows = await db
     .select()
     .from(changeLog)
-    .where(options.since ? gte(changeLog.created_at, options.since) : undefined)
+    .where(
+      options.since
+        ? gte(changeLog.created_at, singaporeMidnight(options.since))
+        : undefined
+    )
     .orderBy(desc(changeLog.id))
     .limit(options.limit ?? 20)
   return describe(rows)
@@ -80,10 +99,20 @@ export async function undoChange(
   id: number | undefined,
   ctx: { source: ConversationSource; request: string; now: Date }
 ): Promise<{ outcome: UndoOutcome; message: string }> {
+  // "The last change" is the newest real change not already undone, so
+  // saying it twice undoes two changes rather than redoing the first
+  const reversed = db
+    .select({ id: changeLog.reverses_id })
+    .from(changeLog)
+    .where(isNotNull(changeLog.reverses_id))
   const [entry] = await db
     .select()
     .from(changeLog)
-    .where(id === undefined ? undefined : eq(changeLog.id, id))
+    .where(
+      id === undefined
+        ? and(isNull(changeLog.reverses_id), notInArray(changeLog.id, reversed))
+        : eq(changeLog.id, id)
+    )
     .orderBy(desc(changeLog.id))
     .limit(1)
   if (!entry)
@@ -91,7 +120,7 @@ export async function undoChange(
       outcome: "not_found",
       message:
         id === undefined
-          ? "The change log is empty, so there is nothing to undo."
+          ? "There is no change left to undo."
           : `There is no change #${id}.`,
     }
   const [view] = await describe([entry])
@@ -217,7 +246,7 @@ export const undoChangeTool = {
   name: "undo_change",
   strict: true,
   description:
-    "Undo one change log entry straight away, without asking for a tap: “undo the last change” (leave change_id out) or “undo #12” (change_id 12). It only works if nothing has changed the same thing since; otherwise it explains and changes nothing. Report the result as given.",
+    "Undo one change log entry straight away, without asking for a tap: “undo the last change” (leave change_id out: the newest change not already undone) or “undo #12” (change_id 12; giving the # of an undo puts that change back). It only works if nothing has changed the same thing since; otherwise it explains and changes nothing. Report the result as given.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -257,7 +286,10 @@ export function parseListInput(input: unknown): {
       limit > 50)
   )
     throw new ProposalError("limit must be a whole number from 1 to 50")
-  return { ...(since ? { since } : {}), limit: (limit as number) ?? 20 }
+  return {
+    ...(typeof since === "string" ? { since } : {}),
+    limit: typeof limit === "number" ? limit : 20,
+  }
 }
 
 /** Strict check of undo_change input. */

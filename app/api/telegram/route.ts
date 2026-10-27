@@ -65,8 +65,8 @@ export async function POST(req: Request) {
     handleTelegramUpdate(update, {
       config,
       now: () => new Date(),
-      runAgent: (question, { history, source }) =>
-        runFinanceAgent(question, { history, source }),
+      runAgent: (question, { history, source, allowUndo }) =>
+        runFinanceAgent(question, { history, source, allowUndo }),
       send: sendTelegramTo,
       sendTyping: sendTypingTo,
       decide: (id, decision) => decideProposal(id, decision, new Date()),

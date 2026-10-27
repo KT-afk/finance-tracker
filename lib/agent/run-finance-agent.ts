@@ -166,6 +166,9 @@ export async function runFinanceAgent(
   overrides: Partial<Dependencies> & {
     history?: Exchange[]
     source?: ConversationSource
+    // False when the question quotes text the owner didn't write (a
+    // Telegram reply): undo has no confirm tap, so it needs their own words
+    allowUndo?: boolean
   } = {}
 ) {
   const propose = overrides.propose ?? proposeRecategorise
@@ -388,6 +391,13 @@ export async function runFinanceAgent(
               }
             }
             const { change_id } = parseUndoInput(toolUse.input)
+            if (overrides.allowUndo === false)
+              return {
+                ...result,
+                is_error: true,
+                content:
+                  "Undo isn't available when the owner's message quotes another message. Ask them to say “undo …” in a new message. Nothing was changed.",
+              }
             return {
               ...result,
               content: JSON.stringify(

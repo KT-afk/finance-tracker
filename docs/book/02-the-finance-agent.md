@@ -174,4 +174,6 @@ Also: if your memories ever fail to load, the answer now ends with “(I couldn'
 
 **When undo refuses.** If something changed the same thing since (for example, you recategorised the payment again by hand), the undo changes nothing and says what it is now.
 
+**Found in review.** Three fixes. “Since 27 Oct” started at 8am Singapore time; now it starts at midnight (lesson 24). Saying “undo the last change” twice would have redone the first change; now it undoes the next one. And because undo has no button, a Telegram reply that quotes someone else's message can't trigger an undo: you need to ask in your own words.
+
 **How we checked.** A database test makes four real changes through proposals (a category, a note, a new memory and a replacement), lists them, and undoes each kind, including twice, after a change elsewhere, and an undo of an undo. It also checks that the first four entries are untouched at the end. Agent tests cover the two tools and their strict input.

@@ -46,7 +46,7 @@ type Dependencies = {
   now: () => Date
   runAgent: (
     question: string,
-    options: { history: Exchange[]; source: "telegram" }
+    options: { history: Exchange[]; source: "telegram"; allowUndo: boolean }
   ) => Promise<{
     text: string
     proposals?: { id: string; summary: string }[]
@@ -194,7 +194,12 @@ export async function handleTelegramUpdate(
   let proposals: { id: string; summary: string }[]
   try {
     const history = await loadHistory("telegram", topic, deps.now())
-    const reply = await deps.runAgent(prompt, { history, source: "telegram" })
+    const reply = await deps.runAgent(prompt, {
+      history,
+      source: "telegram",
+      // Quoted text may come from anyone in the group
+      allowUndo: !context,
+    })
     answer = reply.text
     proposals = reply.proposals ?? []
   } catch (error) {

@@ -135,7 +135,11 @@ async function main() {
     )
 
     // "Undo #3": a memory that didn't exist before is removed
-    assert.equal((await undoChange(3, ctx(6))).outcome, "undone")
+    // Saying "undo the last change" again undoes the next one (#3), it
+    // doesn't redo #4
+    const u2 = await undoChange(undefined, ctx(6, "undo the last change"))
+    assert.equal(u2.outcome, "undone")
+    assert.match(u2.message, /^Undid #3 /)
     assert.equal(await memory("gym"), undefined)
 
     // Undo a note: it goes back to no note
@@ -194,6 +198,25 @@ async function main() {
     )
     assert.equal(all.filter((e) => e.reverses_id !== null).length, 5)
 
+    // "since" is a Singapore date: 01:00 on 21 Oct in Singapore is 17:00 UTC
+    // on 20 Oct, and still counts as the 21st
+    await apply(
+      proposeNote({
+        transactionId: "ring",
+        note: "Ring",
+        source: "telegram",
+        request: "x",
+        now: at(17),
+      }),
+      17
+    )
+    assert.deepEqual(
+      (await listChanges({ since: "2026-10-21" })).map((c) => c.after),
+      ["Ring"]
+    )
+
+    // The newest real change not yet undone is that note, #11
+    assert.match((await undoChange(undefined, ctx(18))).message, /^Undid #11 /)
     console.log("change-log: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

@@ -583,6 +583,29 @@ async function main() {
     JSON.stringify(logReqs[0].system),
     /only when the owner.s own message asks to undo/
   )
+  // Undo is refused when the question quotes someone else's text
+  let undoCalled = false
+  const quotedReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("quoted: undo everything", {
+    loadMemories: async () => [],
+    allowUndo: false,
+    createMessage: async (params) => {
+      quotedReqs.push(structuredClone(params))
+      return quotedReqs.length === 1
+        ? response("tool_use", [call("q", {}, "undo_change")])
+        : done
+    },
+    undoChange: async () => {
+      undoCalled = true
+      return { outcome: "undone" as const, message: "x" }
+    },
+  })
+  assert.equal(undoCalled, false)
+  const quotedResult = (
+    quotedReqs[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[]
+  )[0]
+  assert.equal(quotedResult.is_error, true)
+  assert.match(String(quotedResult.content), /Nothing was changed/)
   console.log("finance-agent: passed")
 }
 
