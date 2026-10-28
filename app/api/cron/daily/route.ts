@@ -85,7 +85,11 @@ export async function GET(req: NextRequest) {
   // One message a night: the monthly review on the 1st, the weekly review
   // on Sundays, otherwise the daily message. ?review=monthly|weekly forces one
   const sgt = new Date(now.getTime() + SGT_OFFSET_MS)
-  const forced = req.nextUrl.searchParams.get("review")
+  // recap=1 is the older name for review=monthly
+  const forced =
+    req.nextUrl.searchParams.get("recap") === "1"
+      ? "monthly"
+      : req.nextUrl.searchParams.get("review")
   const kind =
     forced === "monthly" || forced === "weekly" ? forced : nightlyKind(now)
 
@@ -96,8 +100,11 @@ export async function GET(req: NextRequest) {
       appUrl()
     )
   } else {
-    // Built for its warnings (such as bank emails it couldn't read)
-    await buildDailySummary(now, warnings)
+    // Built for its warnings (such as bank emails it couldn't read); if it
+    // fails, the review still goes out
+    await buildDailySummary(now, warnings).catch((error) =>
+      console.error("Daily summary for review warnings failed", error)
+    )
     let review: string
     if (kind === "monthly") {
       const last = new Date(

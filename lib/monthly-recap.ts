@@ -263,8 +263,8 @@ export async function buildMonthlyRecap(month: string): Promise<MonthlyRecap> {
         )
       ).spend,
     },
-    // 11pm in Singapore on the month's last day: the whole month counted
-    budgets: await budgetStatus(new Date(`${to}T15:00:00Z`)),
+    // The end of the month's last day in Singapore: the whole month counted
+    budgets: await budgetStatus(new Date(`${to}T23:59:59+08:00`)),
     groups,
   }
 }
