@@ -120,3 +120,11 @@ Times are saved in UTC (`2026-10-26T17:00:00Z`), but the owner means Singapore d
 ## 25. Two steps in one request can fail in between
 
 The Budgets page stores a proposal and confirms it in the same request. If the confirm failed, the proposal was left pending, and a later tap in chat could have applied a change you thought had failed. When one request does several steps, decide what happens to the first step if a later one fails, and test that failure.
+
+## 26. Check the same way in every statement of a batch
+
+Undoing a forgotten memory ran two statements: write the log row only if no memory with that name exists (ignoring capitals), and put the memory back. The second relied on the table's unique key, which does care about capitals. So with “Rent” saved and “rent” being restored, the log row was skipped but the memory still went in. When a batch has several statements, give every one the same condition, written out, rather than trusting a constraint to match it.
+
+## 27. Restarting the branch can drop a pushed commit
+
+After each merge we restart the working branch from `main`. Once, a book commit had been pushed to the branch after the merge, so restarting from `main` dropped it, and the next push was refused. Before restarting, check `git log origin/main..origin/<branch>`: if anything is there, merge it in instead of starting over.

@@ -165,6 +165,7 @@ async function main() {
       "search_transactions",
       "query_cash_flow",
       "get_balances",
+      "savings_review",
       "propose_recategorise",
       "propose_memory",
       "propose_note",
@@ -665,6 +666,49 @@ async function main() {
   const rsInstructions = JSON.stringify(rsReqs[0].system)
   assert.match(rsInstructions, /propose_rule/)
   assert.match(rsInstructions, /propose_share/)
+
+  // Savings review: strict input, the clock passed through, failures not zero
+  const savingsReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const savingsCalls: unknown[] = []
+  await runFinanceAgent("how much can I save and what should I cut?", {
+    loadMemories: async () => [],
+    now: () => new Date("2026-10-15T12:00:00Z"),
+    createMessage: async (params) => {
+      savingsReqs.push(structuredClone(params))
+      if (savingsReqs.length === 1)
+        return response("tool_use", [
+          call("v1", { months: 3 }, "savings_review"),
+          call("v2", { months: 12 }, "savings_review"),
+          call("v3", { months: 6 }, "savings_review"),
+        ])
+      return done
+    },
+    savingsReview: async (at, months) => {
+      savingsCalls.push([at.toISOString(), months])
+      if (months === 6) throw new Error("private database details")
+      return {
+        months_counted: 0,
+        months: [],
+        average: { income: 1, spending: 1, savings: 0, savings_rate: 0 },
+        this_month: { from: "", to: "", day: 15, days_in_month: 31 },
+        categories: [],
+      }
+    },
+  })
+  assert.deepEqual(savingsCalls, [
+    ["2026-10-15T12:00:00.000Z", 3],
+    ["2026-10-15T12:00:00.000Z", 6],
+  ])
+  const savingsResults = savingsReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    savingsResults.map((r) => r.is_error),
+    [undefined, true, true]
+  )
+  assert.doesNotMatch(JSON.stringify(savingsResults), /private database/)
+  const savingsInstructions = JSON.stringify(savingsReqs[0].system)
+  assert.match(savingsInstructions, /savings_review/)
+  assert.match(savingsInstructions, /the choice is theirs/)
 
   // Budgets: a proposal on a strict input, and the month's status
   const budgetReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
