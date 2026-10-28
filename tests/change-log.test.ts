@@ -249,6 +249,25 @@ async function main() {
     assert.equal((await memory("rent")).value, "Rent is split with Jane")
     // Again: it's back already, so refused
     assert.equal((await undoChange(forgot.id, ctx(22))).outcome, "conflict")
+    // Forgotten, then saved again with other capitals: undo refuses and
+    // adds nothing, though the table's unique key is case-sensitive
+    await forgetMemory((await memory("rent")).id, { now: at(23) })
+    const [again] = await listChanges({ limit: 1 })
+    await db.insert(aiMemory).values({
+      key: "Rent",
+      value: "Rent is $2,000",
+      source: "user",
+      created_at: "x",
+    })
+    const refused = await undoChange(again.id, ctx(24))
+    assert.equal(refused.outcome, "conflict")
+    assert.match(refused.message, /is now Rent is \$2,000/)
+    assert.deepEqual(
+      (await db.select().from(aiMemory))
+        .filter((m) => m.key.toLowerCase() === "rent")
+        .map((m) => m.value),
+      ["Rent is $2,000"]
+    )
 
     console.log("change-log: passed")
   } finally {

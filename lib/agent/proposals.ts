@@ -31,9 +31,7 @@ import {
   encodeShare,
   money,
 } from "./proposal-format"
-
-/** A stored proposal as the owner sees it, with buttons to decide it. */
-export type Proposal = { id: string; summary: string }
+import type { Decision, DecisionOutcome, Proposal } from "./proposal-types"
 
 /** Why a proposal can't be made; the message goes back to the agent. */
 export class ProposalError extends Error {}
@@ -108,9 +106,7 @@ const ENDINGS = {
   rejected: { outcome: "rejected", message: "Rejected. Nothing changed." },
 } as const
 
-export type Decision = "confirm" | "reject"
-export type DecisionOutcome =
-  "applied" | "rejected" | "expired" | "used" | "conflict" | "not_found"
+export type { Decision, DecisionOutcome, Proposal }
 
 /**
  * The owner's tap on a proposal. Only a pending, unexpired proposal does

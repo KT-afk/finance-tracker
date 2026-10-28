@@ -354,6 +354,7 @@ export async function undoChange(
     }
   } else if (entry.kind === "memory" && !entry.after) {
     // Undo a forgotten memory: put it back if none has been saved since
+    const noMemory = sql`not exists (select 1 from ${aiMemory} where lower(${aiMemory.key}) = ${entry.target.toLowerCase()})`
     const [log] = await db.batch([
       db
         .insert(changeLog)
@@ -361,23 +362,24 @@ export async function undoChange(
           db
             .select(logRow({ target: entry.target, current: "" }))
             .from(changeLog)
-            .where(
-              and(
-                eq(changeLog.id, entry.id),
-                sql`not exists (select 1 from ${aiMemory} where lower(${aiMemory.key}) = ${entry.target.toLowerCase()})`
-              )
-            )
+            .where(and(eq(changeLog.id, entry.id), noMemory))
         )
         .returning({ id: changeLog.id }),
-      db
-        .insert(aiMemory)
-        .values({
-          key: entry.target,
-          value: entry.before,
-          source: "user",
-          created_at: ctx.now.toISOString(),
-        })
-        .onConflictDoNothing(),
+      // The same check as the log row, ignoring case like every memory
+      // lookup (the table's unique key doesn't). Who it came from isn't
+      // kept, so it comes back as the owner's
+      db.insert(aiMemory).select(
+        db
+          .select({
+            id: sql`null`.as("id"),
+            key: sql`${entry.target}`.as("key"),
+            value: sql`${entry.before}`.as("value"),
+            source: sql`'user'`.as("source"),
+            created_at: sql`${ctx.now.toISOString()}`.as("created_at"),
+          })
+          .from(changeLog)
+          .where(and(eq(changeLog.id, entry.id), noMemory))
+      ),
     ])
     logged = log
     if (!logged.length)
@@ -386,7 +388,7 @@ export async function undoChange(
           await db
             .select({ value: aiMemory.value })
             .from(aiMemory)
-            .where(eq(aiMemory.key, entry.target))
+            .where(sql`lower(${aiMemory.key}) = ${entry.target.toLowerCase()}`)
         )[0]?.value ?? ""
   } else if (entry.kind === "memory") {
     const stillAfter = and(

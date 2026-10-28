@@ -21,3 +21,5 @@
 - [x] Deleting a memory from the Ask page (`DELETE /api/memory/[id]`) is not recorded in the change log; decide whether it should be (from ticket 08 review)
 
 Done (2026-10-28): `proposals.ts` keeps the rules (propose, decide, apply); `proposal-tools.ts` holds the agent tools and their strict parsers; `proposal-format.ts` holds how things are named. `OWED_CATEGORIES` and `MEMORY_SOURCES` live in `lib/schema.ts`. Decided: forgetting a memory on the Ask page is now logged (`forgetMemory`), and “undo” brings it back.
+
+Review (2026-10-28): the status → message map covers the endings decided in `decideProposal` (expired, rejected); the `settle("conflict")`/`settle("confirmed")` guards inside each apply function stay, since each has its own message. Folding them is in ticket 31's “one apply shape” item. Fixed in review: undoing a forgotten memory now checks for a memory with the same name in any capitals in both statements, so it can never add a second one without a log row.

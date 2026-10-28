@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import MiniBarChart from "@/components/MiniBarChart"
-import type { Decision, Proposal } from "@/lib/agent/proposals"
+import type { Decision, Proposal } from "@/lib/agent/proposal-types"
 
 interface AnswerData {
   type: "bar"
