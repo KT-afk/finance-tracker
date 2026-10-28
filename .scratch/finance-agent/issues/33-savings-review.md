@@ -13,3 +13,5 @@ Owner request (2026-10-28): “Can it tell me how much I can save and what to cu
 - [x] Database test and agent tests
 
 Note: “Fixed” is Housing and Bills & Utilities. Subscriptions and Health count as flexible; change `FIXED_CATEGORIES` if that's wrong.
+
+Review (2026-10-28), fixed: `months_counted` (0 means not enough data; the agent says so instead of zeros); the month the data starts in counts only if it starts in the first week; no pace or “above average” before the 7th; cuts are worked out from the results (back to average, or an example of 10–20%), with a total “now $X, with cuts $Y”; the savings rate is documented as possibly negative. Performance and duplication notes are in ticket 31.

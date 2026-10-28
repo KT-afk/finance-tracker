@@ -687,6 +687,7 @@ async function main() {
       savingsCalls.push([at.toISOString(), months])
       if (months === 6) throw new Error("private database details")
       return {
+        months_counted: 0,
         months: [],
         average: { income: 1, spending: 1, savings: 0, savings_rate: 0 },
         this_month: { from: "", to: "", day: 15, days_in_month: 31 },

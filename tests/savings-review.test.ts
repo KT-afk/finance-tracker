@@ -119,15 +119,53 @@ async function main() {
     ])
     assert.equal(cat("Shopping").above_average, false)
 
+    assert.equal(r.months_counted, 3)
     // Six months asked for, but data starts in July: averages use those 3
     const six = await savingsReview(now, 6)
     assert.equal(six.months.length, 6)
+    assert.equal(six.months_counted, 3)
     assert.deepEqual(six.average, r.average)
     assert.equal(
       six.categories.find((c) => c.category === "Food & Drink")!
         .monthly_average,
       600
     )
+
+    // Early in the month there is no pace: one week's spending isn't a month
+    const early = await savingsReview(new Date("2026-10-03T04:00:00Z"), 3)
+    assert.equal(
+      early.categories.find((c) => c.category === "Food & Drink")!
+        .this_month_on_pace_for,
+      null
+    )
+    assert.equal(
+      early.categories.find((c) => c.category === "Food & Drink")!
+        .above_average,
+      false
+    )
+
+    // No full month of data yet: says so rather than giving real zeros
+    const none = await savingsReview(new Date("2026-07-20T04:00:00Z"), 3)
+    assert.equal(none.months_counted, 0)
+
+    // A month the data starts in partway (a $10 coffee on 20 Jun) isn't
+    // counted, so it can't pull the averages down
+    const { db } = await import("../lib/db")
+    const { transactions } = await import("../lib/schema")
+    await db.insert(transactions).values({
+      id: "late-june",
+      date: "2026-06-20",
+      description: "MADE UP CAFE",
+      amount: -10,
+      bank: "ocbc",
+      category: "Food & Drink",
+      is_corrected: false,
+      hash: "late-june",
+      uploaded_at: "x",
+    })
+    const withJune = await savingsReview(now, 6)
+    assert.equal(withJune.months_counted, 3)
+    assert.deepEqual(withJune.average, r.average)
 
     // January looks back into the year before
     const jan = await savingsReview(new Date("2027-01-10T04:00:00Z"), 3)

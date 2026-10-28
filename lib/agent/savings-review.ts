@@ -5,7 +5,7 @@
  * “how much do I save?” and “what could I cut?” from one lookup.
  */
 import type Anthropic from "@anthropic-ai/sdk"
-import { and, gte, lte } from "drizzle-orm"
+import { and, gte, lte, min } from "drizzle-orm"
 import { budgetMonth } from "../budgets"
 import { classifyCashFlow } from "../cash-flow"
 import { db } from "../db"
@@ -21,13 +21,20 @@ export const FIXED_CATEGORIES: readonly string[] = [
   "Bills & Utilities",
 ]
 
+// Before this day of the month, a pace is guesswork (one coffee on the 1st
+// is not $1,500 a month)
+const PACE_FROM_DAY = 7
+
 export type SavingsReview = {
+  // Full months the averages cover; 0 means there isn't enough data yet
+  months_counted: number
   months: { month: string; income: number; spending: number; savings: number }[]
   average: {
     income: number
     spending: number
     savings: number
-    // Share of income kept, 0–100; null without income
+    // Share of income kept, in percent; negative when spending is more
+    // than income; null without income
     savings_rate: number | null
   }
   this_month: { from: string; to: string; day: number; days_in_month: number }
@@ -37,7 +44,8 @@ export type SavingsReview = {
     monthly_average: number
     this_month_so_far: number
     // This month so far, scaled to the whole month; null for fixed costs,
-    // which are paid once (rent on the 1st isn't a pace)
+    // which are paid once (rent on the 1st isn't a pace), and in the first
+    // days of the month
     this_month_on_pace_for: number | null
     above_average: boolean
     top_merchants: { name: string; monthly_average: number }[]
@@ -107,8 +115,17 @@ export async function savingsReview(
       ...(await queryCashFlow(p.from, p.to)),
     }))
   )
-  // A month with neither income nor spending is before the data starts
-  const counted = flows.filter((f) => f.income !== 0 || f.spending !== 0)
+  // Only months the data covers in full: a month with nothing in it is
+  // before the data starts or wasn't uploaded, and the month the data
+  // starts in counts only if it starts in its first week
+  const [{ first }] = await db
+    .select({ first: min(transactions.date) })
+    .from(transactions)
+  const counted = flows.filter((f, i) => {
+    if (f.income === 0 && f.spending === 0) return false
+    if (!first || first <= periods[i].from) return true
+    return first.slice(0, 7) !== f.month || Number(first.slice(8)) <= 7
+  })
   const n = Math.max(counted.length, 1)
   const avg = (pick: (f: (typeof flows)[number]) => number) =>
     round(counted.reduce((sum, f) => sum + pick(f), 0) / n)
@@ -138,9 +155,10 @@ export async function savingsReview(
       const monthly_average = round((past?.total ?? 0) / n)
       const this_month_so_far = round(soFar.get(category)?.total ?? 0)
       const fixed = FIXED_CATEGORIES.includes(category)
-      const this_month_on_pace_for = fixed
-        ? null
-        : round(this_month_so_far / share)
+      const this_month_on_pace_for =
+        fixed || current.dayOfMonth < PACE_FROM_DAY
+          ? null
+          : round(this_month_so_far / share)
       const compared = this_month_on_pace_for ?? this_month_so_far
       return {
         category,
@@ -165,6 +183,7 @@ export async function savingsReview(
     .sort((a, b) => b.monthly_average - a.monthly_average)
 
   return {
+    months_counted: counted.length,
     months: flows.map(({ month, income, spending, savings }) => ({
       month,
       income,
@@ -186,7 +205,7 @@ export const savingsReviewTool = {
   name: "savings_review",
   strict: true,
   description:
-    "Averages over the last 3 or 6 full calendar months (not this month): monthly income, spending, savings and savings rate (share of income kept), each month's figures, and each spending category's monthly average with this month so far, what this month is on pace for, whether it is clearly above average, whether it is a fixed cost (housing, bills) or flexible, and its top merchants. Use it for average spending or savings, how much the owner could save, and what they could cut.",
+    "Averages over the last 3 or 6 full calendar months (not this month; months_counted says how many had data): monthly income, spending, savings and savings rate (percent of income kept, negative when spending is more than income), each month's figures, and each spending category's monthly average with this month so far, what this month is on pace for, whether it is clearly above average, whether it is a fixed cost (housing, bills) or flexible, and its top merchants. Use it for average spending or savings, how much the owner could save, and what they could cut.",
   input_schema: {
     type: "object" as const,
     properties: {

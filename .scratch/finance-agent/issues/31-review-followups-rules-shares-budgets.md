@@ -30,3 +30,9 @@ From the review of ticket 13 (2026-10-28):
 - [ ] Review nights build the whole daily summary just for its warnings; split out the warnings.
 - [ ] The endpoint review test runs on the real clock; give the route a clock to replace.
 - [ ] `?review=weekly` on a weekday compares a part week with a full one (testing only).
+
+From the review of ticket 33 (2026-10-28):
+
+- [ ] `savingsReview` reads the transactions about 14 times for 6 months (each `queryCashFlow` plus the category reads); one read bucketed by month would do.
+- [ ] `spendByCategory` repeats `querySpending`'s classify loop, and `round` copies `roundMoney`; share them so the rules can't drift.
+- [ ] The “above average” rule (20% and $30) and the day-7 pace start are written only in code comments.
