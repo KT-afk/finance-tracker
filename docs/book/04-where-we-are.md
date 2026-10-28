@@ -27,6 +27,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Tickets 12 and 32 (PR #37, merged): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
 - Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
 - Ticket 13 (PR #39, merged): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
+- Ticket 33 (PR #41): savings review: averages, how much you could save, what to cut. No migration.
 - Ticket 28 (PR #40, merged): proposals code split in three; deleting a memory on the Ask page is now logged and undoable. No migration.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
