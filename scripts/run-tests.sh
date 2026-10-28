@@ -53,6 +53,7 @@ run_test "alert-reconcile"         "$ROOT/tests/alert-reconcile.test.ts"
 run_test "daily-message"           "$ROOT/tests/daily-message.test.ts"
 run_test "monthly-recap"           "$ROOT/tests/monthly-recap.test.ts"
 run_test "weekly-review"           "$ROOT/tests/weekly-review.test.ts"
+run_test "savings-review"          "$ROOT/tests/savings-review.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \
   "UOB_MAY_PDF=${UOB_MAY_PDF:-}" \
   "OCBC_MAY_PDF=${OCBC_MAY_PDF:-}"

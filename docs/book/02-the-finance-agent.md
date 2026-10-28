@@ -238,3 +238,17 @@ Problems reading your email still lead whichever message goes out. Replying to a
 **What changed inside.** The proposals file had grown to 1,345 lines. It is now three: the rules for proposing and confirming changes, the tools the agent calls, and how payments, shares and budgets are named to you. Shared lists (the two “owed” categories, where a memory came from) and shared types now have one definition each, so they can't drift apart. A new test forces a category change in the split second between the check and the write, and shows the write refuses it.
 
 **How we checked.** All tests pass unchanged, plus the new race test and a forget-then-undo test.
+
+## Ticket 33: Savings review (2026-10-28)
+
+**What you asked for.** “Can it tell me how much I can save and what to cut out and the average.”
+
+**What we built.** A new lookup for the agent, the savings review. In one go it gets:
+
+- your average monthly income, spending and savings over the last 3 months (or 6 if you ask), and how much of your income you keep. This month isn't counted, because it isn't over. Months before your data starts are left out, so they don't drag the averages down.
+- each category's monthly average next to this month so far, and what this month is on pace for. A category is flagged when it's clearly above its average (20% and $30 or more).
+- which costs are fixed (rent, bills) and which you choose, and the top places your money goes in each.
+
+Ask “what should I cut?” and the agent suggests two or three specific cuts, each with a dollar amount and what it would add to your savings a month, and offers to set a budget. It doesn't tell you what you must do; the choice is yours, as with “can I afford this?”.
+
+**How we checked.** A database test with three ordinary months and a busy October: the averages, the savings rate, your share of a shared dinner, rent not counted as “above average” because it's paid on the 1st, food flagged, six months asked for when only three have data, and January looking back into the year before. Agent tests cover the tool, its strict input, and a failure that doesn't read as zero.
