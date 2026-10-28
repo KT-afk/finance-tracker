@@ -52,6 +52,9 @@ function seed(dbPath: string) {
     INSERT INTO transactions
       (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at)
     VALUES ${rows.join(",\n")};
+    INSERT INTO budgets (category, monthly_limit, updated_at) VALUES
+      ('Food & Drink', 600, 'x'),
+      ('Travel', 500, 'x');
   `)
   db.close()
 }
@@ -108,6 +111,21 @@ async function main() {
     assert.match(
       text,
       /🍜 Food  \$530   usual \$300   ⬆ \+\$230\n    .*×15 \$450/
+    )
+
+    // How the month compared with the one before, and each budget's result
+    assert.deepEqual(r.lastMonth, { label: "September", total: 2400 })
+    assert.match(text, /\nSeptember: \$2,400 \(\+\$1,420 this month\)\n/)
+    assert.deepEqual(
+      r.budgets.map((b) => [b.category, b.spent, b.monthPct]),
+      [
+        ["Food & Drink", 530, 100],
+        ["Travel", 900, 100],
+      ]
+    )
+    assert.match(
+      text,
+      /\nBudgets in October:\n✅ Food & Drink: \$530 of \$600 \(88%\) · within budget, \$70 left\n⚠️ Travel: \$900 of \$500 \(180%\) · over by \$400$/
     )
 
     console.log("monthly recap test passed")

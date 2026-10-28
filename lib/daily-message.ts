@@ -61,6 +61,16 @@ function sgtDate(instant: Date): string {
   return new Date(instant.getTime() + SGT_OFFSET_MS).toISOString().slice(0, 10)
 }
 
+/**
+ * Which 10pm message to send: the monthly review on the 1st (even on a
+ * Sunday), the weekly review on Sundays, otherwise the daily message.
+ */
+export function nightlyKind(now: Date): "monthly" | "weekly" | "daily" {
+  const sgt = new Date(now.getTime() + SGT_OFFSET_MS)
+  if (sgt.getUTCDate() === 1) return "monthly"
+  return sgt.getUTCDay() === 0 ? "weekly" : "daily"
+}
+
 export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
@@ -281,8 +291,23 @@ function dayLabel(date: string): string {
   }).format(new Date(`${date}T00:00:00Z`))
 }
 
+/** The budget pace section: a heading and one line per budget. */
+export function budgetLines(
+  budgets: BudgetStatus[],
+  day: number,
+  daysInMonth: number
+): string[] {
+  return [
+    `Budgets (day ${day} of ${daysInMonth}, ${budgets[0].monthPct}% of the month gone):`,
+    ...budgets.map(
+      (b) =>
+        `${b.pace === "on track" ? "✅" : "⚠️"} ${b.category}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)} (${b.usedPct}%) · ${b.pace}`
+    ),
+  ]
+}
+
 /** A line for each budget at 80% or more, for the top of the message. */
-function budgetWarnings(budgets: BudgetStatus[]): string[] {
+export function budgetWarnings(budgets: BudgetStatus[]): string[] {
   return budgets
     .filter((b) => b.usedPct >= 80)
     .map((b) =>
@@ -342,17 +367,8 @@ export function formatDailyMessage(
         : ` → on pace for ${sgd.format(s.pace)}`)
   )
   if (s.budgets.length) {
-    const monthPct = s.budgets[0].monthPct
     lines.push("")
-    lines.push(
-      `Budgets (day ${s.daysElapsed} of ${s.daysInMonth}, ${monthPct}% of the month gone):`
-    )
-    for (const b of s.budgets) {
-      const mark = b.pace === "on track" ? "✅" : "⚠️"
-      lines.push(
-        `${mark} ${b.category}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)} (${b.usedPct}%) · ${b.pace}`
-      )
-    }
+    lines.push(...budgetLines(s.budgets, s.daysElapsed, s.daysInMonth))
   }
   if (s.unlabelled.count > 0) {
     const link = appUrl

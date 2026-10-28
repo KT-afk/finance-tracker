@@ -218,3 +218,15 @@ Spending is your share, as everywhere. Budgets run by calendar month, the 1st to
 **How we checked.** Database tests for removal, undo of a removal (and a second undo refused), and the page's API. Agent tests for removing. A browser test adds, changes, reloads and removes a budget on the page. Phone width checked: no sideways scrolling.
 
 **Review fixes (2026-10-28).** If saving from the Budgets page fails partway, its proposal is now rejected, so it can't sit pending and be applied later by a tap in chat. Each budget's box shows the latest limit, even one changed from Telegram. The page asks before you leave with an amount you haven't saved, and moves focus to the box when it shows an error. The 10pm warnings use the ⚠️ emoji. A test now shows that one message setting two budgets gives two proposals, each with its own buttons. The spec now records the Budgets page exception (pressing Save is your confirmation) and budget removal.
+
+## Ticket 13: Weekly and monthly reviews (2026-10-28)
+
+**What we built.** One message a night, chosen by the Singapore date:
+
+- **The 1st:** the monthly review, in place of the daily message (before, you got both). It's the monthly recap you already had, plus how the month compared with the one before (“September: $2,400 (+$1,420 this month)”) and how each budget ended (“✅ Food & Drink: $530 of $600 (88%) · within budget, $70 left”). Budget results use today's limits, because limits don't keep a history.
+- **Sundays:** the weekly review. Monday to Sunday against the week before: the total, up to three groups that changed by $20 or more, the top three merchants, and the budget pace for the month so far, with the 80% and 100% warnings at the top.
+- **Other days:** the daily message, as before.
+
+Problems reading your email still lead whichever message goes out. Replying to a review works like replying to the daily message: the agent gets the review as context.
+
+**How we checked.** A test picks the message for a weekday, a Sunday, the 1st, and the 1st when it is a Sunday. A weekly review test checks the week's dates, totals, changes, merchants and budget pace. The monthly test checks last month's total and budget results. The endpoint test checks that a review day sends one message, led by warnings, without the daily part.

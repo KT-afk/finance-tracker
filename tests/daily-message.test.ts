@@ -159,6 +159,15 @@ async function main() {
       /Unlabelled: 1 payment, \$30 → https:\/\/example.test\/transactions\?month=2026-10&review=unlabelled/
     )
 
+    // Which message goes out: monthly on the 1st (even a Sunday), weekly on
+    // Sundays, daily otherwise, all by the Singapore date
+    const { nightlyKind } = await import("../lib/daily-message")
+    assert.equal(nightlyKind(NOW), "daily")
+    assert.equal(nightlyKind(new Date("2026-10-25T14:00:00Z")), "weekly")
+    assert.equal(nightlyKind(new Date("2026-11-01T14:00:00Z")), "monthly")
+    assert.equal(nightlyKind(new Date("2026-10-31T16:30:00Z")), "monthly")
+    assert.equal(nightlyKind(new Date("2026-10-24T16:30:00Z")), "weekly")
+
     // The endpoint refuses without the secret, and when none is configured
     const { GET } = await import("../app/api/cron/daily/route")
     const { NextRequest } = await import("next/server")
@@ -209,6 +218,22 @@ async function main() {
       assert.ok(toChat.length > 0)
       assert.ok(toChat.every((c) => c.body.chat_id === "4242"))
       assert.ok(toChat.every((c) => c.body.message_thread_id === undefined))
+
+      // A review replaces the daily message, still led by any warnings
+      for (const review of ["weekly", "monthly"]) {
+        telegramCalls.length = 0
+        const res = await GET(
+          new NextRequest(`http://localhost/api/cron/daily?review=${review}`, {
+            headers: { authorization: "Bearer test-secret" },
+          })
+        )
+        const body = await res.json()
+        assert.equal(body.kind, review)
+        assert.match(body.message, /^⚠️ .*\n[\s\S]*📊 (Week of|\w+ recap)/)
+        assert.doesNotMatch(body.message, /Since last night/)
+        const sent = telegramCalls.filter((c) => c.url.endsWith("/sendMessage"))
+        assert.equal(sent.length, 1, "one message, not two")
+      }
 
       telegramCalls.length = 0
       process.env.TELEGRAM_GROUP_ID = "-1001"

@@ -22,3 +22,11 @@ From the review of PR #37 (2026-10-28):
 - [ ] A hand-edited $0 budget with nothing spent shows as over budget.
 - [ ] Measure the phone menu's 7 tap targets against the 44px rule.
 - [ ] The unsaved-amount warning covers closing or reloading the tab, not in-app links.
+
+From the review of ticket 13 (2026-10-28):
+
+- [ ] `spendBetween`, `groupOf`, `displayName` and `merchantKey` are now shared from `monthly-recap.ts`; move them to their own spending module, with one `sgd`/`dayLabel`/signed-amount formatter.
+- [ ] `nightlyKind` and `budgetLines` live in `daily-message.ts` but serve all three messages.
+- [ ] Review nights build the whole daily summary just for its warnings; split out the warnings.
+- [ ] The endpoint review test runs on the real clock; give the route a clock to replace.
+- [ ] `?review=weekly` on a weekday compares a part week with a full one (testing only).
