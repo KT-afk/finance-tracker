@@ -116,3 +116,7 @@ Ticket 07's review found a race: a check, then a write that didn't repeat the ch
 ## 24. A date means a Singapore day
 
 Times are saved in UTC (`2026-10-26T17:00:00Z`), but the owner means Singapore days. Comparing a saved time with a bare date like `2026-10-27` starts the day at 8am Singapore time and misses anything earlier. Turn the date into Singapore midnight first: `new Date("2026-10-27T00:00:00+08:00")`.
+
+## 25. Two steps in one request can fail in between
+
+The Budgets page stores a proposal and confirms it in the same request. If the confirm failed, the proposal was left pending, and a later tap in chat could have applied a change you thought had failed. When one request does several steps, decide what happens to the first step if a later one fails, and test that failure.

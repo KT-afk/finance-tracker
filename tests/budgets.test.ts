@@ -262,6 +262,34 @@ async function main() {
       (await put({ category: "Shopping", amount: "50" })).status,
       400
     )
+    // A save that fails after the proposal is stored leaves nothing pending
+    const { db } = await import("../lib/db")
+    const { agentProposals, budgets } = await import("../lib/schema")
+    const { eq } = await import("drizzle-orm")
+    const realBatch = db.batch.bind(db)
+    ;(db as { batch: unknown }).batch = async () => {
+      throw new Error("database unavailable")
+    }
+    try {
+      assert.equal(
+        (await put({ category: "Shopping", amount: 70 })).status,
+        500
+      )
+    } finally {
+      ;(db as { batch: unknown }).batch = realBatch
+    }
+    assert.deepEqual(
+      await db
+        .select()
+        .from(agentProposals)
+        .where(eq(agentProposals.status, "pending")),
+      []
+    )
+    assert.deepEqual(
+      await db.select().from(budgets).where(eq(budgets.category, "Shopping")),
+      []
+    )
+
     const page = await (await GET()).json()
     assert.ok(page.categories.includes("Shopping"))
     assert.ok(!page.categories.includes("Income"))

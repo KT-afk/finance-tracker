@@ -28,6 +28,16 @@ function parseAmount(text: string): number | null {
   return Number(cleaned)
 }
 
+/** Ask before leaving the page while a typed amount isn't saved. */
+function useWarnIfUnsaved(dirty: boolean) {
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+}
+
 async function saveBudget(category: string, amount: number | null) {
   const res = await fetch("/api/budgets", {
     method: "PUT",
@@ -124,7 +134,9 @@ export function BudgetsView() {
             ) : (
               <ul className="space-y-3">
                 {data.budgets.map((b) => (
-                  <li key={b.category}>
+                  // A new limit (saved here, in chat or in another tab)
+                  // starts the card afresh, so the box shows it
+                  <li key={`${b.category}:${b.limit}`}>
                     <BudgetCard budget={b} onSaved={saved} />
                   </li>
                 ))}
@@ -168,6 +180,7 @@ function BudgetCard({
   const [amount, setAmount] = useState(String(b.limit))
   const [busy, setBusy] = useState<"save" | "remove" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useWarnIfUnsaved(amount.trim() !== String(b.limit))
 
   async function run(kind: "save" | "remove", value: number | null) {
     setBusy(kind)
@@ -191,6 +204,7 @@ function BudgetCard({
     }
     if (value === b.limit) {
       setError(`The budget is already ${formatSGD(b.limit)}`)
+      document.getElementById(`${id}-amount`)?.focus()
       return
     }
     run("save", value)
@@ -301,6 +315,7 @@ function AddBudget({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const chosen = categories.includes(category) ? category : categories[0]
+  useWarnIfUnsaved(amount.trim() !== "")
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
