@@ -102,16 +102,16 @@ async function main() {
     )
 
     const text = formatDailyMessage(s, "https://example.test")
-    assert.match(text, /^⚠ 1 bank email I couldn't read/)
+    assert.match(text, /^⚠️ 1 bank email I couldn't read/)
     // Budget warnings at the top, after the other warnings: 80% and 100%
     assert.match(
       text,
-      /^⚠ 1 bank email.*\n⚠ Food & Drink budget 93% used: \$10 left of \$150\n⚠ Transport budget used up: \$2 of \$2\n\n📅/
+      /^⚠️ 1 bank email.*\n⚠️ Food & Drink budget 93% used: \$10 left of \$150\n⚠️ Transport budget used up: \$2 of \$2\n\n📅/
     )
     // Pace for each budget, with words as well as a mark
     assert.match(
       text,
-      /\nBudgets \(day 21 of 31, 68% of the month gone\):\n✅ Entertainment: \$0 of \$100 \(0%\) · on track\n⚠ Food & Drink: \$140 of \$150 \(93%\) · ahead of pace\n⚠ Transport: \$2 of \$2 \(100%\) · ahead of pace\n/
+      /\nBudgets \(day 21 of 31, 68% of the month gone\):\n✅ Entertainment: \$0 of \$100 \(0%\) · on track\n⚠️ Food & Drink: \$140 of \$150 \(93%\) · ahead of pace\n⚠️ Transport: \$2 of \$2 \(100%\) · ahead of pace\n/
     )
     // Over the limit
     const over = formatDailyMessage(
@@ -130,8 +130,8 @@ async function main() {
       },
       null
     )
-    assert.match(over, /^⚠ Transport budget over by \$3: \$5 of \$2\n/)
-    assert.match(over, /⚠ Transport: \$5 of \$2 \(250%\) · over budget/)
+    assert.match(over, /^⚠️ Transport budget over by \$3: \$5 of \$2\n/)
+    assert.match(over, /⚠️ Transport: \$5 of \$2 \(250%\) · over budget/)
     // No budgets: the message is as before
     const none = formatDailyMessage(
       { ...s, budgets: [] },

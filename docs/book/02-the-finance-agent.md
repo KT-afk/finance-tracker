@@ -216,3 +216,5 @@ Spending is your share, as everywhere. Budgets run by calendar month, the 1st to
 - **Several at once.** “Food 500, Transport 150, Shopping 300” gives one proposal per category, each with its own buttons.
 
 **How we checked.** Database tests for removal, undo of a removal (and a second undo refused), and the page's API. Agent tests for removing. A browser test adds, changes, reloads and removes a budget on the page. Phone width checked: no sideways scrolling.
+
+**Review fixes (2026-10-28).** If saving from the Budgets page fails partway, its proposal is now rejected, so it can't sit pending and be applied later by a tap in chat. Each budget's box shows the latest limit, even one changed from Telegram. The page asks before you leave with an amount you haven't saved, and moves focus to the box when it shows an error. The 10pm warnings use the ⚠️ emoji. A test now shows that one message setting two budgets gives two proposals, each with its own buttons. The spec now records the Budgets page exception (pressing Save is your confirmation) and budget removal.

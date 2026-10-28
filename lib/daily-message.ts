@@ -298,7 +298,7 @@ export function formatDailyMessage(
 ): string {
   const lines: string[] = []
   const warnings = [...s.warnings, ...budgetWarnings(s.budgets)]
-  for (const warning of warnings) lines.push(`⚠ ${warning}`)
+  for (const warning of warnings) lines.push(`⚠️ ${warning}`)
   if (warnings.length) lines.push("")
 
   lines.push(
@@ -348,7 +348,7 @@ export function formatDailyMessage(
       `Budgets (day ${s.daysElapsed} of ${s.daysInMonth}, ${monthPct}% of the month gone):`
     )
     for (const b of s.budgets) {
-      const mark = b.pace === "on track" ? "✅" : "⚠"
+      const mark = b.pace === "on track" ? "✅" : "⚠️"
       lines.push(
         `${mark} ${b.category}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)} (${b.usedPct}%) · ${b.pace}`
       )

@@ -693,7 +693,7 @@ async function main() {
     },
     proposeBudget: async (input) => {
       budgetCalls.push(["budget", input.category, input.amount, input.source])
-      return { id: "budget1", summary: "Budget: Food & Drink $500 a month" }
+      return { id: `budget-${input.category}`, summary: "Budget" }
     },
     budgetStatus: async (at) => {
       budgetCalls.push(["status", at.toISOString()])
@@ -707,7 +707,8 @@ async function main() {
   ])
   assert.deepEqual(
     withBudget.proposals.map((p) => p.id),
-    ["budget1", "budget1"]
+    // Several budgets in one message: one proposal (one button) each
+    ["budget-Food & Drink", "budget-Transport"]
   )
   const budgetResults = budgetReqs[1].messages.at(-1)!
     .content as Anthropic.ToolResultBlockParam[]

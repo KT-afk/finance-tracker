@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest) {
       { status: 400 }
     )
   const now = new Date()
+  let proposalId: string | null = null
   try {
     const proposal = await proposeBudget({
       category,
@@ -51,6 +52,7 @@ export async function PUT(req: NextRequest) {
       request: `Budgets page: ${amount === null ? `remove ${category}` : `${category} ${amount}`}`,
       now,
     })
+    proposalId = proposal.id
     const result = await decideProposal(proposal.id, "confirm", now)
     return NextResponse.json(result, {
       status: result.outcome === "applied" ? 200 : 409,
@@ -59,6 +61,9 @@ export async function PUT(req: NextRequest) {
     if (error instanceof ProposalError)
       return NextResponse.json({ error: error.message }, { status: 400 })
     console.error("[PUT /api/budgets]", error)
+    // Don't leave it pending, where a later tap in chat could apply it
+    if (proposalId)
+      await decideProposal(proposalId, "reject", now).catch(() => {})
     return NextResponse.json(
       { error: "Couldn’t save just now. Nothing changed. Please try again." },
       { status: 500 }

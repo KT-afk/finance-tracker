@@ -11,3 +11,14 @@ From the review of PR #36 (tickets 10 and 11). None of these blocks anything tod
 - [ ] A share proposed while the payment had no owed entry, then confirmed after an app split was added, says “share has changed” rather than “already recorded in Owed to you”.
 - [ ] The settle → conditional write → log row shape is repeated in each apply and undo branch; `kind` is switched on in four places. Fold into ticket 28.
 - [x] Budgets can be removed (ticket 32).
+
+From the review of PR #37 (2026-10-28):
+
+- [ ] The amount field, its parse-then-focus check and its error line are repeated in the add and edit forms on the Budgets page; one `AmountField`.
+- [ ] “Removed” has three spellings: `amount: null` (API), `after: ""` (proposal), `!entry.after` (change log).
+- [ ] `removeBudget` writes the change-log columns by hand instead of sharing `logRow` with `change-log.ts`.
+- [ ] Pace is turned into a look in three places (`paceStyle`, `barStyle`, the 10pm mark).
+- [ ] `BUDGET_CATEGORIES` lists the two owed categories separately from `OWED_CATEGORIES` in `proposals.ts`.
+- [ ] A hand-edited $0 budget with nothing spent shows as over budget.
+- [ ] Measure the phone menu's 7 tap targets against the 44px rule.
+- [ ] The unsaved-amount warning covers closing or reloading the tab, not in-app links.
