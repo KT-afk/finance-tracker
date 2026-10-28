@@ -26,7 +26,8 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Tickets 10 and 11 (PR #36, merged): category rules, shares and monthly budgets from chat. Migration 0012 is applied to the live database (13 migrations recorded).
 - Tickets 12 and 32 (PR #37, merged): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
 - Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
-- Ticket 13 (PR #39): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
+- Ticket 13 (PR #39, merged): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
+- Ticket 28 (PR #40, merged): proposals code split in three; deleting a memory on the Ask page is now logged and undoable. No migration.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
@@ -34,7 +35,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 
 1. **Check:** ask “What was I spending so much on in May, June and April 2026” in Ask anything to check ticket 27, and reply to tonight's 10pm message in Daily insights to check ticket 06.
 2. **Owner:** remove the spare bot (AskAnythingBotForFinance) from the group, and remove `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` from the cloud environment's settings if no longer needed.
-3. **Next:** the Phase D tickets are done. Pick from the backlog (tickets 18–21, 26, 28, 31).
+3. **Next:** the Phase D tickets are done. Pick from the backlog (tickets 18–21, 26, 31).
 4. **Ticket 21 (owner):** check prompt caching with a real `ANTHROPIC_API_KEY`.
 
 Backlog clean-ups (P2 and P3) are in `.scratch/finance-agent/issues/`. Do P3 ones when you next touch that code.
