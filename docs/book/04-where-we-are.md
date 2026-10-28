@@ -24,7 +24,8 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Ticket 30: notes on payments (migration 0011), so facts about one payment come back with it in every lookup; the answer says so when memories fail to load.
 - Ticket 09: ask what changed, and undo (“undo the last change”, “undo #12”). No migration.
 - Tickets 10 and 11 (PR #36, merged): category rules, shares and monthly budgets from chat. Migration 0012 is applied to the live database (13 migrations recorded).
-- Ticket 12 and 32 (PR #37): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
+- Tickets 12 and 32 (PR #37, merged): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
+- Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
 - Ticket 29: fonts are bundled, so builds don't need Google (a font download failure broke the deploy of #31).
 - Migration 0006 is already applied to the live database (see chapter 3, lesson 1). The next deploy needs it, so nothing to do.
 
