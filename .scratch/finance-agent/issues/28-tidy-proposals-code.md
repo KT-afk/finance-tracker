@@ -8,14 +8,18 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] One `Proposal` type (`{ id, summary }`) and the `Decision` type are imported everywhere instead of being written out in `app/ask/page.tsx`, `app/api/proposals/[id]/route.ts`, `lib/telegram-handler.ts` and `lib/agent/run-finance-agent.ts`
-- [ ] `sendTelegramTo` uses the `TelegramButton` type
-- [ ] The owed-only categories ("Repayment", "Paid by Others") are one export in `lib/schema.ts`, used by `lib/agent/proposals.ts` and `lib/categorize.ts`
-- [ ] `lib/agent/proposals.ts` splits into rules (propose/decide), the agent tool and its parser, and display formatting
-- [ ] The four `if (!(await settle(...))) return lost` guards in `decideProposal` become one status → message map
-- [ ] A test forces a category change between `decideProposal`'s check and its write (the write itself refuses it; only this path is untested)
-- [ ] One `currentMemory(key)`-style helper for the memory lookups in `proposeMemory` and `applyMemory` (from ticket 08 review)
-- [ ] `memory_source` reuses an exported `MEMORY_SOURCES` beside `aiMemory` in `lib/schema.ts` (from ticket 08 review)
-- [ ] Deleting a memory from the Ask page (`DELETE /api/memory/[id]`) is not recorded in the change log; decide whether it should be (from ticket 08 review)
+- [x] One `Proposal` type (`{ id, summary }`) and the `Decision` type are imported everywhere instead of being written out in `app/ask/page.tsx`, `app/api/proposals/[id]/route.ts`, `lib/telegram-handler.ts` and `lib/agent/run-finance-agent.ts`
+- [x] `sendTelegramTo` uses the `TelegramButton` type
+- [x] The owed-only categories ("Repayment", "Paid by Others") are one export in `lib/schema.ts`, used by `lib/agent/proposals.ts` and `lib/categorize.ts`
+- [x] `lib/agent/proposals.ts` splits into rules (propose/decide), the agent tool and its parser, and display formatting
+- [x] The four `if (!(await settle(...))) return lost` guards in `decideProposal` become one status → message map
+- [x] A test forces a category change between `decideProposal`'s check and its write (the write itself refuses it; only this path is untested)
+- [x] One `currentMemory(key)`-style helper for the memory lookups in `proposeMemory` and `applyMemory` (from ticket 08 review)
+- [x] `memory_source` reuses an exported `MEMORY_SOURCES` beside `aiMemory` in `lib/schema.ts` (from ticket 08 review)
+- [x] Deleting a memory from the Ask page (`DELETE /api/memory/[id]`) is not recorded in the change log; decide whether it should be (from ticket 08 review)
+
+Done (2026-10-28): `proposals.ts` keeps the rules (propose, decide, apply); `proposal-tools.ts` holds the agent tools and their strict parsers; `proposal-format.ts` holds how things are named. `OWED_CATEGORIES` and `MEMORY_SOURCES` live in `lib/schema.ts`. Decided: forgetting a memory on the Ask page is now logged (`forgetMemory`), and “undo” brings it back.
+
+Review (2026-10-28): the status → message map covers the endings decided in `decideProposal` (expired, rejected); the `settle("conflict")`/`settle("confirmed")` guards inside each apply function stay, since each has its own message. Folding them is in ticket 31's “one apply shape” item. Fixed in review: undoing a forgotten memory now checks for a memory with the same name in any capitals in both statements, so it can never add a second one without a log row.

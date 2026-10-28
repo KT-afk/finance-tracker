@@ -500,6 +500,37 @@ async function main() {
       )
     }
 
+    // A change that lands between the check and the write: the write
+    // itself refuses, so the newer category stays and nothing is logged
+    const race = await proposeRecategorise({
+      transactionId: "grab",
+      category: "Health",
+      source: "web",
+      request: "grab was travel",
+      now: t0,
+    })
+    const logBefore = (await db.select().from(changeLog)).length
+    const realBatch = db.batch.bind(db)
+    ;(db as { batch: unknown }).batch = async (
+      ...args: Parameters<typeof db.batch>
+    ) => {
+      await db
+        .update(transactions)
+        .set({ category: "Travel" })
+        .where(eq(transactions.id, "grab"))
+      return realBatch(...args)
+    }
+    try {
+      assert.equal(
+        (await decideProposal(race.id, "confirm", t0)).outcome,
+        "conflict"
+      )
+    } finally {
+      ;(db as { batch: unknown }).batch = realBatch
+    }
+    assert.equal(await category("grab"), "Travel")
+    assert.equal((await db.select().from(changeLog)).length, logBefore)
+
     console.log("proposals: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

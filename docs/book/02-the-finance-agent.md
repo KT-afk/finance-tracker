@@ -230,3 +230,11 @@ Spending is your share, as everywhere. Budgets run by calendar month, the 1st to
 Problems reading your email still lead whichever message goes out. Replying to a review works like replying to the daily message: the agent gets the review as context.
 
 **How we checked.** A test picks the message for a weekday, a Sunday, the 1st, and the 1st when it is a Sunday. A weekly review test checks the week's dates, totals, changes, merchants and budget pace. The monthly test checks last month's total and budget results. The endpoint test checks that a review day sends one message, led by warnings, without the daily part.
+
+## Ticket 28: Tidying the proposals code (2026-10-28)
+
+**What changed for you.** One thing: deleting a memory on the Ask page now goes in the change log, so “undo the last change” in Telegram brings it back. Before, it just vanished.
+
+**What changed inside.** The proposals file had grown to 1,345 lines. It is now three: the rules for proposing and confirming changes, the tools the agent calls, and how payments, shares and budgets are named to you. Shared lists (the two “owed” categories, where a memory came from) and shared types now have one definition each, so they can't drift apart. A new test forces a category change in the split second between the check and the write, and shows the write refuses it.
+
+**How we checked.** All tests pass unchanged, plus the new race test and a forget-then-undo test.

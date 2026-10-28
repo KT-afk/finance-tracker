@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { categoryRules } from '@/lib/schema'
-import { CATEGORIES } from '@/lib/schema'
-import { saveRule } from '@/lib/rules'
-import { desc } from 'drizzle-orm'
+import { NextResponse } from "next/server"
+import { db } from "@/lib/db"
+import { categoryRules } from "@/lib/schema"
+import { CATEGORIES, OWED_CATEGORIES } from "@/lib/schema"
+import { saveRule } from "@/lib/rules"
+import { desc } from "drizzle-orm"
 
 export async function GET() {
   try {
@@ -14,8 +14,8 @@ export async function GET() {
 
     return NextResponse.json({ rules })
   } catch (err) {
-    console.error('[GET /api/rules]', err)
-    return NextResponse.json({ error: 'Failed to load rules' }, { status: 500 })
+    console.error("[GET /api/rules]", err)
+    return NextResponse.json({ error: "Failed to load rules" }, { status: 500 })
   }
 }
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     if (!keyword || !category) {
       return NextResponse.json(
-        { error: 'keyword and category are required' },
+        { error: "keyword and category are required" },
         { status: 400 }
       )
     }
@@ -34,10 +34,9 @@ export async function POST(request: Request) {
     // Repayment and Paid by Others always need to know who paid
     if (
       !(CATEGORIES as readonly string[]).includes(category) ||
-      category === 'Repayment' ||
-      category === 'Paid by Others'
+      OWED_CATEGORIES.includes(category)
     ) {
-      return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 })
     }
 
     await saveRule(keyword, category)
@@ -48,11 +47,11 @@ export async function POST(request: Request) {
       .from(categoryRules)
       .orderBy(desc(categoryRules.created_at))
 
-    const saved = rules.find(r => r.keyword === keyword.toLowerCase().trim())
+    const saved = rules.find((r) => r.keyword === keyword.toLowerCase().trim())
 
     return NextResponse.json({ rule: saved })
   } catch (err) {
-    console.error('[POST /api/rules]', err)
-    return NextResponse.json({ error: 'Failed to save rule' }, { status: 500 })
+    console.error("[POST /api/rules]", err)
+    return NextResponse.json({ error: "Failed to save rule" }, { status: 500 })
   }
 }

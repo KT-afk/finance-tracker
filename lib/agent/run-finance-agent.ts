@@ -12,26 +12,29 @@ import {
 import type { Exchange } from "./conversation"
 import { budgetStatus } from "../budgets"
 import {
+  type Proposal,
+  ProposalError,
+  proposeBudget,
+  proposeMemory,
+  proposeNote,
+  proposeRecategorise,
+  proposeRule,
+  proposeShare,
+} from "./proposals"
+import {
   parseBudgetInput,
   parseMemoryInput,
   parseNoteInput,
+  parseProposeInput,
   parseRuleInput,
   parseShareInput,
-  proposeBudget,
   proposeBudgetTool,
-  proposeRule,
-  proposeRuleTool,
-  proposeShare,
-  proposeShareTool,
-  parseProposeInput,
-  ProposalError,
-  proposeMemory,
   proposeMemoryTool,
-  proposeNote,
   proposeNoteTool,
-  proposeRecategorise,
   proposeRecategoriseTool,
-} from "./proposals"
+  proposeRuleTool,
+  proposeShareTool,
+} from "./proposal-tools"
 import { loadMemories, type Memory } from "./memories"
 import {
   getBalances,
@@ -182,8 +185,6 @@ const budgetStatusTool = {
   },
 } satisfies Anthropic.Tool
 
-export type AgentProposal = { id: string; summary: string }
-
 // Dependencies can be replaced in tests without calling Claude or querying real data.
 // history is the recent conversation in this source and topic, oldest first;
 // source is where the question came from, recorded on any proposal.
@@ -208,7 +209,7 @@ export async function runFinanceAgent(
   const undo = overrides.undoChange ?? undoChange
   const now = overrides.now ?? (() => new Date())
   // Proposals made while answering, for the caller to show with buttons
-  const proposals: AgentProposal[] = []
+  const proposals: Proposal[] = []
   const createMessage =
     overrides.createMessage ??
     ((params) => {

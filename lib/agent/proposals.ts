@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto"
 import { and, eq, sql } from "drizzle-orm"
 import { BUDGET_CATEGORIES } from "../budgets"
 import { db } from "../db"
-import { describeTransaction } from "../describe-transaction"
 import {
   cleanAmount,
   cleanPerson,
@@ -18,11 +17,21 @@ import {
   CATEGORIES,
   changeLog,
   OFF_BANK,
+  OWED_CATEGORIES,
   SPEND_CATEGORIES,
   transactions,
   type ConversationSource,
   type ProposalStatus,
 } from "../schema"
+import {
+  decodeShare,
+  describeBudget,
+  describePayment,
+  describeShare,
+  encodeShare,
+  money,
+} from "./proposal-format"
+import type { Decision, DecisionOutcome, Proposal } from "./proposal-types"
 
 /** Why a proposal can't be made; the message goes back to the agent. */
 export class ProposalError extends Error {}
@@ -30,37 +39,6 @@ export class ProposalError extends Error {}
 // After this a button does nothing: an old proposal may no longer match
 // what the owner had in mind
 const EXPIRES_AFTER_MS = 24 * 60 * 60 * 1000
-
-// These come with who owes what, so they are set from Owed to you
-const OWED_CATEGORIES = ["Repayment", "Paid by Others"]
-
-function money(amount: number): string {
-  return new Intl.NumberFormat("en-SG", {
-    style: "currency",
-    currency: "SGD",
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-  }).format(Math.abs(amount))
-}
-
-function day(date: string): string {
-  return new Intl.DateTimeFormat("en-SG", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00Z`))
-}
-
-/** How a payment is named to the owner: "Shopee $80 on 6 Sept 2026". */
-export function describePayment(tx: {
-  payee: string | null
-  description: string
-  amount: number
-  date: string
-}): string {
-  const title = tx.payee ?? describeTransaction(tx.description).title
-  return `${title} ${money(tx.amount)} on ${day(tx.date)}`
-}
 
 // Short enough for Telegram's 64-byte button data, hard to guess
 function newId(): string {
@@ -77,7 +55,7 @@ export async function proposeRecategorise(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   const [tx] = await db
     .select()
     .from(transactions)
@@ -119,9 +97,16 @@ export async function proposeRecategorise(input: {
   return { id, summary }
 }
 
-export type Decision = "confirm" | "reject"
-export type DecisionOutcome =
-  "applied" | "rejected" | "expired" | "used" | "conflict" | "not_found"
+const ENDINGS = {
+  expired: {
+    outcome: "expired",
+    message:
+      "This proposal expired (older than 24 hours). Nothing changed. Ask again if you still want it.",
+  },
+  rejected: { outcome: "rejected", message: "Rejected. Nothing changed." },
+} as const
+
+export type { Decision, DecisionOutcome, Proposal }
 
 /**
  * The owner's tap on a proposal. Only a pending, unexpired proposal does
@@ -170,21 +155,14 @@ export async function decideProposal(
     message: "This was already decided. Nothing changed.",
   }
 
-  if (
-    now.getTime() - new Date(proposal.created_at).getTime() >
-    EXPIRES_AFTER_MS
-  ) {
-    if (!(await settle("expired"))) return lost
-    return {
-      outcome: "expired",
-      message:
-        "This proposal expired (older than 24 hours). Nothing changed. Ask again if you still want it.",
-    }
-  }
-  if (decision === "reject") {
-    if (!(await settle("rejected"))) return lost
-    return { outcome: "rejected", message: "Rejected. Nothing changed." }
-  }
+  // Expired or rejected: claim it and say so; a lost race says it was used
+  const ending: "expired" | "rejected" | null =
+    now.getTime() - new Date(proposal.created_at).getTime() > EXPIRES_AFTER_MS
+      ? "expired"
+      : decision === "reject"
+        ? "rejected"
+        : null
+  if (ending) return (await settle(ending)) ? ENDINGS[ending] : lost
 
   if (proposal.kind === "memory")
     return applyMemory(proposal, settle, lost, now)
@@ -196,13 +174,13 @@ export async function decideProposal(
   return applyRecategorise(proposal, settle, lost, now)
 }
 
-type Proposal = typeof agentProposals.$inferSelect
+type ProposalRow = typeof agentProposals.$inferSelect
 type Settle = (status: ProposalStatus) => Promise<boolean>
 type Lost = { outcome: "used"; message: string }
 type Result = { outcome: DecisionOutcome; message: string }
 
 /** The batch failed: let the owner tap again, unless it in fact landed. */
-async function reopenIfNothingWritten(proposal: Proposal) {
+async function reopenIfNothingWritten(proposal: ProposalRow) {
   const written = await db
     .select({ id: changeLog.id })
     .from(changeLog)
@@ -221,7 +199,7 @@ async function reopenIfNothingWritten(proposal: Proposal) {
 }
 
 async function applyRecategorise(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -306,7 +284,7 @@ async function applyRecategorise(
 }
 
 async function applyMemory(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -316,11 +294,7 @@ async function applyMemory(
     message:
       "Nothing changed: that memory has changed since this was proposed.",
   }
-  const [current] = await db
-    .select({ value: aiMemory.value })
-    .from(aiMemory)
-    .where(eq(aiMemory.key, proposal.target))
-    .limit(1)
+  const current = await currentMemory(proposal.target)
   if ((current?.value ?? "") !== proposal.before) {
     if (!(await settle("conflict"))) return lost
     return conflict
@@ -405,7 +379,7 @@ async function applyMemory(
 const noteOf = sql<string>`coalesce(${transactions.note}, '')`
 
 async function applyNote(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -488,7 +462,7 @@ export async function proposeNote(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   const note = input.note.replace(/\s+/g, " ").trim()
   if (!note) throw new ProposalError("Say what the note should be")
   if (note.length > MAX_NOTE)
@@ -519,48 +493,6 @@ export async function proposeNote(input: {
   return { id, summary }
 }
 
-export const proposeNoteTool = {
-  name: "propose_note",
-  strict: true,
-  description:
-    "Propose a note on one transaction, for a fact about that payment, such as what it was for (“wedding ring”). Find the transaction first with search_transactions and use its id. The note then comes back with the payment in every lookup. This stores a proposal and changes nothing until the owner confirms it with a button.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      transaction_id: {
-        type: "string",
-        description: "The id from search_transactions",
-      },
-      note: {
-        type: "string",
-        description: "Short note, e.g. Wedding ring for my wife",
-      },
-    },
-    additionalProperties: false,
-    required: ["transaction_id", "note"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-/** Strict check of the propose_note input. */
-export function parseNoteInput(input: unknown): {
-  transaction_id: string
-  note: string
-} {
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new ProposalError("Tool input must be an object")
-  const values = input as Record<string, unknown>
-  for (const key of Object.keys(values))
-    if (!["transaction_id", "note"].includes(key))
-      throw new ProposalError("Unknown field " + key)
-  const { transaction_id, note } = values
-  if (typeof transaction_id !== "string" || !transaction_id.trim())
-    throw new ProposalError(
-      "transaction_id must be the id from search_transactions"
-    )
-  if (typeof note !== "string") throw new ProposalError("note must be a string")
-  return { transaction_id: transaction_id.trim(), note }
-}
-
 // ---- Category rules: keyword → category for future uploads ----
 
 const MIN_KEYWORD = 2
@@ -586,7 +518,7 @@ export async function proposeRule(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   // Stored the same way the app's saveRule() stores keywords
   const keyword = input.keyword.replace(/\s+/g, " ").trim().toLowerCase()
   if (keyword.length < MIN_KEYWORD || keyword.length > MAX_KEYWORD)
@@ -627,7 +559,7 @@ export async function proposeRule(input: {
 }
 
 async function applyRule(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -713,21 +645,6 @@ async function applyRule(
 
 // ---- Shares: part of a payment someone else should cover ----
 
-/** "Jane|40" ↔ { person, amount }; "" means no share. */
-export function encodeShare(share: { person: string; amount: number } | null) {
-  return share ? `${share.person}|${share.amount}` : ""
-}
-export function decodeShare(value: string) {
-  if (!value) return null
-  const at = value.lastIndexOf("|")
-  return { person: value.slice(0, at), amount: Number(value.slice(at + 1)) }
-}
-/** How a share reads to the owner: "Jane owes $40", or "no share". */
-export function describeShare(value: string) {
-  const share = decodeShare(value)
-  return share ? `${share.person} owes ${money(share.amount)}` : "no share"
-}
-
 async function currentShare(transactionId: string) {
   const [row] = await db
     .select({ person: owedEntries.person, amount: owedEntries.amount })
@@ -753,7 +670,7 @@ export async function proposeShare(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   let tx: Awaited<ReturnType<typeof getBankTransaction>>
   let person: string
   let amount: number
@@ -797,7 +714,7 @@ export async function proposeShare(input: {
 }
 
 async function applyShare(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -894,11 +811,6 @@ async function applyShare(
 
 // ---- Budgets: one monthly limit per spending category ----
 
-/** How a budget limit reads: "$500", or "none". */
-export function describeBudget(value: string) {
-  return value ? money(Number(value)) : "none"
-}
-
 async function currentBudget(category: string) {
   const [row] = await db
     .select({ limit: budgets.monthly_limit })
@@ -918,7 +830,7 @@ export async function proposeBudget(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   if (!(CATEGORIES as readonly string[]).includes(input.category))
     throw new ProposalError("Use a category from the tool schema")
   if (!BUDGET_CATEGORIES.includes(input.category))
@@ -956,7 +868,7 @@ export async function proposeBudget(input: {
 }
 
 async function applyBudget(
-  proposal: Proposal,
+  proposal: ProposalRow,
   settle: Settle,
   lost: Lost,
   now: Date
@@ -1042,7 +954,7 @@ async function applyBudget(
 
 /** Confirmed removal: log the row while it is there, then delete it. */
 async function removeBudget(
-  proposal: Proposal,
+  proposal: ProposalRow,
   conflict: Result,
   stamp: string
 ): Promise<Result> {
@@ -1093,40 +1005,8 @@ async function removeBudget(
   }
 }
 
-export const proposeBudgetTool = {
-  name: "propose_budget",
-  strict: true,
-  description:
-    "Propose setting, changing or removing (amount null) the monthly budget for one spending category (e.g. cap Food & Drink at $500). To set several budgets in one message, call it once per category. Budgets run by calendar month in Singapore and don't roll over. This stores a proposal and changes nothing until the owner confirms it with a button.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      category: { type: "string", enum: [...CATEGORIES] },
-      amount: {
-        type: ["number", "null"],
-        description: "Monthly limit in SGD, or null to remove the budget",
-      },
-    },
-    additionalProperties: false,
-    required: ["category", "amount"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-/** Strict check of the propose_budget input. */
-export function parseBudgetInput(input: unknown) {
-  const { category, amount } = strictObject(input, ["category", "amount"])
-  if (typeof category !== "string")
-    throw new ProposalError("category must be a string")
-  if (
-    amount !== null &&
-    (typeof amount !== "number" || !Number.isFinite(amount))
-  )
-    throw new ProposalError("amount must be a number or null")
-  return { category, amount: amount as number | null }
-}
-
 /** A memory by name, ignoring case (older memories may use capitals). */
-async function findMemory(key: string) {
+async function currentMemory(key: string) {
   const [row] = await db
     .select({ key: aiMemory.key, value: aiMemory.value })
     .from(aiMemory)
@@ -1150,7 +1030,7 @@ export async function proposeMemory(input: {
   source: ConversationSource
   request: string
   now: Date
-}): Promise<{ id: string; summary: string }> {
+}): Promise<Proposal> {
   const key = input.key.replace(/\s+/g, " ").trim().toLowerCase()
   const value = input.value.replace(/\s+/g, " ").trim()
   if (!key || key.length > MAX_MEMORY_KEY)
@@ -1162,7 +1042,7 @@ export async function proposeMemory(input: {
     throw new ProposalError(
       `Keep a memory to ${MAX_MEMORY_VALUE} characters; split it if needed`
     )
-  const current = await findMemory(key)
+  const current = await currentMemory(key)
   const before = current?.value ?? ""
   if (before === value) throw new ProposalError("That is already remembered")
   const summary =
@@ -1182,164 +1062,4 @@ export async function proposeMemory(input: {
     created_at: input.now.toISOString(),
   })
   return { id, summary }
-}
-
-export const proposeRecategoriseTool = {
-  name: "propose_recategorise",
-  strict: true,
-  description:
-    "Propose moving one transaction to another category, when the owner says a category is wrong. Find the transaction first with search_transactions and use its id. This stores a proposal and changes nothing: the owner confirms or rejects it with a button, and only confirming applies it. Returns the summary the owner will see.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      transaction_id: {
-        type: "string",
-        description: "The id from search_transactions",
-      },
-      category: { type: "string", enum: [...CATEGORIES] },
-    },
-    additionalProperties: false,
-    required: ["transaction_id", "category"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-/** Strict check of the tool input, like the other agent tools. */
-export function parseProposeInput(input: unknown): {
-  transaction_id: string
-  category: string
-} {
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new ProposalError("Tool input must be an object")
-  const values = input as Record<string, unknown>
-  for (const key of Object.keys(values))
-    if (!["transaction_id", "category"].includes(key))
-      throw new ProposalError("Unknown field " + key)
-  const { transaction_id, category } = values
-  if (typeof transaction_id !== "string" || !transaction_id.trim())
-    throw new ProposalError(
-      "transaction_id must be the id from search_transactions"
-    )
-  if (typeof category !== "string")
-    throw new ProposalError("category must be a string")
-  return { transaction_id: transaction_id.trim(), category }
-}
-
-export const proposeMemoryTool = {
-  name: "propose_memory",
-  strict: true,
-  description:
-    "Propose saving a memory: a lasting fact to use in later answers, such as what a payment was for or that a monthly payment is expected. Use it when the owner says “remember that…” (owner_asked true), or when they tell you something worth keeping (owner_asked false). Reuse an existing memory's name to replace it. This stores a proposal and saves nothing until the owner confirms it with a button.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      name: {
-        type: "string",
-        description: "Short name, e.g. wedding ring or gym payment",
-      },
-      fact: {
-        type: "string",
-        description:
-          "The fact in one sentence, with dates and amounts, e.g. The $1,277 transfer to Yoon Thiri on 8 Jun 2026 was my wedding ring",
-      },
-      owner_asked: {
-        type: "boolean",
-        description: "True only if the owner asked you to remember it",
-      },
-    },
-    additionalProperties: false,
-    required: ["name", "fact", "owner_asked"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-/** Strict check of the propose_memory input. */
-export function parseMemoryInput(input: unknown): {
-  name: string
-  fact: string
-  owner_asked: boolean
-} {
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new ProposalError("Tool input must be an object")
-  const values = input as Record<string, unknown>
-  for (const key of Object.keys(values))
-    if (!["name", "fact", "owner_asked"].includes(key))
-      throw new ProposalError("Unknown field " + key)
-  const { name, fact, owner_asked } = values
-  if (typeof name !== "string" || typeof fact !== "string")
-    throw new ProposalError("name and fact must be strings")
-  if (typeof owner_asked !== "boolean")
-    throw new ProposalError("owner_asked must be true or false")
-  return { name, fact, owner_asked }
-}
-
-export const proposeRuleTool = {
-  name: "propose_rule",
-  strict: true,
-  description:
-    "Propose adding or changing a category rule: future uploads whose bank description contains the keyword go to the category (e.g. keyword grab → Transport). Past payments keep their categories; use propose_recategorise for those. This stores a proposal and changes nothing until the owner confirms it with a button.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      keyword: {
-        type: "string",
-        description: "Text in the bank description, e.g. grab or fairprice",
-      },
-      category: { type: "string", enum: [...CATEGORIES] },
-    },
-    additionalProperties: false,
-    required: ["keyword", "category"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-export const proposeShareTool = {
-  name: "propose_share",
-  strict: true,
-  description:
-    "Propose that someone owes the owner part of one payment they made (e.g. Jane owes $40 of a $120 dinner). Find the payment first with search_transactions and use its id. Once confirmed, the owner's spending counts only their part and the person shows in Owed to you. This stores a proposal and changes nothing until the owner confirms it with a button.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      transaction_id: {
-        type: "string",
-        description: "The id from search_transactions",
-      },
-      person: { type: "string", description: "Who owes it, e.g. Jane" },
-      amount: { type: "number", description: "How much they owe, in SGD" },
-    },
-    additionalProperties: false,
-    required: ["transaction_id", "person", "amount"],
-  },
-} satisfies import("@anthropic-ai/sdk").default.Tool
-
-function strictObject(input: unknown, allowed: string[]) {
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new ProposalError("Tool input must be an object")
-  for (const key of Object.keys(input))
-    if (!allowed.includes(key)) throw new ProposalError("Unknown field " + key)
-  return input as Record<string, unknown>
-}
-
-/** Strict check of the propose_rule input. */
-export function parseRuleInput(input: unknown) {
-  const { keyword, category } = strictObject(input, ["keyword", "category"])
-  if (typeof keyword !== "string" || typeof category !== "string")
-    throw new ProposalError("keyword and category must be strings")
-  return { keyword, category }
-}
-
-/** Strict check of the propose_share input. */
-export function parseShareInput(input: unknown) {
-  const { transaction_id, person, amount } = strictObject(input, [
-    "transaction_id",
-    "person",
-    "amount",
-  ])
-  if (typeof transaction_id !== "string" || !transaction_id.trim())
-    throw new ProposalError(
-      "transaction_id must be the id from search_transactions"
-    )
-  if (typeof person !== "string")
-    throw new ProposalError("person must be a string")
-  if (typeof amount !== "number" || !Number.isFinite(amount))
-    throw new ProposalError("amount must be a number")
-  return { transaction_id: transaction_id.trim(), person, amount }
 }

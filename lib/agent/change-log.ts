@@ -25,8 +25,8 @@ import {
   describeBudget,
   describePayment,
   describeShare,
-  ProposalError,
-} from "./proposals"
+} from "./proposal-format"
+import { ProposalError } from "./proposals"
 
 type Entry = typeof changeLog.$inferSelect
 
@@ -90,6 +90,42 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
 /** Start of a Singapore day as a UTC timestamp, to compare with created_at. */
 function singaporeMidnight(date: string): string {
   return new Date(`${date}T00:00:00+08:00`).toISOString()
+}
+
+/**
+ * Forget a memory from the Ask page: deleted and logged in one batch, so
+ * “undo” in chat can bring it back. False if it was already gone.
+ */
+export async function forgetMemory(
+  id: number,
+  ctx: { now: Date }
+): Promise<boolean> {
+  const [logged] = await db.batch([
+    db
+      .insert(changeLog)
+      .select(
+        db
+          .select({
+            id: sql`null`.as("id"),
+            created_at: sql`${ctx.now.toISOString()}`.as("created_at"),
+            kind: sql`'memory'`.as("kind"),
+            target: aiMemory.key,
+            before: aiMemory.value,
+            after: sql`''`.as("after"),
+            source: sql`'web'`.as("source"),
+            request: sql<string>`'Ask page: forget ' || ${aiMemory.key}`.as(
+              "request"
+            ),
+            proposal_id: sql`null`.as("proposal_id"),
+            reverses_id: sql`null`.as("reverses_id"),
+          })
+          .from(aiMemory)
+          .where(eq(aiMemory.id, id))
+      )
+      .returning({ id: changeLog.id }),
+    db.delete(aiMemory).where(eq(aiMemory.id, id)),
+  ])
+  return logged.length > 0
 }
 
 /** Change log entries, newest first. since is a YYYY-MM-DD date in Singapore. */
@@ -316,6 +352,44 @@ export async function undoChange(
         )
       current = row ? `${row.person}|${row.amount}` : ""
     }
+  } else if (entry.kind === "memory" && !entry.after) {
+    // Undo a forgotten memory: put it back if none has been saved since
+    const noMemory = sql`not exists (select 1 from ${aiMemory} where lower(${aiMemory.key}) = ${entry.target.toLowerCase()})`
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: "" }))
+            .from(changeLog)
+            .where(and(eq(changeLog.id, entry.id), noMemory))
+        )
+        .returning({ id: changeLog.id }),
+      // The same check as the log row, ignoring case like every memory
+      // lookup (the table's unique key doesn't). Who it came from isn't
+      // kept, so it comes back as the owner's
+      db.insert(aiMemory).select(
+        db
+          .select({
+            id: sql`null`.as("id"),
+            key: sql`${entry.target}`.as("key"),
+            value: sql`${entry.before}`.as("value"),
+            source: sql`'user'`.as("source"),
+            created_at: sql`${ctx.now.toISOString()}`.as("created_at"),
+          })
+          .from(changeLog)
+          .where(and(eq(changeLog.id, entry.id), noMemory))
+      ),
+    ])
+    logged = log
+    if (!logged.length)
+      current =
+        (
+          await db
+            .select({ value: aiMemory.value })
+            .from(aiMemory)
+            .where(sql`lower(${aiMemory.key}) = ${entry.target.toLowerCase()}`)
+        )[0]?.value ?? ""
   } else if (entry.kind === "memory") {
     const stillAfter = and(
       eq(aiMemory.key, entry.target),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { decideProposal } from "@/lib/agent/proposals"
+import { decideProposal, type Decision } from "@/lib/agent/proposals"
 
 /**
  * The owner's Confirm or Reject on a proposal from the web Ask page.
@@ -11,8 +11,12 @@ export async function POST(
 ) {
   const { id } = await params
   const body = await req.json().catch(() => null)
-  const decision = body?.decision
-  if (decision !== "confirm" && decision !== "reject")
+  const decision: Decision | undefined = ["confirm", "reject"].includes(
+    body?.decision
+  )
+    ? body.decision
+    : undefined
+  if (!decision)
     return NextResponse.json(
       { error: "decision must be confirm or reject" },
       { status: 400 }

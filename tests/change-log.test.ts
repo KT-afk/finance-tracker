@@ -217,6 +217,58 @@ async function main() {
 
     // The newest real change not yet undone is that note, #11
     assert.match((await undoChange(undefined, ctx(18))).message, /^Undid #11 /)
+    // Forgetting a memory on the Ask page is logged, and undo brings it back
+    const { forgetMemory } = await import("../lib/agent/change-log")
+    await apply(
+      proposeMemory({
+        key: "rent",
+        value: "Rent is split with Jane",
+        ownerAsked: true,
+        source: "web",
+        request: "remember rent",
+        now: at(19),
+      }),
+      19
+    )
+    const rent = await memory("rent")
+    assert.equal(await forgetMemory(rent.id, { now: at(20) }), true)
+    assert.equal(await memory("rent"), undefined)
+    assert.equal(await forgetMemory(rent.id, { now: at(20) }), false)
+    const [forgot] = await listChanges({ limit: 1 })
+    assert.deepEqual(
+      [forgot.what, forgot.before, forgot.after, forgot.source, forgot.request],
+      [
+        "memory “rent”",
+        "Rent is split with Jane",
+        "",
+        "web",
+        "Ask page: forget rent",
+      ]
+    )
+    assert.equal((await undoChange(forgot.id, ctx(21))).outcome, "undone")
+    assert.equal((await memory("rent")).value, "Rent is split with Jane")
+    // Again: it's back already, so refused
+    assert.equal((await undoChange(forgot.id, ctx(22))).outcome, "conflict")
+    // Forgotten, then saved again with other capitals: undo refuses and
+    // adds nothing, though the table's unique key is case-sensitive
+    await forgetMemory((await memory("rent")).id, { now: at(23) })
+    const [again] = await listChanges({ limit: 1 })
+    await db.insert(aiMemory).values({
+      key: "Rent",
+      value: "Rent is $2,000",
+      source: "user",
+      created_at: "x",
+    })
+    const refused = await undoChange(again.id, ctx(24))
+    assert.equal(refused.outcome, "conflict")
+    assert.match(refused.message, /is now Rent is \$2,000/)
+    assert.deepEqual(
+      (await db.select().from(aiMemory))
+        .filter((m) => m.key.toLowerCase() === "rent")
+        .map((m) => m.value),
+      ["Rent is $2,000"]
+    )
+
     console.log("change-log: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

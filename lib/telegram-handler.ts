@@ -1,9 +1,10 @@
 import { db } from "./db"
 import { telegramUpdates } from "./schema"
 import { loadHistory, saveExchange, type Exchange } from "./agent/conversation"
-import type { Decision, DecisionOutcome } from "./agent/proposals"
+import type { Decision, DecisionOutcome, Proposal } from "./agent/proposals"
+import type { TelegramButton, TelegramTarget } from "./telegram"
 
-export type TelegramTarget = { chatId: number; threadId?: number }
+export type { TelegramButton, TelegramTarget }
 
 export type TelegramConfig = {
   ownerId: number
@@ -39,8 +40,6 @@ export type TelegramUpdate = {
   }
 }
 
-export type TelegramButton = { text: string; data: string }
-
 type Dependencies = {
   config: TelegramConfig
   now: () => Date
@@ -49,7 +48,7 @@ type Dependencies = {
     options: { history: Exchange[]; source: "telegram"; allowUndo: boolean }
   ) => Promise<{
     text: string
-    proposals?: { id: string; summary: string }[]
+    proposals?: Proposal[]
   }>
   send: (
     text: string,
@@ -191,7 +190,7 @@ export async function handleTelegramUpdate(
   // The indicator is a nicety; never let it stop the answer
   await deps.sendTyping(target).catch(() => {})
   let answer: string
-  let proposals: { id: string; summary: string }[]
+  let proposals: Proposal[]
   try {
     const history = await loadHistory("telegram", topic, deps.now())
     const reply = await deps.runAgent(prompt, {

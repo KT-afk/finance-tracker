@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import { CATEGORIES, Category } from "./schema"
+import { CATEGORIES, Category, OWED_CATEGORIES } from "./schema"
 import { findRuleCategory, saveRule } from "./rules"
 import {
   parsePayNowDescription,
@@ -10,7 +10,7 @@ import { getDeterministicCategory } from "./cash-flow"
 // Repayment and Paid by Others are only ever set by the owner, together with
 // who paid. Unlabelled is the absence of a decision, never a pick.
 const ASSIGNABLE_CATEGORIES = CATEGORIES.filter(
-  (c) => c !== "Repayment" && c !== "Paid by Others" && c !== "Unlabelled"
+  (c) => !OWED_CATEGORIES.includes(c) && c !== "Unlabelled"
 )
 const CATEGORY_LIST = ASSIGNABLE_CATEGORIES.join(", ")
 

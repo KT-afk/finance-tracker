@@ -66,14 +66,17 @@ export function splitMessage(text: string, max = MAX_MESSAGE_LENGTH): string[] {
   return parts
 }
 
+export type TelegramTarget = { chatId: number; threadId?: number }
+export type TelegramButton = { text: string; data: string }
+
 /**
  * Send to a chat, in a topic when threadId is given; long text is split.
  * Buttons go on the last part, in one row.
  */
 export async function sendTelegramTo(
   text: string,
-  target: { chatId: number; threadId?: number },
-  options: { buttons?: { text: string; data: string }[] } = {}
+  target: TelegramTarget,
+  options: { buttons?: TelegramButton[] } = {}
 ): Promise<void> {
   const parts = splitMessage(text)
   for (const [i, part] of parts.entries())
