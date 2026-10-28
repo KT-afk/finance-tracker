@@ -5,6 +5,7 @@
  */
 import { and, eq, gte, inArray, lte } from "drizzle-orm"
 import { classifyCashFlow, summarizeCashFlow } from "./cash-flow"
+import { budgetStatus, type BudgetStatus } from "./budgets"
 import { db } from "./db"
 import { withOwedShares } from "./owed"
 import { alertEmails, transactions } from "./schema"
@@ -50,6 +51,8 @@ export type DailySummary = {
   salary: number | null
   pace: number
   unlabelled: { count: number; total: number }
+  // Only categories with a budget; empty when none are set
+  budgets: BudgetStatus[]
   warnings: string[]
 }
 
@@ -254,6 +257,7 @@ export async function buildDailySummary(
     salary: salaryRow ? salaryRow.amount : null,
     pace: rent + laterBills + unusualTotal + averagePerDay * daysInMonth,
     unlabelled: { count: unlabelledRows.length, total: summary.unlabelled },
+    budgets: await budgetStatus(now),
     warnings,
   }
 }
@@ -277,13 +281,25 @@ function dayLabel(date: string): string {
   }).format(new Date(`${date}T00:00:00Z`))
 }
 
+/** A line for each budget at 80% or more, for the top of the message. */
+function budgetWarnings(budgets: BudgetStatus[]): string[] {
+  return budgets
+    .filter((b) => b.usedPct >= 80)
+    .map((b) =>
+      b.usedPct >= 100
+        ? `${b.category} budget ${b.left < 0 ? `over by ${sgd.format(-b.left)}` : "used up"}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)}`
+        : `${b.category} budget ${b.usedPct}% used: ${sgd.format(b.left)} left of ${sgd.format(b.limit)}`
+    )
+}
+
 export function formatDailyMessage(
   s: DailySummary,
   appUrl: string | null
 ): string {
   const lines: string[] = []
-  for (const warning of s.warnings) lines.push(`⚠ ${warning}`)
-  if (s.warnings.length) lines.push("")
+  const warnings = [...s.warnings, ...budgetWarnings(s.budgets)]
+  for (const warning of warnings) lines.push(`⚠ ${warning}`)
+  if (warnings.length) lines.push("")
 
   lines.push(
     `📅 ${new Intl.DateTimeFormat("en-SG", {
@@ -325,6 +341,19 @@ export function formatDailyMessage(
         ? ` → on pace for ${sgd.format(s.pace)} of ${sgd.format(s.salary)} salary`
         : ` → on pace for ${sgd.format(s.pace)}`)
   )
+  if (s.budgets.length) {
+    const monthPct = s.budgets[0].monthPct
+    lines.push("")
+    lines.push(
+      `Budgets (day ${s.daysElapsed} of ${s.daysInMonth}, ${monthPct}% of the month gone):`
+    )
+    for (const b of s.budgets) {
+      const mark = b.pace === "on track" ? "✅" : "⚠"
+      lines.push(
+        `${mark} ${b.category}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)} (${b.usedPct}%) · ${b.pace}`
+      )
+    }
+  }
   if (s.unlabelled.count > 0) {
     const link = appUrl
       ? ` → ${appUrl}/transactions?month=${s.month}&review=unlabelled`

@@ -198,3 +198,9 @@ Also: if your memories ever fail to load, the answer now ends with “(I couldn'
 Spending is your share, as everywhere. Budgets run by calendar month, the 1st to the last day, in Singapore time, as you chose. Nothing rolls over. Categories without a budget aren't listed. Only spending categories can have one (not Income or Transfer).
 
 **How we checked.** A database test sets two budgets, checks spending counts only your share and only this month, the three paces, a change and its undo, an undo refused because the budget changed since, October starting clean, and the refusals. Agent tests cover both tools.
+
+## Ticket 12: Budget pace in the 10pm message (2026-10-28)
+
+**What we built.** When you have budgets, the 10pm message ends with a Budgets section: the day of the month, how much of the month is gone, and one line per budget, such as “⚠ Food & Drink: $140 of $150 (93%) · ahead of pace”. Each line has the words as well as ✅ or ⚠. A budget at 80% or more also gets a warning line at the very top (“Food & Drink budget 93% used: $10 left of $150”), and at 100% it says “used up” or “over by $X”. With no budgets, the message is the same as before.
+
+**How we checked.** The daily message test adds three budgets (on track, at 93%, and at 100%) and checks the warnings, the section, an over-budget line, and a message with no budgets.

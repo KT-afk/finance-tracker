@@ -46,6 +46,10 @@ function seed(dbPath: string) {
       ('e3', 'ocbc', '2026-10-21T06:00:00Z', 'saved', 'friend', 'x'),
       ('e4', 'ocbc', '2026-10-21T07:00:00Z', 'self-transfer', 'wise', 'x'),
       ('e5', 'uob', '2026-10-21T08:00:00Z', 'unrecognised', NULL, 'x');
+    INSERT INTO budgets (category, monthly_limit, updated_at) VALUES
+      ('Food & Drink', 150, 'x'),
+      ('Transport', 2, 'x'),
+      ('Entertainment', 100, 'x');
   `)
   db.close()
 }
@@ -87,9 +91,53 @@ async function main() {
     assert.equal(s.pace, 1200 + 580 + 128 + (44 / 21) * 31)
     assert.deepEqual(s.unlabelled, { count: 1, total: 30 })
     assert.equal(s.warnings.length, 1)
+    // Budgets: the owner's spending this month against each limit
+    assert.deepEqual(
+      s.budgets.map((b) => [b.category, b.spent, b.usedPct, b.pace]),
+      [
+        ["Entertainment", 0, 0, "on track"],
+        ["Food & Drink", 140, 93, "ahead of pace"],
+        ["Transport", 2, 100, "ahead of pace"],
+      ]
+    )
 
     const text = formatDailyMessage(s, "https://example.test")
     assert.match(text, /^⚠ 1 bank email I couldn't read/)
+    // Budget warnings at the top, after the other warnings: 80% and 100%
+    assert.match(
+      text,
+      /^⚠ 1 bank email.*\n⚠ Food & Drink budget 93% used: \$10 left of \$150\n⚠ Transport budget used up: \$2 of \$2\n\n📅/
+    )
+    // Pace for each budget, with words as well as a mark
+    assert.match(
+      text,
+      /\nBudgets \(day 21 of 31, 68% of the month gone\):\n✅ Entertainment: \$0 of \$100 \(0%\) · on track\n⚠ Food & Drink: \$140 of \$150 \(93%\) · ahead of pace\n⚠ Transport: \$2 of \$2 \(100%\) · ahead of pace\n/
+    )
+    // Over the limit
+    const over = formatDailyMessage(
+      {
+        ...s,
+        warnings: [],
+        budgets: [
+          {
+            ...s.budgets[2],
+            spent: 5,
+            left: -3,
+            usedPct: 250,
+            pace: "over budget",
+          },
+        ],
+      },
+      null
+    )
+    assert.match(over, /^⚠ Transport budget over by \$3: \$5 of \$2\n/)
+    assert.match(over, /⚠ Transport: \$5 of \$2 \(250%\) · over budget/)
+    // No budgets: the message is as before
+    const none = formatDailyMessage(
+      { ...s, budgets: [] },
+      "https://example.test"
+    )
+    assert.doesNotMatch(none, /[Bb]udget/)
     // Which day the message is for
     assert.match(text, /\n📅 Wed, 21 Oct\nSince last night: \$44.00\n/)
     // One line per payment, with the Payee and category
