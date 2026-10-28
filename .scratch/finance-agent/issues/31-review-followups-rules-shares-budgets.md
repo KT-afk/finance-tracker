@@ -10,4 +10,4 @@ From the review of PR #36 (tickets 10 and 11). None of these blocks anything tod
 - [ ] `applyRule`/`applyShare`/`applyBudget` find their new log row by timestamp; two confirms in the same millisecond could mix them up.
 - [ ] A share proposed while the payment had no owed entry, then confirmed after an app split was added, says “share has changed” rather than “already recorded in Owed to you”.
 - [ ] The settle → conditional write → log row shape is repeated in each apply and undo branch; `kind` is switched on in four places. Fold into ticket 28.
-- [ ] Budgets can't be removed except by undoing the entry that set them.
+- [x] Budgets can be removed (ticket 32).

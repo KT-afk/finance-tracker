@@ -687,6 +687,7 @@ async function main() {
             "propose_budget"
           ),
           call("b3", {}, "budget_status"),
+          call("b4", { category: "Transport", amount: null }, "propose_budget"),
         ])
       return done
     },
@@ -702,16 +703,17 @@ async function main() {
   assert.deepEqual(budgetCalls, [
     ["budget", "Food & Drink", 500, "web"],
     ["status", "2026-09-15T12:00:00.000Z"],
+    ["budget", "Transport", null, "web"],
   ])
   assert.deepEqual(
     withBudget.proposals.map((p) => p.id),
-    ["budget1"]
+    ["budget1", "budget1"]
   )
   const budgetResults = budgetReqs[1].messages.at(-1)!
     .content as Anthropic.ToolResultBlockParam[]
   assert.deepEqual(
     budgetResults.map((r) => r.is_error),
-    [undefined, true, undefined]
+    [undefined, true, undefined, undefined]
   )
   assert.match(JSON.stringify(budgetReqs[0].system), /calendar month/)
   console.log("finance-agent: passed")

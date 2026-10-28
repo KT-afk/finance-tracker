@@ -175,6 +175,48 @@ async function main() {
       ]
     )
 
+    // Removing: a proposal, logged, and undo puts it back
+    const p5 = await proposeBudget({
+      category: "Food & Drink",
+      amount: null,
+      source: "telegram",
+      request: "remove my food budget",
+      now,
+    })
+    assert.equal(p5.summary, "Budget: remove Food & Drink (was $200 a month)")
+    await confirm(Promise.resolve(p5))
+    assert.deepEqual(
+      (await budgetStatus(now)).map((b) => b.category),
+      ["Transport"]
+    )
+    const [removed] = await listChanges({ limit: 1 })
+    assert.deepEqual(
+      [removed.what, removed.before, removed.after],
+      ["budget for Food & Drink", "$200", "none"]
+    )
+    await assert.rejects(
+      proposeBudget({
+        category: "Food & Drink",
+        amount: null,
+        source: "web",
+        request: "x",
+        now,
+      }),
+      /no budget to remove/
+    )
+    assert.equal(
+      (await undoChange(removed.id, { source: "web", request: "undo", now }))
+        .outcome,
+      "undone"
+    )
+    assert.equal((await budgetStatus(now))[0].limit, 200)
+    // Undoing the removal again: a budget is already there, so refused
+    assert.equal(
+      (await undoChange(removed.id, { source: "web", request: "undo", now }))
+        .outcome,
+      "conflict"
+    )
+
     for (const [category, amount, why] of [
       ["Snacks", 100, /category/i],
       ["Income", 100, /spending categor/i],
@@ -188,6 +230,43 @@ async function main() {
         `${category} ${amount}`
       )
     }
+    // The Budgets page's API: the same checks, applied at once, logged
+    const { GET, PUT } = await import("../app/api/budgets/route")
+    const { NextRequest } = await import("next/server")
+    const put = (body: unknown) =>
+      PUT(
+        new NextRequest("http://localhost/api/budgets", {
+          method: "PUT",
+          body: JSON.stringify(body),
+        })
+      )
+    const set = await put({ category: "Shopping", amount: 300 })
+    assert.equal(set.status, 200)
+    assert.match(
+      (await set.json()).message,
+      /^Done: Budget: Shopping \$300 a month/
+    )
+    const [web] = await listChanges({ limit: 1 })
+    assert.deepEqual(
+      [web.source, web.request],
+      ["web", "Budgets page: Shopping 300"]
+    )
+    assert.equal(
+      (await put({ category: "Shopping", amount: null })).status,
+      200
+    )
+    const refused = await put({ category: "Income", amount: 50 })
+    assert.equal(refused.status, 400)
+    assert.match((await refused.json()).error, /spending categor/)
+    assert.equal(
+      (await put({ category: "Shopping", amount: "50" })).status,
+      400
+    )
+    const page = await (await GET()).json()
+    assert.ok(page.categories.includes("Shopping"))
+    assert.ok(!page.categories.includes("Income"))
+    assert.ok(!page.categories.includes("Repayment"))
+
     console.log("budgets: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

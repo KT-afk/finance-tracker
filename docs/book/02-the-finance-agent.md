@@ -204,3 +204,15 @@ Spending is your share, as everywhere. Budgets run by calendar month, the 1st to
 **What we built.** When you have budgets, the 10pm message ends with a Budgets section: the day of the month, how much of the month is gone, and one line per budget, such as “⚠ Food & Drink: $140 of $150 (93%) · ahead of pace”. Each line has the words as well as ✅ or ⚠. A budget at 80% or more also gets a warning line at the very top (“Food & Drink budget 93% used: $10 left of $150”), and at 100% it says “used up” or “over by $X”. With no budgets, the message is the same as before.
 
 **How we checked.** The daily message test adds three budgets (on track, at 93%, and at 100%) and checks the warnings, the section, an over-budget line, and a message with no budgets.
+
+## Ticket 32: Easier budget changes (2026-10-28)
+
+**What you asked for.** Changing a budget took a chat message and a tap each time, and there was no way to remove one.
+
+**What we built.**
+
+- **A Budgets page** in the app (in the menu). Each budget shows what you've spent, the limit, a bar with a mark for how much of the month is gone, and the pace in words. Type a new limit and press Save, press Remove… (it asks first), or add a budget for another category. Changes from the page go through the same checks as chat, are applied straight away because you're the one asking, and are in the change log, so “undo the last change” in Telegram still works.
+- **Remove by chat.** “Remove my food budget” offers “Budget: remove Food & Drink (was $200 a month)”, with ✅ and ❌. Undo puts it back, unless you've set a new one since.
+- **Several at once.** “Food 500, Transport 150, Shopping 300” gives one proposal per category, each with its own buttons.
+
+**How we checked.** Database tests for removal, undo of a removal (and a second undo refused), and the page's API. Agent tests for removing. A browser test adds, changes, reloads and removes a budget on the page. Phone width checked: no sideways scrolling.
