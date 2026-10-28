@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { CATEGORY_COLORS, formatSGD } from "@/lib/display"
-import { CATEGORIES, BANKS, OFF_BANK, SPEND_CATEGORIES } from "@/lib/schema"
+import {
+  CATEGORIES,
+  BANKS,
+  OFF_BANK,
+  OWED_CATEGORIES,
+  SPEND_CATEGORIES,
+} from "@/lib/schema"
 import { describeTransaction } from "@/lib/describe-transaction"
 import Link from "next/link"
 import { OwedEditor, type OwedInfo } from "@/components/OwedEditor"
@@ -456,13 +462,13 @@ function TransactionsView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
-                    {CATEGORIES.filter(
-                      (c) => c !== "Repayment" && c !== "Paid by Others"
-                    ).map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
+                    {CATEGORIES.filter((c) => !OWED_CATEGORIES.includes(c)).map(
+                      (c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -623,9 +629,7 @@ function TransactionsView() {
                 ? SPEND_CATEGORIES
                 : CATEGORIES.filter(
                     // Set via "Repayment…" / Owed to you, which record who paid
-                    (c) =>
-                      (c !== "Repayment" && c !== "Paid by Others") ||
-                      t.category === c
+                    (c) => !OWED_CATEGORIES.includes(c) || t.category === c
                   )
               return (
                 <Card key={t.id} className="bg-zinc-900 border-zinc-800">

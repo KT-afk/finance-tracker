@@ -10,16 +10,12 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import MiniBarChart from "@/components/MiniBarChart"
+import type { Decision, Proposal } from "@/lib/agent/proposals"
 
 interface AnswerData {
   type: "bar"
   labels: string[]
   values: number[]
-}
-
-interface Proposal {
-  id: string
-  summary: string
 }
 
 interface Message {
@@ -33,14 +29,14 @@ interface Message {
 
 /** A change the agent proposed: nothing happens until Confirm. */
 function ProposalCard({ proposal }: { proposal: Proposal }) {
-  const [busy, setBusy] = useState<"confirm" | "reject" | null>(null)
+  const [busy, setBusy] = useState<Decision | null>(null)
   // decided: the server answered for good; the buttons go away
   const [result, setResult] = useState<{
     text: string
     decided: boolean
   } | null>(null)
 
-  async function decide(decision: "confirm" | "reject") {
+  async function decide(decision: Decision) {
     setBusy(decision)
     try {
       const res = await fetch(`/api/proposals/${proposal.id}`, {

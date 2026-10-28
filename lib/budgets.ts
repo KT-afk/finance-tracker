@@ -1,11 +1,11 @@
 import { asc } from "drizzle-orm"
 import { db } from "./db"
-import { budgets, SPEND_CATEGORIES } from "./schema"
+import { budgets, OWED_CATEGORIES, SPEND_CATEGORIES } from "./schema"
 import { querySpending } from "./agent/query-spending"
 
 /** Categories that can have a budget: spending, but not money owed. */
 export const BUDGET_CATEGORIES: string[] = SPEND_CATEGORIES.filter(
-  (c) => c !== "Repayment" && c !== "Paid by Others"
+  (c) => !OWED_CATEGORIES.includes(c)
 )
 
 const SGT_OFFSET_MS = 8 * 60 * 60 * 1000

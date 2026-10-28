@@ -51,6 +51,12 @@ export const EXCLUDED_FROM_SPEND: readonly string[] = [
   "Income",
 ]
 
+// Set only together with who paid (Owed to you), never on their own
+export const OWED_CATEGORIES: readonly string[] = [
+  "Repayment",
+  "Paid by Others",
+]
+
 export const SPEND_CATEGORIES = CATEGORIES.filter(
   (c) => !EXCLUDED_FROM_SPEND.includes(c)
 )
@@ -159,11 +165,14 @@ export const telegramUpdates = sqliteTable("telegram_updates", {
   received_at: text("received_at").notNull(),
 })
 
+// Who a memory came from: the owner said so, or the agent noticed it
+export const MEMORY_SOURCES = ["user", "inferred"] as const
+
 export const aiMemory = sqliteTable("ai_memory", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   key: text("key").notNull().unique(),
   value: text("value").notNull(),
-  source: text("source", { enum: ["user", "inferred"] }).notNull(),
+  source: text("source", { enum: MEMORY_SOURCES }).notNull(),
   created_at: text("created_at").notNull(),
 })
 
@@ -251,7 +260,7 @@ export const agentProposals = sqliteTable("agent_proposals", {
   source: text("source", { enum: CONVERSATION_SOURCES }).notNull(),
   request: text("request").notNull(), // the owner's message that led to it
   // For a memory: "user" if the owner asked, "inferred" if the agent noticed
-  memory_source: text("memory_source", { enum: ["user", "inferred"] }),
+  memory_source: text("memory_source", { enum: MEMORY_SOURCES }),
   status: text("status", { enum: PROPOSAL_STATUSES })
     .notNull()
     .default("pending"),
