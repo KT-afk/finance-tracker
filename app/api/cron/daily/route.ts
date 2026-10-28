@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { buildDailySummary, formatDailyMessage } from "@/lib/daily-message"
+import {
+  budgetWarnings,
+  buildDailySummary,
+  nightlyKind,
+  formatDailyMessage,
+} from "@/lib/daily-message"
+import { buildWeeklyReview, formatWeeklyReview } from "@/lib/weekly-review"
 import { buildMonthlyRecap, formatMonthlyRecap } from "@/lib/monthly-recap"
 import { ingestPaymentAlerts } from "@/lib/payment-alerts/ingest"
 import { OutlookAuthError } from "@/lib/payment-alerts/outlook"
@@ -33,7 +39,8 @@ function appUrl(): string | null {
  * The daily job: read new Payment Alerts, then send the 10pm message.
  * Vercel Cron calls it with `Authorization: Bearer $CRON_SECRET`.
  * `?dryRun=1` reads mail and builds the message without saving or sending.
- * On the 1st it also sends the recap of the month before (`?recap=1` forces it).
+ * On the 1st it sends the monthly review instead, and on Sundays the weekly
+ * review (`?review=monthly|weekly` forces one).
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim()
@@ -75,22 +82,43 @@ export async function GET(req: NextRequest) {
   const send = (text: string) =>
     target ? sendTelegramTo(text, target) : sendTelegram(text)
 
-  const summary = await buildDailySummary(now, warnings)
-  const message = formatDailyMessage(summary, appUrl())
+  // One message a night: the monthly review on the 1st, the weekly review
+  // on Sundays, otherwise the daily message. ?review=monthly|weekly forces one
+  const sgt = new Date(now.getTime() + SGT_OFFSET_MS)
+  const forced = req.nextUrl.searchParams.get("review")
+  const kind =
+    forced === "monthly" || forced === "weekly" ? forced : nightlyKind(now)
+
+  let message: string
+  if (kind === "daily") {
+    message = formatDailyMessage(
+      await buildDailySummary(now, warnings),
+      appUrl()
+    )
+  } else {
+    // Built for its warnings (such as bank emails it couldn't read)
+    await buildDailySummary(now, warnings)
+    let review: string
+    if (kind === "monthly") {
+      const last = new Date(
+        Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth() - 1, 1)
+      )
+      review = formatMonthlyRecap(
+        await buildMonthlyRecap(last.toISOString().slice(0, 7))
+      )
+    } else {
+      const weekly = await buildWeeklyReview(now)
+      warnings.push(...budgetWarnings(weekly.budgets))
+      review = formatWeeklyReview(weekly)
+    }
+    // Problems reading email still lead the message
+    message = [
+      ...warnings.map((w) => `⚠️ ${w}`),
+      ...(warnings.length ? [""] : []),
+      review,
+    ].join("\n")
+  }
   if (!dryRun) await send(message)
 
-  // On the 1st, also recap the month that just ended
-  let recap: string | null = null
-  const sgt = new Date(now.getTime() + SGT_OFFSET_MS)
-  if (sgt.getUTCDate() === 1 || req.nextUrl.searchParams.get("recap") === "1") {
-    const last = new Date(
-      Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth() - 1, 1)
-    )
-    recap = formatMonthlyRecap(
-      await buildMonthlyRecap(last.toISOString().slice(0, 7))
-    )
-    if (!dryRun) await send(recap)
-  }
-
-  return NextResponse.json({ ingested, sent: !dryRun, message, recap })
+  return NextResponse.json({ ingested, sent: !dryRun, kind, message })
 }

@@ -6,6 +6,7 @@
  * Nothing is tagged by hand: groups come from the existing categories.
  */
 import { and, gte, lte } from "drizzle-orm"
+import { budgetStatus, type BudgetStatus } from "./budgets"
 import { classifyCashFlow, summarizeCashFlow } from "./cash-flow"
 import { LATER_BILL_PATTERN, median, payeeOf } from "./daily-message"
 import { describeTransaction } from "./describe-transaction"
@@ -27,7 +28,7 @@ export const GROUPS = [
 ] as const
 const OTHER = { name: "Other", icon: "❓" } as const
 
-function groupOf(category: string): string {
+export function groupOf(category: string): string {
   return (
     GROUPS.find((g) => (g.categories as readonly string[]).includes(category))
       ?.name ?? OTHER.name
@@ -35,7 +36,10 @@ function groupOf(category: string): string {
 }
 
 // A short name for the message: the alert's Payee, else the tidied bank text
-function displayName(row: { payee: string | null; description: string }) {
+export function displayName(row: {
+  payee: string | null
+  description: string
+}) {
   const name = row.payee ?? describeTransaction(row.description).title
   return (
     name
@@ -46,7 +50,10 @@ function displayName(row: { payee: string | null; description: string }) {
 }
 
 /** Who was paid, loosely, so "KOPITIAM FP APP PAYMENTS" months apart match. */
-function merchantKey(row: { payee: string | null; description: string }) {
+export function merchantKey(row: {
+  payee: string | null
+  description: string
+}) {
   return payeeOf(row)
     .toUpperCase()
     .replace(/[^A-Z ]/g, " ")
@@ -60,7 +67,7 @@ function merchantKey(row: { payee: string | null; description: string }) {
     .join(" ")
 }
 
-type Spend = {
+export type Spend = {
   date: string
   amount: number
   group: string
@@ -69,7 +76,7 @@ type Spend = {
   laterBill: boolean
 }
 
-async function spendBetween(from: string, to: string): Promise<Spend[]> {
+export async function spendBetween(from: string, to: string): Promise<Spend[]> {
   const rows = await withOwedShares(
     await db
       .select()
@@ -114,6 +121,9 @@ export type MonthlyRecap = {
   usualTotal: number | null
   oneOffs: { date: string; payee: string; amount: number }[]
   laterBills: number
+  lastMonth: { label: string; total: number }
+  // Each budget at the end of the month (today's limits)
+  budgets: BudgetStatus[]
   groups: {
     name: string
     icon: string
@@ -217,6 +227,11 @@ export async function buildMonthlyRecap(month: string): Promise<MonthlyRecap> {
   }
 
   const [y, m] = month.split("-").map(Number)
+  const before = monthBounds(month, 1)
+  const label = (yy: number, mm: number) =>
+    new Intl.DateTimeFormat("en-SG", { month: "long", timeZone: "UTC" }).format(
+      new Date(Date.UTC(yy, mm - 1, 1))
+    )
   return {
     month,
     monthLabel: new Intl.DateTimeFormat("en-SG", {
@@ -232,6 +247,24 @@ export async function buildMonthlyRecap(month: string): Promise<MonthlyRecap> {
       .map(({ date, payee, amount }) => ({ date, payee, amount }))
       .sort((a, b) => b.amount - a.amount),
     laterBills,
+    lastMonth: {
+      label: label(y, m - 1),
+      total: summarizeCashFlow(
+        await withOwedShares(
+          await db
+            .select()
+            .from(transactions)
+            .where(
+              and(
+                gte(transactions.date, before.from),
+                lte(transactions.date, before.to)
+              )
+            )
+        )
+      ).spend,
+    },
+    // 11pm in Singapore on the month's last day: the whole month counted
+    budgets: await budgetStatus(new Date(`${to}T15:00:00Z`)),
     groups,
   }
 }
@@ -258,6 +291,12 @@ export function formatMonthlyRecap(r: MonthlyRecap): string {
         ? ` (usual month ~${sgd.format(r.usualTotal)})`
         : "")
   )
+
+  const change = r.total - r.lastMonth.total
+  if (r.lastMonth.total > 0)
+    lines.push(
+      `${r.lastMonth.label}: ${sgd.format(r.lastMonth.total)} (${change >= 0 ? "+" : "−"}${sgd.format(Math.abs(change))} this month)`
+    )
 
   if (r.oneOffs.length) {
     lines.push("")
@@ -299,6 +338,19 @@ export function formatMonthlyRecap(r: MonthlyRecap): string {
                 `${m.payee}${m.count > 1 ? ` ×${m.count}` : ""} ${sgd.format(m.total)}`
             )
             .join(" · ")
+      )
+    }
+  }
+  if (r.budgets.length) {
+    lines.push("")
+    lines.push(`Budgets in ${r.monthLabel}:`)
+    for (const b of r.budgets) {
+      const result =
+        b.left < 0
+          ? `over by ${sgd.format(-b.left)}`
+          : `within budget, ${sgd.format(b.left)} left`
+      lines.push(
+        `${b.left < 0 ? "⚠️" : "✅"} ${b.category}: ${sgd.format(b.spent)} of ${sgd.format(b.limit)} (${b.usedPct}%) · ${result}`
       )
     }
   }
