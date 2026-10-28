@@ -199,6 +199,41 @@ export async function undoChange(
             .from(categoryRules)
             .where(eq(categoryRules.keyword, entry.target))
         )[0]?.value ?? ""
+  } else if (entry.kind === "budget" && !entry.after) {
+    // Undo a removal: put the budget back if none has been set since. The
+    // log row comes first, from the entry itself, while no budget exists
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: "" }))
+            .from(changeLog)
+            .where(
+              and(
+                eq(changeLog.id, entry.id),
+                sql`not exists (select 1 from ${budgets} where ${budgets.category} = ${entry.target})`
+              )
+            )
+        )
+        .returning({ id: changeLog.id }),
+      db
+        .insert(budgets)
+        .values({
+          category: entry.target,
+          monthly_limit: Number(entry.before),
+          updated_at: ctx.now.toISOString(),
+        })
+        .onConflictDoNothing(),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select({ limit: budgets.monthly_limit })
+        .from(budgets)
+        .where(eq(budgets.category, entry.target))
+      current = row ? String(row.limit) : ""
+    }
   } else if (entry.kind === "budget") {
     const stillAfter = and(
       eq(budgets.category, entry.target),

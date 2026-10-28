@@ -6,12 +6,12 @@
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Pace lines appear for categories with a budget only
-- [ ] Warning lines appear at the top at 80% and at 100%
-- [ ] The message is unchanged when no budgets are set
-- [ ] Daily message tests cover pace and both warning levels
+- [x] Pace lines appear for categories with a budget only
+- [x] Warning lines appear at the top at 80% and at 100%
+- [x] The message is unchanged when no budgets are set
+- [x] Daily message tests cover pace and both warning levels
 
 Spec: `.scratch/finance-agent/spec.md`
 

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { and, eq, sql } from "drizzle-orm"
+import { BUDGET_CATEGORIES } from "../budgets"
 import { db } from "../db"
 import { describeTransaction } from "../describe-transaction"
 import {
@@ -907,35 +908,38 @@ async function currentBudget(category: string) {
   return row ? String(row.limit) : ""
 }
 
-/** Store a proposal to set or change one category's monthly budget. */
+/**
+ * Store a proposal to set or change one category's monthly budget, or to
+ * remove it (amount null).
+ */
 export async function proposeBudget(input: {
   category: string
-  amount: number
+  amount: number | null
   source: ConversationSource
   request: string
   now: Date
 }): Promise<{ id: string; summary: string }> {
   if (!(CATEGORIES as readonly string[]).includes(input.category))
     throw new ProposalError("Use a category from the tool schema")
-  if (
-    !(SPEND_CATEGORIES as readonly string[]).includes(input.category) ||
-    OWED_CATEGORIES.includes(input.category)
-  )
+  if (!BUDGET_CATEGORIES.includes(input.category))
     throw new ProposalError("Budgets are for spending categories only")
-  let limit: number
-  try {
-    limit = cleanAmount(input.amount)
-  } catch (error) {
-    if (error instanceof OwedError) throw new ProposalError(error.message)
-    throw error
-  }
+  let after = ""
+  if (input.amount !== null)
+    try {
+      after = String(cleanAmount(input.amount))
+    } catch (error) {
+      if (error instanceof OwedError) throw new ProposalError(error.message)
+      throw error
+    }
   const before = await currentBudget(input.category)
-  const after = String(limit)
+  if (!before && !after)
+    throw new ProposalError(`${input.category} has no budget to remove`)
   if (before === after)
     throw new ProposalError(`The budget is already ${describeBudget(after)}`)
-  const summary =
-    `Budget: ${input.category} ${describeBudget(after)} a month` +
-    (before ? ` (replaces ${describeBudget(before)})` : "")
+  const summary = !after
+    ? `Budget: remove ${input.category} (was ${describeBudget(before)} a month)`
+    : `Budget: ${input.category} ${describeBudget(after)} a month` +
+      (before ? ` (replaces ${describeBudget(before)})` : "")
   const id = newId()
   await db.insert(agentProposals).values({
     id,
@@ -968,6 +972,7 @@ async function applyBudget(
   }
   if (!(await settle("confirmed"))) return lost
   const stamp = now.toISOString()
+  if (!proposal.after) return removeBudget(proposal, conflict, stamp)
   const write = proposal.before
     ? db
         .update(budgets)
@@ -1035,16 +1040,72 @@ async function applyBudget(
   }
 }
 
+/** Confirmed removal: log the row while it is there, then delete it. */
+async function removeBudget(
+  proposal: Proposal,
+  conflict: Result,
+  stamp: string
+): Promise<Result> {
+  const stillBefore = and(
+    eq(budgets.category, proposal.target),
+    eq(budgets.monthly_limit, Number(proposal.before))
+  )
+  let entry: { id: number } | undefined
+  try {
+    const [logged] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${stamp}`.as("created_at"),
+              kind: sql`'budget'`.as("kind"),
+              target: budgets.category,
+              before: sql`${proposal.before}`.as("before"),
+              after: sql`''`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(budgets)
+            .where(stillBefore)
+        )
+        .returning({ id: changeLog.id }),
+      db.delete(budgets).where(stillBefore),
+    ])
+    entry = logged[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
 export const proposeBudgetTool = {
   name: "propose_budget",
   strict: true,
   description:
-    "Propose setting or changing the monthly budget for one spending category (e.g. cap Food & Drink at $500). Budgets run by calendar month in Singapore and don't roll over. This stores a proposal and changes nothing until the owner confirms it with a button.",
+    "Propose setting, changing or removing (amount null) the monthly budget for one spending category (e.g. cap Food & Drink at $500). To set several budgets in one message, call it once per category. Budgets run by calendar month in Singapore and don't roll over. This stores a proposal and changes nothing until the owner confirms it with a button.",
   input_schema: {
     type: "object" as const,
     properties: {
       category: { type: "string", enum: [...CATEGORIES] },
-      amount: { type: "number", description: "Monthly limit in SGD" },
+      amount: {
+        type: ["number", "null"],
+        description: "Monthly limit in SGD, or null to remove the budget",
+      },
     },
     additionalProperties: false,
     required: ["category", "amount"],
@@ -1056,9 +1117,12 @@ export function parseBudgetInput(input: unknown) {
   const { category, amount } = strictObject(input, ["category", "amount"])
   if (typeof category !== "string")
     throw new ProposalError("category must be a string")
-  if (typeof amount !== "number" || !Number.isFinite(amount))
-    throw new ProposalError("amount must be a number")
-  return { category, amount }
+  if (
+    amount !== null &&
+    (typeof amount !== "number" || !Number.isFinite(amount))
+  )
+    throw new ProposalError("amount must be a number or null")
+  return { category, amount: amount as number | null }
 }
 
 /** A memory by name, ignoring case (older memories may use capitals). */
