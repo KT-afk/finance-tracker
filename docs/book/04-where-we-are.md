@@ -27,7 +27,8 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Tickets 12 and 32 (PR #37, merged): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
 - Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
 - Ticket 13 (PR #39, merged): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
-- Ticket 35 (PR #43): each question tells the agent what became of recent proposals, so it knows about button taps.
+- Ticket 36 (PR #44): search passes on each payment's bank and bank text, and flags a same-day transfer in.
+- Ticket 35 (PR #43, merged): each question tells the agent what became of recent proposals, so it knows about button taps.
 - Ticket 34 (PR #42, merged): an answer that claims a proposal nobody stored now says so. Tool calls are still not recorded (backlog idea).
 - Ticket 33 (PR #41, merged): savings review: averages, how much you could save, what to cut. No migration.
 - Ticket 28 (PR #40, merged): proposals code split in three; deleting a memory on the Ask page is now logged and undoable. No migration.

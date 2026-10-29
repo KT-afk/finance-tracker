@@ -26,7 +26,10 @@ function seed(dbPath: string) {
       ${rides},
       ('dinner', '2026-09-05', 'SUSHI TEI', -120, 'dbs', 'Food & Drink', 0, 'h1', 'x'),
       ('shopee', '2026-09-06', 'SHOPEE SINGAPORE', -80, 'dbs', 'Shopping', 0, 'h2', 'x'),
-      ('salary', '2026-09-10', 'SALARY GRAB HOLDINGS', 5000, 'dbs', 'Income', 0, 'h3', 'x');
+      ('salary', '2026-09-10', 'SALARY GRAB HOLDINGS', 5000, 'dbs', 'Income', 0, 'h3', 'x'),
+      ('kt-in', '2026-05-05', 'Credit Payment from Trust savings account', 500, 'trust', 'Transfer', 0, 'k1', 'x'),
+      ('kt-out', '2026-05-05', 'FAST PAYMENT via PayNow-Mobile to Kt OTHR-OTHR', -500, 'ocbc', 'Transfer', 0, 'k2', 'x'),
+      ('cafe', '2026-05-27', 'NETS QR PURCHASE L21 CAFE', -1.6, 'ocbc', 'Transfer', 0, 'k3', 'x');
     INSERT INTO owed_entries (id, transaction_id, person, kind, amount, created_at) VALUES
       ('s1', 'dinner', 'Jane', 'share', 80, 'x');
   `)
@@ -124,6 +127,28 @@ async function main() {
       .update(transactions)
       .set({ note: "Wedding ring" })
       .where(eq(transactions.id, "shopee"))
+    // The bank and its own text come back, and a payment matched by the
+    // same amount coming into another account that day is flagged (seen
+    // live: $500 from Trust savings to OCBC, then PayNow to “Kt”)
+    const may = await searchTransactions({
+      category: "Unlabelled",
+      date_from: "2026-05-01",
+      date_to: "2026-05-31",
+    })
+    const kt = may.transactions.find((t) => t.id === "kt-out")!
+    assert.deepEqual(
+      [kt.bank, kt.bank_text],
+      ["ocbc", "FAST PAYMENT via PayNow-Mobile to Kt OTHR-OTHR"]
+    )
+    assert.deepEqual(kt.same_day_in, {
+      bank: "trust",
+      bank_text: "Credit Payment from Trust savings account",
+    })
+    assert.equal(
+      may.transactions.find((t) => t.id === "cafe")!.same_day_in,
+      undefined
+    )
+
     const ring = await searchTransactions({ text: "ring" })
     assert.deepEqual(
       ring.transactions.map((t) => t.id),
