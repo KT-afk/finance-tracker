@@ -268,3 +268,11 @@ Ask “what should I cut?” and the agent suggests two or three specific cuts, 
 **What we changed.** Every question now tells the agent what became of the proposals from the last 24 hours: waiting, confirmed, rejected or expired. That beats anything said earlier. Its instructions also say to look numbers up again rather than repeat old ones, and when you type “confirm”, to say whether it's already confirmed or point you to the ✅ under it.
 
 **How we checked.** Tests for the list (only the last 24 hours, newest first, with status) and for what the agent is sent, including when the list can't be loaded.
+
+## Ticket 36: Saying what a payment was (2026-10-29)
+
+**What happened.** You asked what three $500 “Kt” payments in May were. The agent said it only had the name “Kt”. But the bank says more: each was “FAST PAYMENT via PayNow-Mobile to Kt” from OCBC, and each time, $500 had come into OCBC from your Trust savings the same day. The agent's search only passed on the short name.
+
+**What we changed.** Search now passes on the account each payment came from and the bank's own wording, and flags when the same amount came into another of your accounts that day. The agent then says so, asks whether it was money moved between your own accounts, and if it was, offers to mark it as a Self Transfer, which takes it out of your spending.
+
+**How we checked.** A search test copies the “Kt” case: the bank, the bank text and the matching transfer in come back, and a café payment with no match isn't flagged.

@@ -23,6 +23,11 @@ export type FoundTransaction = {
   amount: number // full payment
   your_share?: number // only when someone else covers part of it
   note?: string // the owner's own note on this payment
+  bank: string // the account it was paid from
+  bank_text: string // the bank's own description, shortened
+  // The same amount came into another of the owner's accounts that day:
+  // possibly money moved between their own accounts, not spending
+  same_day_in?: { bank: string; bank_text: string }
   display: string
 }
 
@@ -48,6 +53,8 @@ function formatMoney(value: number): string {
     minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
   }).format(value)
 }
+
+const BANK_TEXT = 120
 
 export function parseSearchInput(input: unknown): SearchInput {
   if (!input || typeof input !== "object" || Array.isArray(input))
@@ -115,7 +122,27 @@ export async function searchTransactions(
       .where(and(...conditions))
   )
   const text = filters.text?.toLowerCase()
+  // Money in, by day and amount, to spot a payment matched by a transfer in
+  const incoming = new Map<string, typeof rows>()
+  for (const row of rows)
+    if (row.amount > 0) {
+      const key = `${row.date}|${roundMoney(row.amount)}`
+      incoming.set(key, [...(incoming.get(key) ?? []), row])
+    }
 
+  const sameDayIn = (row: (typeof rows)[number]) => {
+    const match = incoming
+      .get(`${row.date}|${roundMoney(Math.abs(row.amount))}`)
+      ?.find((other) => other.bank !== row.bank)
+    return match
+      ? {
+          same_day_in: {
+            bank: match.bank,
+            bank_text: match.description.slice(0, BANK_TEXT),
+          },
+        }
+      : {}
+  }
   const matches: Array<FoundTransaction & { time: string | null }> = []
   let total = 0
   let grossTotal = 0
@@ -152,6 +179,9 @@ export async function searchTransactions(
       amount,
       ...(shared ? { your_share: share } : {}),
       ...(row.note ? { note: row.note } : {}),
+      bank: row.bank,
+      bank_text: row.description.slice(0, BANK_TEXT),
+      ...sameDayIn(row),
       display:
         `${title} ${formatMoney(amount)}` +
         (shared ? ` (your share ${formatMoney(share)})` : "") +
@@ -175,7 +205,7 @@ export const searchTransactionsTool = {
   name: "search_transactions",
   strict: true,
   description:
-    "Find the payments behind a number. Matches text in the merchant, description, memo or the owner's note, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
+    "Find the payments behind a number. Matches text in the merchant, description, memo or the owner's note, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner, the account it was paid from (bank), the bank's own text (bank_text), and same_day_in when the same amount came into another of the owner's accounts that day; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
   input_schema: {
     type: "object" as const,
     properties: {
