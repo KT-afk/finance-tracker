@@ -531,6 +531,29 @@ async function main() {
     assert.equal(await category("grab"), "Travel")
     assert.equal((await db.select().from(changeLog)).length, logBefore)
 
+    // Recent proposals for the agent: the last 24 hours, newest first (at
+    // most 10), with their status
+    const { recentProposals } = await import("../lib/agent/proposals")
+    const t1 = new Date(t0.getTime() + 60 * 60 * 1000)
+    const newest = await proposeRecategorise({
+      transactionId: "grab",
+      category: "Health",
+      source: "web",
+      request: "x",
+      now: t1,
+    })
+    const latest = await recentProposals(t1)
+    assert.ok(latest.length <= 10)
+    assert.deepEqual(
+      [latest[0].summary, latest[0].status],
+      [newest.summary, "pending"]
+    )
+    assert.ok(latest.slice(1).every((p) => p.created_at <= t1.toISOString()))
+    assert.deepEqual(
+      await recentProposals(new Date(t1.getTime() + 25 * 60 * 60 * 1000)),
+      []
+    )
+
     console.log("proposals: passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

@@ -260,3 +260,11 @@ Ask “what should I cut?” and the agent suggests two or three specific cuts, 
 **What we changed.** The code now checks the AI's words against what really happened. If an answer talks about a proposal and none was stored, it ends with “(Nothing was actually proposed, so there are no buttons and nothing changed. Please ask again.)”, plus the reason when the attempt was refused. The AI's instructions also say plainly to report a refusal instead of claiming success.
 
 **How we checked.** Agent tests: a claim with no attempt, a claim after a refused attempt, and a real proposal, which gets no notice.
+
+## Ticket 35: The agent didn't know you'd tapped ✅ (2026-10-29)
+
+**What happened.** You tapped ✅ on the rent share and it worked: Yoon Thiri owes $1,500, and May's spending dropped to $6,815.07. But the agent kept saying it was still waiting for your tap, said there were two proposals (there was one), and showed May's old total. Your taps go straight to the app, not into the conversation, so the agent only had its own earlier messages to go on, and it reused their numbers.
+
+**What we changed.** Every question now tells the agent what became of the proposals from the last 24 hours: waiting, confirmed, rejected or expired. That beats anything said earlier. Its instructions also say to look numbers up again rather than repeat old ones, and when you type “confirm”, to say whether it's already confirmed or point you to the ✅ under it.
+
+**How we checked.** Tests for the list (only the last 24 hours, newest first, with status) and for what the agent is sent, including when the list can't be loaded.

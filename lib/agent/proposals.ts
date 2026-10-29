@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { and, eq, sql } from "drizzle-orm"
+import { and, desc, eq, gte, sql } from "drizzle-orm"
 import { BUDGET_CATEGORIES } from "../budgets"
 import { db } from "../db"
 import {
@@ -1062,4 +1062,29 @@ export async function proposeMemory(input: {
     created_at: input.now.toISOString(),
   })
   return { id, summary }
+}
+
+/**
+ * Proposals from the last 24 hours with what became of them, newest first.
+ * The agent gets these with every question: a button tap never reaches the
+ * conversation, so without them it would think a confirmed change is
+ * still waiting.
+ */
+export async function recentProposals(now: Date) {
+  const rows = await db
+    .select({
+      summary: agentProposals.summary,
+      status: agentProposals.status,
+      created_at: agentProposals.created_at,
+    })
+    .from(agentProposals)
+    .where(
+      gte(
+        agentProposals.created_at,
+        new Date(now.getTime() - EXPIRES_AFTER_MS).toISOString()
+      )
+    )
+    .orderBy(desc(agentProposals.created_at))
+    .limit(10)
+  return rows
 }
