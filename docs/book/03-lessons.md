@@ -132,3 +132,7 @@ After each merge we restart the working branch from `main`. Once, a book commit 
 ## 28. Check what the AI says it did against what it did
 
 The agent told the owner “I've proposed… tap to confirm” when no proposal existed. Instructions alone (“never say it was saved”) didn't stop it. When the AI's words promise an action with a visible result (buttons, a saved change), check in code that the action happened, and say so when it didn't. Also record enough to tell afterwards why it didn't: here, tool calls weren't kept, so we could only guess.
+
+## 29. The AI only knows what's in its conversation
+
+A tap on a Telegram button changes the data but never appears in the chat, so the agent went on saying a confirmed change was waiting, and reused old totals from its earlier answers. Anything that happens outside the conversation (button taps, changes in the app) has to be handed to the AI with each question, and its instructions should treat earlier answers as possibly out of date.

@@ -724,6 +724,58 @@ async function main() {
   assert.equal(real.text, claim)
   assert.match(JSON.stringify(real), /"s1"/)
 
+  // Each question says what became of recent proposals, since button taps
+  // never reach the conversation (seen live on 29 Oct 2026)
+  const statusReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("Confirm", {
+    loadMemories: async () => [],
+    recentProposals: async () => [
+      {
+        summary:
+          "Share: Yoon Thiri owes $1,500 of CHEW NGENG HIANG $3,000 on 1 May 2026",
+        status: "confirmed",
+        created_at: "x",
+      },
+      {
+        summary: "Budget: Food & Drink $500 a month",
+        status: "pending",
+        created_at: "x",
+      },
+    ],
+    createMessage: async (params) => {
+      statusReqs.push(structuredClone(params))
+      return done
+    },
+  })
+  const statusText = JSON.stringify(statusReqs[0].system)
+  assert.match(
+    statusText,
+    /“Share: Yoon Thiri owes \$1,500 of CHEW NGENG HIANG \$3,000 on 1 May 2026”: confirmed/
+  )
+  assert.match(
+    statusText,
+    /“Budget: Food & Drink \$500 a month”: waiting for the owner's tap/
+  )
+  assert.match(
+    statusText,
+    /call the tools again for any number asked for again/
+  )
+  const failedReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  await runFinanceAgent("hi", {
+    loadMemories: async () => [],
+    recentProposals: async () => {
+      throw new Error("db down")
+    },
+    createMessage: async (params) => {
+      failedReqs.push(structuredClone(params))
+      return done
+    },
+  })
+  assert.match(
+    JSON.stringify(failedReqs[0].system),
+    /Whether recent proposals were confirmed is unknown/
+  )
+
   // Savings review: strict input, the clock passed through, failures not zero
   const savingsReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
   const savingsCalls: unknown[] = []
