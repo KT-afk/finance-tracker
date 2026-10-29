@@ -252,3 +252,11 @@ Problems reading your email still lead whichever message goes out. Replying to a
 Ask “what should I cut?” and the agent suggests two or three specific cuts, each with a dollar amount and what it would add to your savings a month, and offers to set a budget. It doesn't tell you what you must do; the choice is yours, as with “can I afford this?”.
 
 **How we checked.** A database test with three ordinary months and a busy October: the averages, the savings rate, your share of a shared dinner, rent not counted as “above average” because it's paid on the 1st, food flagged, six months asked for when only three have data, and January looking back into the year before. Agent tests cover the tool, its strict input, and a failure that doesn't read as zero.
+
+## Ticket 34: “I've proposed…” with no buttons (2026-10-29)
+
+**What happened.** You asked to split the $3,000 rent in May with your wife. The agent answered “I've proposed that your wife owes $1,500… Just tap to confirm”, but no buttons came. Nothing had been proposed: the database had no proposal from that morning. The AI said it had done something it hadn't (most likely its attempt was refused because it used the wrong payment id, and it didn't say so).
+
+**What we changed.** The code now checks the AI's words against what really happened. If an answer talks about a proposal and none was stored, it ends with “(Nothing was actually proposed, so there are no buttons and nothing changed. Please ask again.)”, plus the reason when the attempt was refused. The AI's instructions also say plainly to report a refusal instead of claiming success.
+
+**How we checked.** Agent tests: a claim with no attempt, a claim after a refused attempt, and a real proposal, which gets no notice.

@@ -667,6 +667,63 @@ async function main() {
   assert.match(rsInstructions, /propose_rule/)
   assert.match(rsInstructions, /propose_share/)
 
+  // An answer that claims a proposal nobody stored gets a notice, with the
+  // reason when a propose_ tool refused (seen live on 29 Oct 2026)
+  const claim =
+    "I've proposed that your wife owes $1,500 of the $3,000 payment. Just tap to confirm or reject."
+  const claimed = await runFinanceAgent("split the rent with my wife", {
+    loadMemories: async () => [],
+    createMessage: async () =>
+      response("end_turn", [{ type: "text", text: claim, citations: null }]),
+  })
+  assert.match(
+    claimed.text,
+    /\(Nothing was actually proposed, so there are no buttons and nothing changed\. Please ask again\.\)$/
+  )
+  let refusedRound = 0
+  const refused = await runFinanceAgent("split the rent with my wife", {
+    loadMemories: async () => [],
+    createMessage: async () =>
+      ++refusedRound === 1
+        ? response("tool_use", [
+            call(
+              "x1",
+              { transaction_id: "made-up", person: "Wife", amount: 1500 },
+              "propose_share"
+            ),
+          ])
+        : response("end_turn", [
+            { type: "text", text: claim, citations: null },
+          ]),
+    proposeShare: async () => {
+      const { ProposalError } = await import("../lib/agent/proposals")
+      throw new ProposalError("Transaction not found; search for it first")
+    },
+  })
+  assert.match(
+    refused.text,
+    /The proposal was refused: Transaction not found; search for it first\. Please ask again\.\)$/
+  )
+  let realRound = 0
+  const real = await runFinanceAgent("split the rent with my wife", {
+    loadMemories: async () => [],
+    createMessage: async () =>
+      ++realRound === 1
+        ? response("tool_use", [
+            call(
+              "x2",
+              { transaction_id: "rent", person: "Wife", amount: 1500 },
+              "propose_share"
+            ),
+          ])
+        : response("end_turn", [
+            { type: "text", text: claim, citations: null },
+          ]),
+    proposeShare: async () => ({ id: "s1", summary: "Share" }),
+  })
+  assert.equal(real.text, claim)
+  assert.match(JSON.stringify(real), /"s1"/)
+
   // Savings review: strict input, the clock passed through, failures not zero
   const savingsReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
   const savingsCalls: unknown[] = []

@@ -128,3 +128,7 @@ Undoing a forgotten memory ran two statements: write the log row only if no memo
 ## 27. Restarting the branch can drop a pushed commit
 
 After each merge we restart the working branch from `main`. Once, a book commit had been pushed to the branch after the merge, so restarting from `main` dropped it, and the next push was refused. Before restarting, check `git log origin/main..origin/<branch>`: if anything is there, merge it in instead of starting over.
+
+## 28. Check what the AI says it did against what it did
+
+The agent told the owner “I've proposed… tap to confirm” when no proposal existed. Instructions alone (“never say it was saved”) didn't stop it. When the AI's words promise an action with a visible result (buttons, a saved change), check in code that the action happened, and say so when it didn't. Also record enough to tell afterwards why it didn't: here, tool calls weren't kept, so we could only guess.
