@@ -166,6 +166,7 @@ async function main() {
       "query_cash_flow",
       "get_balances",
       "savings_review",
+      "trip_spending",
       "propose_recategorise",
       "propose_memory",
       "propose_note",
@@ -774,6 +775,74 @@ async function main() {
   assert.match(
     JSON.stringify(failedReqs[0].system),
     /Whether recent proposals were confirmed is unknown/
+  )
+
+  // Trip spending: strict input, failures not zero, and the instructions
+  // say to use the country code rather than search for the country's name
+  const tripReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const tripCalls: unknown[] = []
+  await runFinanceAgent("how much did I spend in Korea?", {
+    loadMemories: async () => [],
+    createMessage: async (params) => {
+      tripReqs.push(structuredClone(params))
+      if (tripReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "k1",
+            { date_from: "2026-04-26", date_to: "2026-05-13", country: "KR" },
+            "trip_spending"
+          ),
+          call(
+            "k2",
+            {
+              date_from: "2026-04-26",
+              date_to: "2026-05-13",
+              country: "Korea",
+            },
+            "trip_spending"
+          ),
+          call(
+            "k3",
+            { date_from: "2026-06-01", date_to: "2026-06-10", country: null },
+            "trip_spending"
+          ),
+        ])
+      return done
+    },
+    tripSpending: async (filters) => {
+      tripCalls.push(filters)
+      if (filters.date_from === "2026-06-01")
+        throw new Error("private database details")
+      return {
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        days: 18,
+        count: 0,
+        total: 0,
+        gross_total: 0,
+        per_day: 0,
+        by_category: [],
+        by_country: [],
+        first_payment: null,
+        last_payment: null,
+        biggest: [],
+      }
+    },
+  })
+  assert.deepEqual(tripCalls, [
+    { date_from: "2026-04-26", date_to: "2026-05-13", country: "KR" },
+    { date_from: "2026-06-01", date_to: "2026-06-10" },
+  ])
+  const tripResults = tripReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    tripResults.map((r) => r.is_error),
+    [undefined, true, true]
+  )
+  assert.doesNotMatch(JSON.stringify(tripResults), /private database/)
+  assert.match(
+    JSON.stringify(tripReqs[0].system),
+    /never a text search for the country name/
   )
 
   // Savings review: strict input, the clock passed through, failures not zero
