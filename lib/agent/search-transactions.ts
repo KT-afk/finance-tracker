@@ -13,6 +13,8 @@ export type SearchInput = {
   max_amount?: number
   date_from?: string
   date_to?: string
+  // Money coming in (refunds, interest, transfers in) instead of payments
+  money_in?: boolean
 }
 
 export type FoundTransaction = {
@@ -88,6 +90,11 @@ export function parseSearchInput(input: unknown): SearchInput {
           throw new Error("Dates must be valid YYYY-MM-DD dates")
         filters[key] = value
         break
+      case "money_in":
+        if (typeof value !== "boolean")
+          throw new Error("money_in must be true or false")
+        filters.money_in = value
+        break
       default:
         throw new Error("Unknown filter")
     }
@@ -147,9 +154,11 @@ export async function searchTransactions(
   let total = 0
   let grossTotal = 0
   for (const row of rows) {
-    // Same classification as the dashboard, so only payments count
+    // Same classification as the dashboard, so only payments count; or,
+    // when asked, only money in
     const classification = classifyCashFlow(row)
-    if (!classification.countsAsSpend) continue
+    if (filters.money_in ? row.amount <= 0 : !classification.countsAsSpend)
+      continue
     if (filters.category && classification.category !== filters.category)
       continue
     const amount = roundMoney(Math.abs(row.amount))
@@ -165,7 +174,9 @@ export async function searchTransactions(
     )
       continue
 
-    const share = roundMoney(Math.abs(classification.effectiveAmount))
+    const share = filters.money_in
+      ? amount
+      : roundMoney(Math.abs(classification.effectiveAmount))
     const title = row.payee ?? describeTransaction(row.description).title
     const shared = share !== amount
     total += share
@@ -205,7 +216,7 @@ export const searchTransactionsTool = {
   name: "search_transactions",
   strict: true,
   description:
-    "Find the payments behind a number. Matches text in the merchant, description, memo or the owner's note, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner, the account it was paid from (bank), the bank's own text (bank_text), and same_day_in when the same amount came into another of the owner's accounts that day; total is the owner's spending and gross_total the full payments, both across every match, and more is how many matches were not listed.",
+    "Find the payments behind a number, or with money_in true, money that came in (refunds, interest, transfers in). Matches text in the merchant, description, memo or the owner's note, plus optional category, full-payment amount range and dates. Returns at most 20 payments, newest first, each with a display line to show the owner, the account it was paid from (bank), the bank's own text (bank_text), and same_day_in when the same amount came into another of the owner's accounts that day; total is the owner's spending (with money_in, the money in) and gross_total the full payments, both across every match, and more is how many matches were not listed.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -232,6 +243,11 @@ export const searchTransactionsTool = {
       date_to: {
         type: "string",
         description: "ISO date YYYY-MM-DD, inclusive",
+      },
+      money_in: {
+        type: "boolean",
+        description:
+          "True to find money coming in (refunds, interest, salary, transfers in) instead of payments",
       },
     },
     additionalProperties: false,

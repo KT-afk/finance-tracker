@@ -149,6 +149,26 @@ async function main() {
       undefined
     )
 
+    // Money in: refunds and transfers in, found only when asked for (seen
+    // live: UOB's “CR INTEREST” refunds were invisible to the agent)
+    const moneyIn = await searchTransactions({
+      money_in: true,
+      date_from: "2026-05-01",
+      date_to: "2026-05-31",
+    })
+    assert.deepEqual(
+      moneyIn.transactions.map((t) => [t.id, t.amount]),
+      [["kt-in", 500]]
+    )
+    assert.equal(moneyIn.total, 500)
+    assert.equal((await searchTransactions({ text: "salary" })).count, 0)
+    assert.equal(
+      (await searchTransactions({ text: "salary", money_in: true })).count,
+      1
+    )
+    assert.throws(() => parseSearchInput({ money_in: "yes" }))
+    assert.deepEqual(parseSearchInput({ money_in: true }), { money_in: true })
+
     const ring = await searchTransactions({ text: "ring" })
     assert.deepEqual(
       ring.transactions.map((t) => t.id),
