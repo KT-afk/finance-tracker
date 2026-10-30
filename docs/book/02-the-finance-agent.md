@@ -288,3 +288,11 @@ Checked on your real data (read-only): Korea, 26 Apr to 15 May 2026, 87 payments
 **Found on the way.** Two of the biggest Korea purchases (Amaescotes $344.66 and Gnaleu $121.73) were missed at first, because the bank put the amount in won after “KR”. The test now covers that.
 
 **Later.** The bigger version: named trips you can add flights and hotels to, a trip label on the Transactions page, and trips set apart in monthly reviews and the savings review. That needs a database change.
+
+## Ticket 38: Finding money that came in (2026-10-30)
+
+**What happened.** You asked whether UOB paid back two interest charges. The agent said there was no refund. There were two, both on 4 July (“CR INTEREST” $46.85 and $29.11), but the agent's search only ever looked at money going out.
+
+**What we changed.** Search can now look at money coming in: refunds, interest, salary and transfers in. The agent is told to check this before saying something wasn't refunded. Checked on your real data: it finds both UOB refunds.
+
+**How we checked.** A search test for money in, including that a normal search still ignores salary.
