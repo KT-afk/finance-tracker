@@ -276,3 +276,15 @@ Ask “what should I cut?” and the agent suggests two or three specific cuts, 
 **What we changed.** Search now passes on the account each payment came from and the bank's own wording, and flags when the same amount came into another of your accounts that day. The agent then says so, asks whether it was money moved between your own accounts, and if it was, offers to mark it as a Self Transfer, which takes it out of your spending.
 
 **How we checked.** A search test copies the “Kt” case: the bank, the bank text and the matching transfer in come back, and a café payment with no match isn't flagged.
+
+## Ticket 37: Trip spending (2026-10-30)
+
+**What happened.** You asked how much you spent in Korea. The agent searched for the word “Korea” and found nothing, because your card's bank text says “SEOUL KR”, “Jeonju KR” and so on.
+
+**What we built (the small version).** A new lookup for the agent: spending abroad between two dates. A payment counts as abroad when the bank text ends in a country code other than SG (sometimes followed by the amount in the local currency), or it was in a foreign currency. It gives your share, the full amounts, the total per day, by category, by country, and the five biggest payments. The agent says what it can't see: flights and hotels you paid from Singapore, and cash. It offers to remember the trip's dates, so next time “how much did Korea cost?” needs no dates.
+
+Checked on your real data (read-only): Korea, 26 Apr to 15 May 2026, 87 payments, $2,519.84.
+
+**Found on the way.** Two of the biggest Korea purchases (Amaescotes $344.66 and Gnaleu $121.73) were missed at first, because the bank put the amount in won after “KR”. The test now covers that.
+
+**Later.** The bigger version: named trips you can add flights and hotels to, a trip label on the Transactions page, and trips set apart in monthly reviews and the savings review. That needs a database change.

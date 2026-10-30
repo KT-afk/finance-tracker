@@ -136,3 +136,7 @@ The agent told the owner “I've proposed… tap to confirm” when no proposal 
 ## 29. The AI only knows what's in its conversation
 
 A tap on a Telegram button changes the data but never appears in the chat, so the agent went on saying a confirmed change was waiting, and reused old totals from its earlier answers. Anything that happens outside the conversation (button taps, changes in the app) has to be handed to the AI with each question, and its instructions should treat earlier answers as possibly out of date.
+
+## 30. Try a new lookup on the real data before calling it done
+
+The trip lookup passed its tests but found $2,053 of Korea spending, not $2,520. On real data, some bank lines end with the amount in won after the country code, which the made-up test data didn't have. A read-only run on the live data caught it in a minute. For anything that reads bank text, compare against a count done by hand on real rows.
