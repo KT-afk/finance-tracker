@@ -5,6 +5,11 @@ import { BANKS, CATEGORIES, transactions, type Bank } from "@/lib/schema"
 import { and, eq, gte, lte, desc } from "drizzle-orm"
 import { classifyCashFlow } from "@/lib/cash-flow"
 import { applyOwedRulesTo, loadOwedEntriesFor } from "@/lib/owed"
+import {
+  findTrip,
+  listTrips,
+  tripsByTransaction,
+} from "@/lib/agent/trip-spending"
 
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -28,12 +33,15 @@ export async function GET(req: NextRequest) {
     // 'transfers' = the dashboard's "Transfers to review" set;
     // 'unlabelled' = outgoing payments nobody has labelled yet
     const review = searchParams.get("review")
+    // A saved trip's key: its payments, whatever their month
+    const tripParam = searchParams.get("trip")
+    const trip = tripParam ? await findTrip(tripParam) : undefined
     const page = parseInt(searchParams.get("page") ?? "1", 10)
     const pageSize = parseInt(searchParams.get("pageSize") ?? "50", 10)
 
     const conditions = []
 
-    if (month) {
+    if (month && !trip) {
       conditions.push(gte(transactions.date, `${month}-01`))
       conditions.push(lte(transactions.date, `${month}-31`))
     }
@@ -49,7 +57,8 @@ export async function GET(req: NextRequest) {
       .from(transactions)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(transactions.date), desc(transactions.uploaded_at))
-    const allTxns =
+    const inTrips = await tripsByTransaction()
+    const reviewed =
       review === "transfers"
         ? matchingTxns.filter(
             (tx) => classifyCashFlow(tx).isUnclassifiedTransfer
@@ -57,6 +66,11 @@ export async function GET(req: NextRequest) {
         : review === "unlabelled"
           ? matchingTxns.filter((tx) => classifyCashFlow(tx).isUnlabelled)
           : matchingTxns
+    const allTxns = trip
+      ? reviewed.filter((tx) => inTrips.get(tx.id) === trip.name)
+      : tripParam
+        ? []
+        : reviewed
 
     const total = allTxns.length
     const offset = (page - 1) * pageSize
@@ -67,6 +81,7 @@ export async function GET(req: NextRequest) {
       return {
         ...tx,
         is_manual: tx.hash.startsWith("manual:"),
+        trip: inTrips.get(tx.id) ?? null,
         owed: entry
           ? { kind: entry.kind, person: entry.person, amount: entry.amount }
           : null,
@@ -74,6 +89,8 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json({
+      // Saved trips, for the filter
+      trips: (await listTrips()).map((t) => ({ key: t.key, name: t.name })),
       transactions: paged,
       total,
       page,

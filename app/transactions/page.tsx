@@ -36,9 +36,12 @@ interface Transaction {
   // The owner's own note, saved through a confirmed agent proposal
   note?: string | null
   owed: OwedInfo | null
+  // The saved trip this payment belongs to, if any
+  trip?: string | null
 }
 
 interface ApiResponse {
+  trips?: { key: string; name: string }[]
   transactions: Transaction[]
   total: number
   page: number
@@ -76,6 +79,10 @@ function TransactionsView() {
   )
   const [bank, setBank] = useState<string>(
     () => searchParams.get("bank") ?? "all"
+  )
+  // A saved trip's key; its payments are shown whatever the month
+  const [trip, setTrip] = useState<string>(
+    () => searchParams.get("trip") ?? "all"
   )
   const [review, setReview] = useState<string | null>(() => {
     const value = searchParams.get("review")
@@ -146,9 +153,10 @@ function TransactionsView() {
     if (category !== "all") params.set("category", category)
     if (bank !== "all") params.set("bank", bank)
     if (review) params.set("review", review)
+    if (trip !== "all") params.set("trip", trip)
     const query = params.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-  }, [month, category, bank, review, pathname, router])
+  }, [month, category, bank, review, trip, pathname, router])
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -157,6 +165,7 @@ function TransactionsView() {
     if (category !== "all") params.set("category", category)
     if (bank !== "all") params.set("bank", bank)
     if (review) params.set("review", review)
+    if (trip !== "all") params.set("trip", trip)
     params.set("page", String(page))
     params.set("pageSize", "50")
 
@@ -170,7 +179,7 @@ function TransactionsView() {
     } finally {
       setLoading(false)
     }
-  }, [month, category, bank, review, page])
+  }, [month, category, bank, review, trip, page])
 
   useEffect(() => {
     fetchTransactions()
@@ -179,7 +188,7 @@ function TransactionsView() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [month, category, bank, review])
+  }, [month, category, bank, review, trip])
 
   async function handleCategoryChange(id: string, newCategory: string) {
     setUpdatingId(id)
@@ -562,7 +571,35 @@ function TransactionsView() {
             ))}
           </SelectContent>
         </Select>
+
+        {(data?.trips?.length ?? 0) > 0 && (
+          <Select
+            value={trip}
+            onValueChange={setTrip}
+            disabled={recategorizing}
+          >
+            <SelectTrigger
+              aria-label="Trip"
+              className="bg-zinc-900 border-zinc-700 w-36 text-sm"
+            >
+              <SelectValue placeholder="Trip" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-800 border-zinc-700">
+              <SelectItem value="all">All payments</SelectItem>
+              {data!.trips!.map((t) => (
+                <SelectItem key={t.key} value={t.key}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
+      {trip !== "all" && month !== "all" && (
+        <p className="text-xs text-zinc-500">
+          Showing the whole trip; the month filter doesn’t apply to it.
+        </p>
+      )}
 
       {loading && (
         <div className="space-y-1">
@@ -708,6 +745,12 @@ function TransactionsView() {
                         {t.is_manual && (
                           <span className="text-[10px] text-zinc-500 font-medium">
                             manual
+                          </span>
+                        )}
+                        {t.trip && (
+                          <span className="text-[10px] text-violet-300 font-medium min-w-0 truncate">
+                            <span aria-hidden="true">✈ </span>
+                            {t.trip}
                           </span>
                         )}
                         {t.owed && (

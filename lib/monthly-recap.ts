@@ -6,6 +6,7 @@
  * Nothing is tagged by hand: groups come from the existing categories.
  */
 import { and, gte, lte } from "drizzle-orm"
+import { tripLabel, tripsByTransaction } from "./agent/trip-spending"
 import { budgetStatus, type BudgetStatus } from "./budgets"
 import { classifyCashFlow, summarizeCashFlow } from "./cash-flow"
 import { LATER_BILL_PATTERN, median, payeeOf } from "./daily-message"
@@ -122,6 +123,8 @@ export type MonthlyRecap = {
   oneOffs: { date: string; payee: string; amount: number }[]
   laterBills: number
   lastMonth: { label: string; total: number }
+  // Spending this month on saved trips (part of total), largest first
+  trips: { name: string; total: number }[]
   // Each budget at the end of the month (today's limits)
   budgets: BudgetStatus[]
   groups: {
@@ -144,6 +147,18 @@ export async function buildMonthlyRecap(month: string): Promise<MonthlyRecap> {
       .where(and(gte(transactions.date, from), lte(transactions.date, to)))
   )
   const total = summarizeCashFlow(monthRows).spend
+  const inTrips = await tripsByTransaction()
+  const tripTotals = new Map<string, number>()
+  for (const row of monthRows) {
+    const name = inTrips.get(row.id)
+    if (!name) continue
+    const c = classifyCashFlow(row)
+    if (!c.countsAsSpend) continue
+    tripTotals.set(
+      name,
+      (tripTotals.get(name) ?? 0) + Math.abs(c.effectiveAmount)
+    )
+  }
 
   // The three months before, for what's usual
   const history: Spend[][] = []
@@ -263,6 +278,9 @@ export async function buildMonthlyRecap(month: string): Promise<MonthlyRecap> {
         )
       ).spend,
     },
+    trips: [...tripTotals]
+      .map(([name, t]) => ({ name, total: Math.round(t * 100) / 100 }))
+      .sort((a, b) => b.total - a.total),
     // The end of the month's last day in Singapore: the whole month counted
     budgets: await budgetStatus(new Date(`${to}T23:59:59+08:00`)),
     groups,
@@ -292,6 +310,10 @@ export function formatMonthlyRecap(r: MonthlyRecap): string {
         : "")
   )
 
+  if (r.trips.length)
+    lines.push(
+      `Trips (in that total): ${r.trips.map((t) => `${tripLabel(t.name)} ${sgd.format(t.total)}`).join(" · ")}`
+    )
   const change = r.total - r.lastMonth.total
   if (r.lastMonth.total > 0)
     lines.push(

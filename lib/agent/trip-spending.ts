@@ -89,6 +89,47 @@ export async function listTrips(): Promise<Trip[]> {
     .orderBy(sql`${trips.date_from} desc`)
 }
 
+/**
+ * Every payment that belongs to a trip, as transaction id → trip name: made
+ * abroad between its dates and not left out, or added to it. For the
+ * Transactions page and the monthly review. A payment in two trips gets
+ * the later one.
+ */
+export async function tripsByTransaction(): Promise<Map<string, string>> {
+  const saved = await listTrips()
+  const byId = new Map<string, string>()
+  for (const trip of [...saved].reverse()) {
+    const marks = await db
+      .select()
+      .from(tripPayments)
+      .where(eq(tripPayments.trip_key, trip.key))
+    const leftOut = new Set(
+      marks.filter((m) => !m.included).map((m) => m.transaction_id)
+    )
+    const rows = await db
+      .select({
+        id: transactions.id,
+        description: transactions.description,
+        currency: transactions.currency,
+      })
+      .from(transactions)
+      .where(
+        and(
+          gte(transactions.date, trip.date_from),
+          lte(transactions.date, trip.date_to)
+        )
+      )
+    for (const row of rows) {
+      const where = countryOf(row)
+      if (!where || leftOut.has(row.id)) continue
+      if (trip.country && where !== trip.country) continue
+      byId.set(row.id, trip.name)
+    }
+    for (const m of marks) if (m.included) byId.set(m.transaction_id, trip.name)
+  }
+  return byId
+}
+
 /** The owner named a trip that isn't saved; the message goes to the agent. */
 export class TripError extends Error {}
 

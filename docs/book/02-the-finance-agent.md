@@ -308,3 +308,11 @@ After that, “How much did Korea cost?” needs no dates: the agent knows your 
 **How we checked.** A test saves a trip, adds a flight and a cash entry, leaves out a taxi, checks the total ($584.96 − $14.79 + $780 + $1,000), the refusals, how the change log reads, and undo for each kind. Agent tests cover the new tools and the saved-trips list.
 
 **Needs** migration 0013 on the live database before it's merged.
+
+## Ticket 39, part two: Trips in the app (2026-10-31)
+
+**What we built.** On the Transactions page, once you have a saved trip, there's a trip filter next to the bank filter. Pick “Korea” and you see every payment of the trip, including a flight paid months before, whatever month is chosen. The link keeps the filter, so you can bookmark it. Each payment that belongs to a trip shows a small ✈ label with the trip's name.
+
+The monthly review on the 1st now says how much of the month was trips: “Trips (in that total): Korea trip $1,560”, so a trip month doesn't look like ordinary overspending.
+
+**How we checked.** Tests for which trip each payment belongs to (a Singapore payment and a Japan payment aren't in the Korea trip; an added flight is), the page's filter, and the review line. In the browser at phone width, the filter and labels show with no sideways scrolling, and the existing Transactions and dashboard browser tests pass.
