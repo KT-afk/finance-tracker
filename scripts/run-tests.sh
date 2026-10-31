@@ -55,6 +55,7 @@ run_test "monthly-recap"           "$ROOT/tests/monthly-recap.test.ts"
 run_test "weekly-review"           "$ROOT/tests/weekly-review.test.ts"
 run_test "savings-review"          "$ROOT/tests/savings-review.test.ts"
 run_test "trip-spending"           "$ROOT/tests/trip-spending.test.ts"
+run_test "cash-payment"            "$ROOT/tests/cash-payment.test.ts"
 run_test "uob-upload-confirm-flow" "$ROOT/tests/uob-upload-confirm-flow.test.ts" \
   "UOB_MAY_PDF=${UOB_MAY_PDF:-}" \
   "OCBC_MAY_PDF=${OCBC_MAY_PDF:-}"

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm"
 import type { BatchItem } from "drizzle-orm/batch"
 import { BUDGET_CATEGORIES } from "../budgets"
@@ -33,8 +33,11 @@ import {
   describeShare,
   encodeShare,
   money,
+  decodeCash,
   decodeTrip,
+  describeCash,
   describeTrip,
+  encodeCash,
   encodeTrip,
   type TripValue,
 } from "./proposal-format"
@@ -186,6 +189,8 @@ export async function decideProposal(
   if (proposal.kind === "budget")
     return applyBudget(proposal, settle, lost, now)
   if (proposal.kind === "trip") return applyTrip(proposal, settle, lost, now)
+  if (proposal.kind === "cash_payment")
+    return applyCashPayment(proposal, settle, lost, now)
   if (proposal.kind === "trip_payment")
     return applyTripPayment(proposal, settle, lost, now)
   return applyRecategorise(proposal, settle, lost, now)
@@ -1386,6 +1391,173 @@ async function logFirst(
       write,
     ])
     entry = rows[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
+}
+
+// ---- Cash payments: spending that no bank statement will show ----
+
+const MAX_CASH = 10_000
+const MAX_CASH_TEXT = 80
+
+/**
+ * Store a proposal to add a cash payment (it goes in as a hand-entered
+ * payment with no bank), optionally adding it to a saved trip.
+ */
+export async function proposeCashPayment(input: {
+  date: string
+  amount: number
+  category: string
+  description: string
+  trip: string | null
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<Proposal> {
+  const description = input.description.replace(/\s+/g, " ").trim()
+  if (description.length < 2 || description.length > MAX_CASH_TEXT)
+    throw new ProposalError(
+      `Describe it in 2 to ${MAX_CASH_TEXT} characters, e.g. Korea trip cash`
+    )
+  if (!Number.isFinite(input.amount) || input.amount <= 0)
+    throw new ProposalError("The amount must be more than 0")
+  if (input.amount > MAX_CASH)
+    throw new ProposalError(
+      `That is more than ${money(MAX_CASH)}; add it on the Transactions page instead`
+    )
+  if (!BUDGET_CATEGORIES.includes(input.category))
+    throw new ProposalError("Use a spending category")
+  const today = new Date(input.now.getTime() + 8 * 3_600_000)
+    .toISOString()
+    .slice(0, 10)
+  if (input.date > today) throw new ProposalError("The date is in the future")
+  let tripKeyValue: string | null = null
+  let tripName = ""
+  if (input.trip) {
+    const trip = await findTrip(input.trip)
+    if (!trip)
+      throw new ProposalError(
+        `No saved trip called “${input.trip}”; propose_trip first, or leave trip empty`
+      )
+    tripKeyValue = trip.key
+    tripName = trip.name
+  }
+  const after = encodeCash({
+    date: input.date,
+    amount: Math.round(input.amount * 100) / 100,
+    category: input.category,
+    description,
+    trip: tripKeyValue,
+  })
+  const summary =
+    `New cash payment: ${describeCash(after)}, “${description}”` +
+    (tripKeyValue ? `, added to the ${tripLabel(tripName)}` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "cash_payment",
+    // The payment's id, chosen now so the log and undo can name it
+    target: randomUUID(),
+    before: "",
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyCashPayment(
+  proposal: ProposalRow,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message: "Nothing changed: that payment already exists.",
+  }
+  if (!(await settle("confirmed"))) return lost
+  const cash = decodeCash(proposal.after)!
+  const stamp = now.toISOString()
+  const notThere = sql`not exists (select 1 from ${transactions} where ${transactions.id} = ${proposal.target})`
+  const fromProposal = and(eq(agentProposals.id, proposal.id), notThere)
+  // Log row, payment and trip mark, all on the same condition
+  let entry: { id: number } | undefined
+  try {
+    const [rows] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${stamp}`.as("created_at"),
+              kind: sql`'cash_payment'`.as("kind"),
+              target: sql`${proposal.target}`.as("target"),
+              before: sql`''`.as("before"),
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(agentProposals)
+            .where(fromProposal)
+        )
+        .returning({ id: changeLog.id }),
+      ...(cash.trip
+        ? [
+            db.insert(tripPayments).select(
+              db
+                .select({
+                  trip_key: sql`${cash.trip}`.as("trip_key"),
+                  transaction_id: sql`${proposal.target}`.as("transaction_id"),
+                  included: sql`1`.as("included"),
+                  updated_at: sql`${stamp}`.as("updated_at"),
+                })
+                .from(agentProposals)
+                .where(
+                  and(
+                    fromProposal,
+                    sql`exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`
+                  )
+                )
+            ),
+          ]
+        : []),
+      // The id is the table's key, so this inserts only when the payment
+      // isn't there: the same condition as the log row
+      db
+        .insert(transactions)
+        .values({
+          id: proposal.target,
+          date: cash.date,
+          description: cash.description,
+          amount: -cash.amount,
+          bank: OFF_BANK,
+          category: cash.category,
+          is_corrected: true,
+          hash: "manual:" + proposal.target,
+          uploaded_at: stamp,
+        })
+        .onConflictDoNothing(),
+    ] as unknown as Parameters<typeof db.batch>[0])
+    entry = (rows as { id: number }[])[0]
   } catch (error) {
     await reopenIfNothingWritten(proposal)
     throw error

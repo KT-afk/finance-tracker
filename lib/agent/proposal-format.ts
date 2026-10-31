@@ -78,3 +78,27 @@ export function describeTrip(value: string) {
 export function describeTripMark(value: string) {
   return value === "in" ? "added" : value === "out" ? "left out" : "neither"
 }
+
+/** A cash payment the agent adds, as stored in proposals and the log. */
+export type CashValue = {
+  date: string
+  amount: number // positive: what was spent
+  category: string
+  description: string
+  trip: string | null // a saved trip's key to add it to
+}
+export function encodeCash(cash: CashValue | null) {
+  return cash ? JSON.stringify(cash) : ""
+}
+export function decodeCash(value: string): CashValue | null {
+  return value ? (JSON.parse(value) as CashValue) : null
+}
+/** How a cash payment reads: "$1,000 cash, Travel, 26 Apr 2026", or "none". */
+export function describeCash(value: string) {
+  // Undo can report a plain reason instead of a stored value
+  if (value && !value.startsWith("{")) return value
+  const cash = decodeCash(value)
+  return cash
+    ? `${money(cash.amount)} cash, ${cash.category}, ${day(cash.date)}`
+    : "none"
+}
