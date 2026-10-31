@@ -13,3 +13,7 @@ Owner request (2026-10-31): continue with trips after the small version (ticket 
 - [x] Tests: proposing, confirming, totals with added and left-out payments, refusals, log wording, undo
 
 Part two (not started): a trip label and filter on the Transactions page; trips shown apart in monthly reviews and optionally left out of the savings review's averages.
+
+Review (2026-10-31), fixed: trip writes put the change-log row first, on the same condition as the write, using the proposal's own row as the source (the first version keyed the log row on a timestamp, which could log a write that didn't happen); a payment can only be added to a trip that still exists, checked in the write; a trip change compares every field, name included; `trip_spending` returns `total_abroad`, `total_added` and `per_day_abroad`, names added payments that aren't spending, and no longer lists “added” as a country; the change log shows the trip's name (“Korea trip: …”); the spec lists trips as allowed changes.
+
+Known: undoing a trip's creation keeps its added and left-out payments, so saving a trip with the same name again brings them back. No way to delete a trip except undo.

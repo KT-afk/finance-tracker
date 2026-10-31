@@ -32,8 +32,14 @@ export type TripSpending = {
   first_payment: string | null
   last_payment: string | null
   biggest: Payment[]
-  // Added by the owner (flights, hotels, cash), and how many were left out
+  // The two parts of total: payments abroad in the dates, and payments the
+  // owner added (flights, hotels, cash); per_day_abroad is the first per day
+  total_abroad: number
+  total_added: number
+  per_day_abroad: number
   added: Payment[]
+  // Added, but not spending (a refund, a transfer), so not counted
+  added_not_counted: string[]
   left_out: number
 }
 
@@ -63,8 +69,17 @@ export async function findTrip(name: string): Promise<Trip | undefined> {
   return row
 }
 
+export function cleanTripName(name: string) {
+  return name.replace(/\s+/g, " ").trim()
+}
+
 export function tripKey(name: string) {
-  return name.replace(/\s+/g, " ").trim().toLowerCase()
+  return cleanTripName(name).toLowerCase()
+}
+
+/** “Korea trip”, or the name as it is when it already says trip. */
+export function tripLabel(name: string) {
+  return /\btrip$/i.test(name) ? name : `${name} trip`
 }
 
 export async function listTrips(): Promise<Trip[]> {
@@ -134,8 +149,10 @@ export async function tripSpending(
   const found: Payment[] = []
   const added: Payment[] = []
   const counted = new Set<string>()
+  const notCounted: string[] = []
   let total = 0
   let gross = 0
+  let abroadTotal = 0
   const count = (
     row: (typeof inRange)[number],
     where: string | null,
@@ -143,15 +160,20 @@ export async function tripSpending(
   ) => {
     if (counted.has(row.id)) return
     const c = classifyCashFlow(row)
-    if (!c.countsAsSpend) return
+    if (!c.countsAsSpend) {
+      if (!where) notCounted.push(`${displayName(row)} on ${row.date}`)
+      return
+    }
     counted.add(row.id)
     const share = Math.abs(c.effectiveAmount)
     total += share
     gross += Math.abs(row.amount)
     byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + share)
-    const label = where ?? "added"
-    const k = byCountry.get(label) ?? { total: 0, count: 0 }
-    byCountry.set(label, { total: k.total + share, count: k.count + 1 })
+    if (where) {
+      abroadTotal += share
+      const k = byCountry.get(where) ?? { total: 0, count: 0 }
+      byCountry.set(where, { total: k.total + share, count: k.count + 1 })
+    }
     list.push({
       date: row.date,
       name: displayName(row),
@@ -199,7 +221,11 @@ export async function tripSpending(
     biggest: [...found, ...added]
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5),
+    total_abroad: round(abroadTotal),
+    total_added: round(total - abroadTotal),
+    per_day_abroad: round(abroadTotal / days),
     added: added.sort((a, b) => a.date.localeCompare(b.date)),
+    added_not_counted: notCounted,
     left_out: leftOut.size,
   }
 }
@@ -208,7 +234,7 @@ export const tripSpendingTool = {
   name: "trip_spending",
   strict: true,
   description:
-    "Spending on a trip. Give trip (a saved trip's name), or date_from and date_to for spending abroad between two dates: payments in a foreign currency or whose bank text ends in a country code other than SG (e.g. SEOUL KR); optional country is a two-letter code (KR, JP, MY…). A saved trip also counts the payments the owner added to it (added: flights, hotels, cash) and leaves out the ones they removed. Returns the owner's spending total and gross_total, per_day, by_category, by_country, the first and last payment dates abroad, and the 5 biggest payments. Without a saved trip, flights and hotels paid from Singapore, and cash, are never included.",
+    "Spending on a trip. Give trip (a saved trip's name), or date_from and date_to for spending abroad between two dates: payments in a foreign currency or whose bank text ends in a country code other than SG (e.g. SEOUL KR); optional country is a two-letter code (KR, JP, MY…). A saved trip also counts the payments the owner added to it (added: flights, hotels, cash) and leaves out the ones they removed. Returns the owner's spending total (= total_abroad + total_added) and gross_total, per_day and per_day_abroad, by_category, by_country, the first and last payment dates abroad, and the 5 biggest payments. Without a saved trip, flights and hotels paid from Singapore, and cash, are never included.",
   input_schema: {
     type: "object" as const,
     properties: {

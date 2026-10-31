@@ -32,6 +32,7 @@ import {
   describeTripMark,
 } from "./proposal-format"
 import { ProposalError, splitTripTarget } from "./proposals"
+import { tripLabel } from "./trip-spending"
 
 type Entry = typeof changeLog.$inferSelect
 
@@ -74,6 +75,10 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
         .where(inArray(transactions.id, txIds))
     : []
   const byId = new Map(txs.map((t) => [t.id, t]))
+  // Trip names as saved, for entries that only carry the lowercased key
+  const tripNames = entries.some((e) => e.kind === "trip_payment")
+    ? new Map((await db.select().from(trips)).map((t) => [t.key, t.name]))
+    : new Map<string, string>()
   return entries.map((e) => {
     const tx = byId.get(
       e.kind === "trip_payment" ? splitTripTarget(e.target)[1] : e.target
@@ -92,7 +97,7 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
               : e.kind === "trip"
                 ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
                 : e.kind === "trip_payment"
-                  ? `${splitTripTarget(e.target)[0]} trip: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
+                  ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
                   : tx
                     ? describePayment(tx)
                     : "a transaction that no longer exists",

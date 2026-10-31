@@ -140,3 +140,7 @@ A tap on a Telegram button changes the data but never appears in the chat, so th
 ## 30. Try a new lookup on the real data before calling it done
 
 The trip lookup passed its tests but found $2,053 of Korea spending, not $2,520. On real data, some bank lines end with the amount in won after the country code, which the made-up test data didn't have. A read-only run on the live data caught it in a minute. For anything that reads bank text, compare against a count done by hand on real rows.
+
+## 31. A timestamp doesn't prove your write happened
+
+The first version of trips found its change-log row by “the row this write stamped with this time”. If anything else wrote the same row at the same millisecond, the log would record our change even when our write did nothing. Review caught it. The safe shape, already used by undo: put the log row first in the batch, on exactly the condition the write uses, so both happen or neither does.

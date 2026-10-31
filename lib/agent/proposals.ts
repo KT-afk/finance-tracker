@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
-import { and, desc, eq, gte, sql } from "drizzle-orm"
+import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm"
+import type { BatchItem } from "drizzle-orm/batch"
 import { BUDGET_CATEGORIES } from "../budgets"
 import { db } from "../db"
 import {
@@ -37,7 +38,13 @@ import {
   encodeTrip,
   type TripValue,
 } from "./proposal-format"
-import { findTrip, tripKey, tripSpending } from "./trip-spending"
+import {
+  cleanTripName,
+  findTrip,
+  tripKey,
+  tripLabel,
+  tripSpending,
+} from "./trip-spending"
 import type { Decision, DecisionOutcome, Proposal } from "./proposal-types"
 
 /** Why a proposal can't be made; the message goes back to the agent. */
@@ -1125,7 +1132,7 @@ export async function proposeTrip(input: {
   request: string
   now: Date
 }): Promise<Proposal> {
-  const name = input.name.replace(/\s+/g, " ").trim()
+  const name = cleanTripName(input.name)
   if (!name || name.length > MAX_TRIP_NAME || name.includes("|"))
     throw new ProposalError(
       `Give the trip a short name, up to ${MAX_TRIP_NAME} characters`
@@ -1181,30 +1188,33 @@ async function applyTrip(
   const stamp = now.toISOString()
   const after = decodeTrip(proposal.after)!
   const before = decodeTrip(proposal.before)
-  const write = before
-    ? db
-        .update(trips)
-        .set({ ...after, updated_at: stamp })
-        .where(
-          and(
-            eq(trips.key, proposal.target),
-            eq(trips.date_from, before.date_from),
-            eq(trips.date_to, before.date_to),
-            sql`${trips.country} is ${before.country}`
-          )
-        )
-    : db
-        .insert(trips)
-        .values({ key: proposal.target, ...after, updated_at: stamp })
-        .onConflictDoNothing()
-  return logged(
+  // The trip still exactly as it was (every field), or still not saved
+  const stillBefore = before
+    ? and(
+        eq(trips.key, proposal.target),
+        eq(trips.name, before.name),
+        eq(trips.date_from, before.date_from),
+        eq(trips.date_to, before.date_to),
+        sql`${trips.country} is ${before.country}`
+      )
+    : undefined
+  const condition = stillBefore
+    ? sql`exists (select 1 from ${trips} where ${stillBefore})`
+    : sql`not exists (select 1 from ${trips} where ${trips.key} = ${proposal.target})`
+  return logFirst(
     proposal,
     conflict,
     stamp,
-    write,
-    trips,
-    trips.key,
-    trips.updated_at
+    condition,
+    stillBefore
+      ? db
+          .update(trips)
+          .set({ ...after, updated_at: stamp })
+          .where(stillBefore)
+      : db
+          .insert(trips)
+          .values({ key: proposal.target, ...after, updated_at: stamp })
+          .onConflictDoNothing()
   )
 }
 
@@ -1299,59 +1309,60 @@ async function applyTripPayment(
   if (!(await settle("confirmed"))) return lost
   const stamp = now.toISOString()
   const included = proposal.after === "in"
-  const write = proposal.before
-    ? db
-        .update(tripPayments)
-        .set({ included, updated_at: stamp })
-        .where(
-          and(
-            eq(tripPayments.trip_key, key),
-            eq(tripPayments.transaction_id, transactionId),
-            eq(tripPayments.included, proposal.before === "in")
-          )
-        )
-    : db
-        .insert(tripPayments)
-        .values({
-          trip_key: key,
-          transaction_id: transactionId,
-          included,
-          updated_at: stamp,
-        })
-        .onConflictDoNothing()
-  return logged(
+  // The trip still saved, and the payment's mark still as it was
+  const tripExists = sql`exists (select 1 from ${trips} where ${trips.key} = ${key})`
+  const markIs = and(
+    eq(tripPayments.trip_key, key),
+    eq(tripPayments.transaction_id, transactionId)
+  )
+  const stillBefore = proposal.before
+    ? and(markIs, eq(tripPayments.included, proposal.before === "in"))
+    : undefined
+  const condition = and(
+    tripExists,
+    stillBefore
+      ? sql`exists (select 1 from ${tripPayments} where ${stillBefore})`
+      : sql`not exists (select 1 from ${tripPayments} where ${markIs})`
+  )!
+  return logFirst(
     proposal,
     conflict,
     stamp,
-    write,
-    tripPayments,
-    sql<string>`${tripPayments.trip_key} || '|' || ${tripPayments.transaction_id}`,
-    tripPayments.updated_at
+    condition,
+    stillBefore
+      ? db
+          .update(tripPayments)
+          .set({ included, updated_at: stamp })
+          .where(and(stillBefore, tripExists))
+      : db.insert(tripPayments).select(
+          db
+            .select({
+              trip_key: sql`${key}`.as("trip_key"),
+              transaction_id: sql`${transactionId}`.as("transaction_id"),
+              included: sql`${included ? 1 : 0}`.as("included"),
+              updated_at: sql`${stamp}`.as("updated_at"),
+            })
+            .from(agentProposals)
+            .where(and(eq(agentProposals.id, proposal.id), condition))
+        )
   )
 }
 
 /**
- * Run a conditional write and its change-log row in one batch; the log row
- * comes from the row the write stamped, so it exists only if the write
- * happened (book lesson 22).
+ * The change-log row, then the write, in one batch, both on the same
+ * condition (book lessons 22 and 26). The proposal's own row is the
+ * one-row source for the log row, so it exists only if the condition holds.
  */
-async function logged(
+async function logFirst(
   proposal: ProposalRow,
   conflict: Result,
   stamp: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  write: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  target: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updatedAt: any
+  condition: SQL,
+  write: BatchItem<"sqlite">
 ): Promise<Result> {
   let entry: { id: number } | undefined
   try {
-    const [, rows] = await db.batch([
-      write,
+    const [rows] = await db.batch([
       db
         .insert(changeLog)
         .select(
@@ -1360,7 +1371,7 @@ async function logged(
               id: sql`null`.as("id"),
               created_at: sql`${stamp}`.as("created_at"),
               kind: sql`${proposal.kind}`.as("kind"),
-              target: sql`${target}`.as("target"),
+              target: sql`${proposal.target}`.as("target"),
               before: sql`${proposal.before}`.as("before"),
               after: sql`${proposal.after}`.as("after"),
               source: sql`${proposal.source}`.as("source"),
@@ -1368,14 +1379,13 @@ async function logged(
               proposal_id: sql`${proposal.id}`.as("proposal_id"),
               reverses_id: sql`null`.as("reverses_id"),
             })
-            .from(table)
-            .where(
-              and(sql`${target} = ${proposal.target}`, eq(updatedAt, stamp))
-            )
+            .from(agentProposals)
+            .where(and(eq(agentProposals.id, proposal.id), condition))
         )
         .returning({ id: changeLog.id }),
+      write,
     ])
-    entry = (rows as { id: number }[])[0]
+    entry = rows[0]
   } catch (error) {
     await reopenIfNothingWritten(proposal)
     throw error

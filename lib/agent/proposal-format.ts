@@ -74,7 +74,7 @@ export function describeTrip(value: string) {
     (trip.country ? ` (${trip.country})` : "")
   )
 }
-/** A payment's place in a trip: "added", "left out", or "" for neither. */
+/** A payment's place in a trip ("in", "out" or ""): added, left out, or neither. */
 export function describeTripMark(value: string) {
   return value === "in" ? "added" : value === "out" ? "left out" : "neither"
 }

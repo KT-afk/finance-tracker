@@ -210,6 +210,12 @@ async function main() {
     assert.equal(trip.total, 2350.17)
     assert.equal(trip.count, 5)
     assert.equal(trip.left_out, 1)
+    assert.deepEqual([trip.total_abroad, trip.total_added], [570.17, 1780])
+    assert.equal(trip.per_day_abroad, 31.68)
+    assert.deepEqual(
+      trip.by_country.map((c) => c.country),
+      ["KR"]
+    )
     assert.deepEqual(
       trip.added.map((a) => [a.date, a.amount]),
       [
@@ -288,19 +294,19 @@ async function main() {
         ],
         [
           "trip_payment",
-          "korea trip: Kakao Mobility 16448830 KR $14.79 on 8 May 2026",
+          "Korea trip: Kakao Mobility 16448830 KR $14.79 on 8 May 2026",
           "neither",
           "left out",
         ],
         [
           "trip_payment",
-          "korea trip: Korea trip cash $1,000 on 26 Apr 2026",
+          "Korea trip: Korea trip cash $1,000 on 26 Apr 2026",
           "neither",
           "added",
         ],
         [
           "trip_payment",
-          "korea trip: SINGAPORE AIRLINES SINGAPORE $780 on 2 Mar 2026",
+          "Korea trip: SINGAPORE AIRLINES SINGAPORE $780 on 2 Mar 2026",
           "neither",
           "added",
         ],
@@ -326,6 +332,66 @@ async function main() {
     const [undoEntry] = await listChanges({ limit: 1 })
     assert.equal((await undoChange(undoEntry.id, ctx)).outcome, "undone")
     assert.equal((await tripSpending({ trip: "Korea" })).trip, "Korea")
+
+    // A refund added by mistake isn't counted, and is named
+    await db.insert(transactions).values({
+      id: "refund-sg",
+      date: "2026-05-20",
+      description: "MADE UP AIRLINE REFUND",
+      amount: 50,
+      bank: "uob",
+      category: "Shopping",
+      is_corrected: false,
+      hash: "r1",
+      uploaded_at: "x",
+    })
+    await confirm(
+      proposeTripPayment({
+        trip: "Korea",
+        transactionId: "refund-sg",
+        include: true,
+        source: "web",
+        request: "x",
+        now,
+      })
+    )
+    const withRefund = await tripSpending({ trip: "Korea" })
+    assert.equal(withRefund.total, 2364.96)
+    assert.deepEqual(withRefund.added_not_counted, [
+      "MADE UP AIRLINE REFUND on 2026-05-20",
+    ])
+
+    // A mark can't be added to a trip that's gone: the write itself checks
+    // (the trip is removed between the proposal and the tap)
+    const { trips: tripsTable } = await import("../lib/schema")
+    const { eq } = await import("drizzle-orm")
+    const late = await proposeTripPayment({
+      trip: "Korea",
+      transactionId: "bbq",
+      include: false,
+      source: "web",
+      request: "x",
+      now,
+    })
+    const savedRow = (await db.select().from(tripsTable))[0]
+    const realBatch = db.batch.bind(db)
+    ;(db as { batch: unknown }).batch = async (
+      ...args: Parameters<typeof db.batch>
+    ) => {
+      await db.delete(tripsTable).where(eq(tripsTable.key, "korea"))
+      return realBatch(...args)
+    }
+    try {
+      assert.equal(
+        (await decideProposal(late.id, "confirm", now)).outcome,
+        "conflict"
+      )
+    } finally {
+      ;(db as { batch: unknown }).batch = realBatch
+    }
+    // Nothing was written: the trip comes back with no mark for the barbecue
+    await db.insert(tripsTable).values(savedRow)
+    assert.equal((await tripSpending({ trip: "Korea" })).left_out, 0)
 
     console.log("trip spending test passed")
   } finally {
