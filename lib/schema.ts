@@ -1,4 +1,10 @@
-import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core"
+import {
+  sqliteTable,
+  text,
+  real,
+  integer,
+  primaryKey,
+} from "drizzle-orm/sqlite-core"
 
 export const BANKS = [
   "ocbc",
@@ -247,6 +253,8 @@ export const CHANGE_KINDS = [
   "rule",
   "share",
   "budget",
+  "trip",
+  "trip_payment",
 ] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
@@ -290,3 +298,27 @@ export const budgets = sqliteTable("budgets", {
   monthly_limit: real("monthly_limit").notNull(),
   updated_at: text("updated_at").notNull(),
 })
+
+// A named trip (lib/trips.ts): its payments are those made abroad between
+// the dates, plus payments added to it (flights, hotels, cash), minus
+// payments left out. key is the lowercased name.
+export const trips = sqliteTable("trips", {
+  key: text("key").primaryKey(),
+  name: text("name").notNull(),
+  date_from: text("date_from").notNull(),
+  date_to: text("date_to").notNull(),
+  country: text("country"), // two-letter code, or null for any country
+  updated_at: text("updated_at").notNull(),
+})
+
+// A payment added to a trip (included) or left out of it (not included)
+export const tripPayments = sqliteTable(
+  "trip_payments",
+  {
+    trip_key: text("trip_key").notNull(),
+    transaction_id: text("transaction_id").notNull(),
+    included: integer("included", { mode: "boolean" }).notNull(),
+    updated_at: text("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.trip_key, t.transaction_id] })]
+)

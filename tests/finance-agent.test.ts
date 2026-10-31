@@ -167,6 +167,8 @@ async function main() {
       "get_balances",
       "savings_review",
       "trip_spending",
+      "propose_trip",
+      "propose_trip_payment",
       "propose_recategorise",
       "propose_memory",
       "propose_note",
@@ -811,11 +813,19 @@ async function main() {
     },
     tripSpending: async (filters) => {
       tripCalls.push(filters)
-      if (filters.date_from === "2026-06-01")
+      if ("date_from" in filters && filters.date_from === "2026-06-01")
         throw new Error("private database details")
       return {
-        date_from: filters.date_from,
-        date_to: filters.date_to,
+        trip: null,
+        date_from: "2026-04-26",
+        date_to: "2026-05-13",
+        country: null,
+        added: [],
+        added_not_counted: [],
+        total_abroad: 0,
+        total_added: 0,
+        per_day_abroad: 0,
+        left_out: 0,
         days: 18,
         count: 0,
         total: 0,
@@ -843,6 +853,96 @@ async function main() {
   assert.match(
     JSON.stringify(tripReqs[0].system),
     /never a text search for the country name/
+  )
+
+  // Trips: saving one and adding a payment are proposals on strict input,
+  // and saved trips are listed with every question
+  const tripPropReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const tripProps: unknown[] = []
+  const withTrip = await runFinanceAgent(
+    "save my korea trip and add the flight",
+    {
+      loadMemories: async () => [],
+      listTrips: async () => [
+        {
+          key: "japan",
+          name: "Japan",
+          date_from: "2025-12-01",
+          date_to: "2025-12-08",
+          country: "JP",
+          updated_at: "x",
+        },
+      ],
+      createMessage: async (params) => {
+        tripPropReqs.push(structuredClone(params))
+        if (tripPropReqs.length === 1)
+          return response("tool_use", [
+            call(
+              "t1",
+              {
+                name: "Korea",
+                date_from: "2026-04-26",
+                date_to: "2026-05-13",
+                country: "kr",
+              },
+              "propose_trip"
+            ),
+            call(
+              "t2",
+              {
+                name: "Korea",
+                date_from: "2026-05-13",
+                date_to: "2026-04-26",
+                country: "KR",
+              },
+              "propose_trip"
+            ),
+            call(
+              "t3",
+              { trip: "Korea", transaction_id: "flight", include: true },
+              "propose_trip_payment"
+            ),
+            call(
+              "t4",
+              { trip: "Korea", transaction_id: "flight", include: "yes" },
+              "propose_trip_payment"
+            ),
+          ])
+        return done
+      },
+      proposeTrip: async (input) => {
+        tripProps.push([
+          "trip",
+          input.name,
+          input.date_from,
+          input.date_to,
+          input.country,
+        ])
+        return { id: "trip1", summary: "Trip" }
+      },
+      proposeTripPayment: async (input) => {
+        tripProps.push(["mark", input.trip, input.transactionId, input.include])
+        return { id: "mark1", summary: "Add" }
+      },
+    }
+  )
+  assert.deepEqual(tripProps, [
+    ["trip", "Korea", "2026-04-26", "2026-05-13", "KR"],
+    ["mark", "Korea", "flight", true],
+  ])
+  assert.deepEqual(
+    withTrip.proposals.map((p) => p.id),
+    ["trip1", "mark1"]
+  )
+  const tripPropResults = tripPropReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    tripPropResults.map((r) => r.is_error),
+    [undefined, true, undefined, true]
+  )
+  assert.match(
+    JSON.stringify(tripPropReqs[0].system),
+    /Saved trips \(use trip_spending with the name\): Japan, 2025-12-01 to 2025-12-08 \(JP\)\./
   )
 
   // Savings review: strict input, the clock passed through, failures not zero

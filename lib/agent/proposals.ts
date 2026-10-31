@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
-import { and, desc, eq, gte, sql } from "drizzle-orm"
+import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm"
+import type { BatchItem } from "drizzle-orm/batch"
 import { BUDGET_CATEGORIES } from "../budgets"
 import { db } from "../db"
 import {
@@ -9,6 +10,8 @@ import {
   OwedError,
 } from "../owed"
 import {
+  tripPayments,
+  trips,
   agentProposals,
   aiMemory,
   budgets,
@@ -30,7 +33,18 @@ import {
   describeShare,
   encodeShare,
   money,
+  decodeTrip,
+  describeTrip,
+  encodeTrip,
+  type TripValue,
 } from "./proposal-format"
+import {
+  cleanTripName,
+  findTrip,
+  tripKey,
+  tripLabel,
+  tripSpending,
+} from "./trip-spending"
 import type { Decision, DecisionOutcome, Proposal } from "./proposal-types"
 
 /** Why a proposal can't be made; the message goes back to the agent. */
@@ -171,6 +185,9 @@ export async function decideProposal(
   if (proposal.kind === "share") return applyShare(proposal, settle, lost, now)
   if (proposal.kind === "budget")
     return applyBudget(proposal, settle, lost, now)
+  if (proposal.kind === "trip") return applyTrip(proposal, settle, lost, now)
+  if (proposal.kind === "trip_payment")
+    return applyTripPayment(proposal, settle, lost, now)
   return applyRecategorise(proposal, settle, lost, now)
 }
 
@@ -1087,4 +1104,301 @@ export async function recentProposals(now: Date) {
     .orderBy(desc(agentProposals.created_at))
     .limit(10)
   return rows
+}
+
+// ---- Trips: a name and dates, and payments added to or left out of one ----
+
+const MAX_TRIP_NAME = 40
+
+async function currentTrip(key: string) {
+  const trip = await findTrip(key)
+  return trip
+    ? encodeTrip({
+        name: trip.name,
+        date_from: trip.date_from,
+        date_to: trip.date_to,
+        country: trip.country,
+      })
+    : ""
+}
+
+/** Store a proposal to save a trip, or change a saved one's dates. */
+export async function proposeTrip(input: {
+  name: string
+  date_from: string
+  date_to: string
+  country: string | null
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<Proposal> {
+  const name = cleanTripName(input.name)
+  if (!name || name.length > MAX_TRIP_NAME || name.includes("|"))
+    throw new ProposalError(
+      `Give the trip a short name, up to ${MAX_TRIP_NAME} characters`
+    )
+  const after: TripValue = {
+    name,
+    date_from: input.date_from,
+    date_to: input.date_to,
+    country: input.country,
+  }
+  const key = tripKey(name)
+  const before = await currentTrip(key)
+  if (before === encodeTrip(after))
+    throw new ProposalError("That trip is already saved")
+  const found = await tripSpending({
+    date_from: after.date_from,
+    date_to: after.date_to,
+    country: after.country ?? undefined,
+  })
+  const summary =
+    `Trip: ${describeTrip(encodeTrip(after))}: ${found.count} payments abroad, ${money(found.total)}` +
+    (before ? ` (replaces ${describeTrip(before)})` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "trip",
+    target: key,
+    before,
+    after: encodeTrip(after),
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyTrip(
+  proposal: ProposalRow,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message: "Nothing changed: that trip has changed since this was proposed.",
+  }
+  if ((await currentTrip(proposal.target)) !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const stamp = now.toISOString()
+  const after = decodeTrip(proposal.after)!
+  const before = decodeTrip(proposal.before)
+  // The trip still exactly as it was (every field), or still not saved
+  const stillBefore = before
+    ? and(
+        eq(trips.key, proposal.target),
+        eq(trips.name, before.name),
+        eq(trips.date_from, before.date_from),
+        eq(trips.date_to, before.date_to),
+        sql`${trips.country} is ${before.country}`
+      )
+    : undefined
+  const condition = stillBefore
+    ? sql`exists (select 1 from ${trips} where ${stillBefore})`
+    : sql`not exists (select 1 from ${trips} where ${trips.key} = ${proposal.target})`
+  return logFirst(
+    proposal,
+    conflict,
+    stamp,
+    condition,
+    stillBefore
+      ? db
+          .update(trips)
+          .set({ ...after, updated_at: stamp })
+          .where(stillBefore)
+      : db
+          .insert(trips)
+          .values({ key: proposal.target, ...after, updated_at: stamp })
+          .onConflictDoNothing()
+  )
+}
+
+/**
+ * Store a proposal to add a payment to a trip (a flight, a hotel, a cash
+ * entry) or leave one out of it.
+ */
+export async function proposeTripPayment(input: {
+  trip: string
+  transactionId: string
+  include: boolean
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<Proposal> {
+  const trip = await findTrip(input.trip)
+  if (!trip)
+    throw new ProposalError(
+      `No saved trip called “${input.trip}”; propose_trip first`
+    )
+  const [tx] = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, input.transactionId))
+    .limit(1)
+  if (!tx) throw new ProposalError("Transaction not found; search for it first")
+  const target = `${trip.key}|${tx.id}`
+  const before = await currentTripMark(target)
+  const after = input.include ? "in" : "out"
+  if (before === after)
+    throw new ProposalError(
+      input.include
+        ? "It is already added to that trip"
+        : "It is already left out"
+    )
+  const summary = `${input.include ? "Add to" : "Leave out of"} ${trip.name} trip: ${describePayment(tx)}`
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "trip_payment",
+    target,
+    before,
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+/** "in", "out", or "" for a payment neither added to nor left out of a trip. */
+export async function currentTripMark(target: string) {
+  const [key, transactionId] = splitTripTarget(target)
+  const [row] = await db
+    .select({ included: tripPayments.included })
+    .from(tripPayments)
+    .where(
+      and(
+        eq(tripPayments.trip_key, key),
+        eq(tripPayments.transaction_id, transactionId)
+      )
+    )
+    .limit(1)
+  return row ? (row.included ? "in" : "out") : ""
+}
+
+export function splitTripTarget(target: string): [string, string] {
+  const at = target.lastIndexOf("|")
+  return [target.slice(0, at), target.slice(at + 1)]
+}
+
+async function applyTripPayment(
+  proposal: ProposalRow,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: that payment's place in the trip has changed since this was proposed.",
+  }
+  const [key, transactionId] = splitTripTarget(proposal.target)
+  if (
+    !(await findTrip(key)) ||
+    (await currentTripMark(proposal.target)) !== proposal.before
+  ) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const stamp = now.toISOString()
+  const included = proposal.after === "in"
+  // The trip still saved, and the payment's mark still as it was
+  const tripExists = sql`exists (select 1 from ${trips} where ${trips.key} = ${key})`
+  const markIs = and(
+    eq(tripPayments.trip_key, key),
+    eq(tripPayments.transaction_id, transactionId)
+  )
+  const stillBefore = proposal.before
+    ? and(markIs, eq(tripPayments.included, proposal.before === "in"))
+    : undefined
+  const condition = and(
+    tripExists,
+    stillBefore
+      ? sql`exists (select 1 from ${tripPayments} where ${stillBefore})`
+      : sql`not exists (select 1 from ${tripPayments} where ${markIs})`
+  )!
+  return logFirst(
+    proposal,
+    conflict,
+    stamp,
+    condition,
+    stillBefore
+      ? db
+          .update(tripPayments)
+          .set({ included, updated_at: stamp })
+          .where(and(stillBefore, tripExists))
+      : db.insert(tripPayments).select(
+          db
+            .select({
+              trip_key: sql`${key}`.as("trip_key"),
+              transaction_id: sql`${transactionId}`.as("transaction_id"),
+              included: sql`${included ? 1 : 0}`.as("included"),
+              updated_at: sql`${stamp}`.as("updated_at"),
+            })
+            .from(agentProposals)
+            .where(and(eq(agentProposals.id, proposal.id), condition))
+        )
+  )
+}
+
+/**
+ * The change-log row, then the write, in one batch, both on the same
+ * condition (book lessons 22 and 26). The proposal's own row is the
+ * one-row source for the log row, so it exists only if the condition holds.
+ */
+async function logFirst(
+  proposal: ProposalRow,
+  conflict: Result,
+  stamp: string,
+  condition: SQL,
+  write: BatchItem<"sqlite">
+): Promise<Result> {
+  let entry: { id: number } | undefined
+  try {
+    const [rows] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select({
+              id: sql`null`.as("id"),
+              created_at: sql`${stamp}`.as("created_at"),
+              kind: sql`${proposal.kind}`.as("kind"),
+              target: sql`${proposal.target}`.as("target"),
+              before: sql`${proposal.before}`.as("before"),
+              after: sql`${proposal.after}`.as("after"),
+              source: sql`${proposal.source}`.as("source"),
+              request: sql`${proposal.request}`.as("request"),
+              proposal_id: sql`${proposal.id}`.as("proposal_id"),
+              reverses_id: sql`null`.as("reverses_id"),
+            })
+            .from(agentProposals)
+            .where(and(eq(agentProposals.id, proposal.id), condition))
+        )
+        .returning({ id: changeLog.id }),
+      write,
+    ])
+    entry = rows[0]
+  } catch (error) {
+    await reopenIfNothingWritten(proposal)
+    throw error
+  }
+  if (!entry) {
+    await db
+      .update(agentProposals)
+      .set({ status: "conflict" })
+      .where(eq(agentProposals.id, proposal.id))
+    return conflict
+  }
+  return {
+    outcome: "applied",
+    message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
+  }
 }

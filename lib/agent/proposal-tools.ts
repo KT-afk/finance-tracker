@@ -3,6 +3,7 @@
  * their input, like the other agent tools.
  */
 import type Anthropic from "@anthropic-ai/sdk"
+import { isValidIsoDate } from "../owed"
 import { CATEGORIES } from "../schema"
 import { ProposalError } from "./proposals"
 
@@ -231,4 +232,104 @@ export function parseShareInput(input: unknown) {
   if (typeof amount !== "number" || !Number.isFinite(amount))
     throw new ProposalError("amount must be a number")
   return { transaction_id: transaction_id.trim(), person, amount }
+}
+
+export const proposeTripTool = {
+  name: "propose_trip",
+  strict: true,
+  description:
+    "Propose saving a trip, or changing a saved trip's dates or country: a short name (e.g. Korea), the first and last day, and the country's two-letter code (or null for several countries). Its payments are then those made abroad between the dates, plus any added with propose_trip_payment. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      name: {
+        type: "string",
+        description: "Short name, e.g. Korea or Japan 2025",
+      },
+      date_from: { type: "string", description: "First day, YYYY-MM-DD" },
+      date_to: { type: "string", description: "Last day, YYYY-MM-DD" },
+      country: {
+        type: ["string", "null"],
+        description: "Two-letter country code, e.g. KR, or null",
+      },
+    },
+    additionalProperties: false,
+    required: ["name", "date_from", "date_to", "country"],
+  },
+} satisfies Anthropic.Tool
+
+/** Strict check of the propose_trip input. */
+export function parseTripProposalInput(input: unknown) {
+  const { name, date_from, date_to, country } = strictObject(input, [
+    "name",
+    "date_from",
+    "date_to",
+    "country",
+  ])
+  if (typeof name !== "string") throw new ProposalError("name must be a string")
+  for (const d of [date_from, date_to])
+    if (typeof d !== "string" || !isValidIsoDate(d))
+      throw new ProposalError("Dates must be valid YYYY-MM-DD dates")
+  if ((date_from as string) > (date_to as string))
+    throw new ProposalError("date_to must not be before date_from")
+  if (
+    (Date.parse(date_to as string) - Date.parse(date_from as string)) /
+      86_400_000 >
+    92
+  )
+    throw new ProposalError("A trip can be at most 3 months")
+  if (
+    country !== null &&
+    (typeof country !== "string" || !/^[A-Za-z]{2}$/.test(country))
+  )
+    throw new ProposalError(
+      "country must be a two-letter code such as KR, or null"
+    )
+  return {
+    name,
+    date_from: date_from as string,
+    date_to: date_to as string,
+    country: country === null ? null : (country as string).toUpperCase(),
+  }
+}
+
+export const proposeTripPaymentTool = {
+  name: "propose_trip_payment",
+  strict: true,
+  description:
+    "Propose adding one payment to a saved trip (a flight or hotel paid from Singapore, a cash entry: include true) or leaving one out of it (a payment abroad that wasn't part of the trip: include false). Find the payment first with search_transactions and use its id. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      trip: { type: "string", description: "The saved trip's name" },
+      transaction_id: {
+        type: "string",
+        description: "The id from search_transactions",
+      },
+      include: {
+        type: "boolean",
+        description: "True to add it, false to leave it out",
+      },
+    },
+    additionalProperties: false,
+    required: ["trip", "transaction_id", "include"],
+  },
+} satisfies Anthropic.Tool
+
+/** Strict check of the propose_trip_payment input. */
+export function parseTripPaymentInput(input: unknown) {
+  const { trip, transaction_id, include } = strictObject(input, [
+    "trip",
+    "transaction_id",
+    "include",
+  ])
+  if (typeof trip !== "string" || !trip.trim())
+    throw new ProposalError("trip must be a saved trip's name")
+  if (typeof transaction_id !== "string" || !transaction_id.trim())
+    throw new ProposalError(
+      "transaction_id must be the id from search_transactions"
+    )
+  if (typeof include !== "boolean")
+    throw new ProposalError("include must be true or false")
+  return { trip: trip.trim(), transaction_id: transaction_id.trim(), include }
 }

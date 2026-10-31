@@ -14,6 +14,8 @@ import { db } from "../db"
 import {
   aiMemory,
   budgets,
+  tripPayments,
+  trips,
   categoryRules,
   changeLog,
   owedEntries,
@@ -25,8 +27,12 @@ import {
   describeBudget,
   describePayment,
   describeShare,
+  decodeTrip,
+  describeTrip,
+  describeTripMark,
 } from "./proposal-format"
-import { ProposalError } from "./proposals"
+import { ProposalError, splitTripTarget } from "./proposals"
+import { tripLabel } from "./trip-spending"
 
 type Entry = typeof changeLog.$inferSelect
 
@@ -34,6 +40,8 @@ type Entry = typeof changeLog.$inferSelect
 function shownValue(kind: Entry["kind"], value: string) {
   if (kind === "share") return describeShare(value)
   if (kind === "budget") return describeBudget(value)
+  if (kind === "trip") return describeTrip(value)
+  if (kind === "trip_payment") return describeTripMark(value)
   return value
 }
 
@@ -54,7 +62,12 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
   // Memories and rules are named by their key; the rest are payments
   const onPayment = (e: Entry) =>
     e.kind === "recategorise" || e.kind === "note" || e.kind === "share"
-  const txIds = entries.filter(onPayment).map((e) => e.target)
+  const txIds = [
+    ...entries.filter(onPayment).map((e) => e.target),
+    ...entries
+      .filter((e) => e.kind === "trip_payment")
+      .map((e) => splitTripTarget(e.target)[1]),
+  ]
   const txs = txIds.length
     ? await db
         .select()
@@ -62,8 +75,14 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
         .where(inArray(transactions.id, txIds))
     : []
   const byId = new Map(txs.map((t) => [t.id, t]))
+  // Trip names as saved, for entries that only carry the lowercased key
+  const tripNames = entries.some((e) => e.kind === "trip_payment")
+    ? new Map((await db.select().from(trips)).map((t) => [t.key, t.name]))
+    : new Map<string, string>()
   return entries.map((e) => {
-    const tx = byId.get(e.target)
+    const tx = byId.get(
+      e.kind === "trip_payment" ? splitTripTarget(e.target)[1] : e.target
+    )
     return {
       id: e.id,
       at: e.created_at,
@@ -75,9 +94,13 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
             ? `rule “${e.target}”`
             : e.kind === "budget"
               ? `budget for ${e.target}`
-              : tx
-                ? describePayment(tx)
-                : "a transaction that no longer exists",
+              : e.kind === "trip"
+                ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
+                : e.kind === "trip_payment"
+                  ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
+                  : tx
+                    ? describePayment(tx)
+                    : "a transaction that no longer exists",
       before: shownValue(e.kind, e.before),
       after: shownValue(e.kind, e.after),
       source: e.source,
@@ -235,6 +258,134 @@ export async function undoChange(
             .from(categoryRules)
             .where(eq(categoryRules.keyword, entry.target))
         )[0]?.value ?? ""
+  } else if (
+    (entry.kind === "trip" || entry.kind === "trip_payment") &&
+    !entry.after
+  ) {
+    // Undo of a removal (itself an undo): put it back if nothing has been
+    // saved there since. The log row comes first, from the entry itself
+    const [key, transactionId] =
+      entry.kind === "trip" ? [entry.target, ""] : splitTripTarget(entry.target)
+    const stamp = ctx.now.toISOString()
+    const nothingThere =
+      entry.kind === "trip"
+        ? sql`not exists (select 1 from ${trips} where ${trips.key} = ${key})`
+        : sql`not exists (select 1 from ${tripPayments} where ${tripPayments.trip_key} = ${key} and ${tripPayments.transaction_id} = ${transactionId})`
+    const before = decodeTrip(entry.kind === "trip" ? entry.before : "")
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: "" }))
+            .from(changeLog)
+            .where(and(eq(changeLog.id, entry.id), nothingThere))
+        )
+        .returning({ id: changeLog.id }),
+      entry.kind === "trip"
+        ? db
+            .insert(trips)
+            .values({ key, ...before!, updated_at: stamp })
+            .onConflictDoNothing()
+        : db
+            .insert(tripPayments)
+            .values({
+              trip_key: key,
+              transaction_id: transactionId,
+              included: entry.before === "in",
+              updated_at: stamp,
+            })
+            .onConflictDoNothing(),
+    ])
+    logged = log
+    if (!logged.length) current = "something else"
+  } else if (entry.kind === "trip") {
+    const after = decodeTrip(entry.after)
+    const before = decodeTrip(entry.before)
+    const stillAfter = and(
+      eq(trips.key, entry.target),
+      ...(after
+        ? [
+            eq(trips.date_from, after.date_from),
+            eq(trips.date_to, after.date_to),
+            sql`${trips.country} is ${after.country}`,
+          ]
+        : [sql`0`])
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: trips.key, current: entry.after }))
+            .from(trips)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      // A trip that didn't exist before is removed again; its added and
+      // left-out payments stay, in case it is saved again
+      before
+        ? db
+            .update(trips)
+            .set({ ...before, updated_at: ctx.now.toISOString() })
+            .where(stillAfter)
+        : db.delete(trips).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select()
+        .from(trips)
+        .where(eq(trips.key, entry.target))
+      current = row
+        ? JSON.stringify({
+            name: row.name,
+            date_from: row.date_from,
+            date_to: row.date_to,
+            country: row.country,
+          })
+        : ""
+    }
+  } else if (entry.kind === "trip_payment") {
+    const [key, transactionId] = splitTripTarget(entry.target)
+    const stillAfter = and(
+      eq(tripPayments.trip_key, key),
+      eq(tripPayments.transaction_id, transactionId),
+      entry.after ? eq(tripPayments.included, entry.after === "in") : sql`0`
+    )
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: entry.after }))
+            .from(tripPayments)
+            .where(stillAfter)
+        )
+        .returning({ id: changeLog.id }),
+      entry.before
+        ? db
+            .update(tripPayments)
+            .set({
+              included: entry.before === "in",
+              updated_at: ctx.now.toISOString(),
+            })
+            .where(stillAfter)
+        : db.delete(tripPayments).where(stillAfter),
+    ])
+    logged = log
+    if (!logged.length) {
+      const [row] = await db
+        .select({ included: tripPayments.included })
+        .from(tripPayments)
+        .where(
+          and(
+            eq(tripPayments.trip_key, key),
+            eq(tripPayments.transaction_id, transactionId)
+          )
+        )
+      current = row ? (row.included ? "in" : "out") : ""
+    }
   } else if (entry.kind === "budget" && !entry.after) {
     // Undo a removal: put the budget back if none has been set since. The
     // log row comes first, from the entry itself, while no budget exists
@@ -478,7 +629,7 @@ export const listChangesTool = {
   name: "list_changes",
   strict: true,
   description:
-    "Read the change log: every change the owner confirmed (categories, notes, memories, rules, shares, budgets) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
+    "Read the change log: every change the owner confirmed (categories, notes, memories, rules, shares, budgets, trips) and every undo, newest first, with before and after. Use it for questions like “what did you change this week?”. since is an ISO date YYYY-MM-DD.",
   input_schema: {
     type: "object" as const,
     properties: {

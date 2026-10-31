@@ -12,3 +12,7 @@ Owner request (2026-10-30): “How much would you say I paid in Korea?” The ag
 - [x] Database test and agent tests; checked read-only on live data: Korea, 26 Apr to 15 May 2026, 87 payments, $2,519.84
 
 Later (the bigger version): named trips stored in the database, adding or removing payments (flights, hotels), a label on the Transactions page, and trips set apart in reviews and the savings review.
+
+## Saved trips (2026-10-31, ticket 39)
+
+The bigger version, part one, is ticket 39.
