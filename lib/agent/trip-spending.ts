@@ -9,7 +9,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { classifyCashFlow } from "../cash-flow"
 import { db } from "../db"
-import { displayName } from "../monthly-recap"
+import { displayName } from "../payee-name"
 import { isValidIsoDate, withOwedShares } from "../owed"
 import { transactions, tripPayments, trips } from "../schema"
 
@@ -95,8 +95,10 @@ export async function listTrips(): Promise<Trip[]> {
  * Transactions page and the monthly review. A payment in two trips gets
  * the later one.
  */
-export async function tripsByTransaction(): Promise<Map<string, string>> {
-  const saved = await listTrips()
+export async function tripsByTransaction(
+  saved?: Trip[]
+): Promise<Map<string, string>> {
+  saved ??= await listTrips()
   const byId = new Map<string, string>()
   for (const trip of [...saved].reverse()) {
     const marks = await db

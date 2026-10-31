@@ -572,7 +572,9 @@ function TransactionsView() {
           </SelectContent>
         </Select>
 
-        {(data?.trips?.length ?? 0) > 0 && (
+        {/* Shown while a trip is chosen, even one since removed, so the
+            filter can always be cleared */}
+        {((data?.trips?.length ?? 0) > 0 || trip !== "all") && (
           <Select
             value={trip}
             onValueChange={setTrip}
@@ -586,7 +588,12 @@ function TransactionsView() {
             </SelectTrigger>
             <SelectContent className="bg-zinc-800 border-zinc-700">
               <SelectItem value="all">All payments</SelectItem>
-              {data!.trips!.map((t) => (
+              {trip !== "all" &&
+                data &&
+                !data.trips?.some((t) => t.key === trip) && (
+                  <SelectItem value={trip}>Trip no longer saved</SelectItem>
+                )}
+              {(data?.trips ?? []).map((t) => (
                 <SelectItem key={t.key} value={t.key}>
                   {t.name}
                 </SelectItem>

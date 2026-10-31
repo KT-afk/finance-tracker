@@ -57,7 +57,11 @@ export async function GET(req: NextRequest) {
       .from(transactions)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(transactions.date), desc(transactions.uploaded_at))
-    const inTrips = await tripsByTransaction()
+    // Only when a trip is saved: each trip costs two small queries
+    const saved = await listTrips()
+    const inTrips = saved.length
+      ? await tripsByTransaction(saved)
+      : new Map<string, string>()
     const reviewed =
       review === "transfers"
         ? matchingTxns.filter(
@@ -90,7 +94,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       // Saved trips, for the filter
-      trips: (await listTrips()).map((t) => ({ key: t.key, name: t.name })),
+      trips: saved.map((t) => ({ key: t.key, name: t.name })),
       transactions: paged,
       total,
       page,

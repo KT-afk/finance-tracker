@@ -25,3 +25,7 @@ Known: undoing a trip's creation keeps its added and left-out payments, so savin
 - [x] Tests: which trip each payment belongs to, the API filter, the review line; browser check at phone width
 
 Not done: leaving trips out of the savings review's averages (ask if wanted).
+
+Review of part two (2026-10-31), fixed: the trip map is built only when a trip is saved (two small queries per trip); the trip filter stays visible while a trip is chosen, with “Trip no longer saved” when it was removed, so it can always be cleared; `displayName` moved to `lib/payee-name.ts` to break an import loop.
+
+Known: a payment in two saved trips (overlapping dates) is labelled and counted in the review under the later trip only, while `trip_spending` counts it in both.

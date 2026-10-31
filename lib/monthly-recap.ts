@@ -7,11 +7,13 @@
  */
 import { and, gte, lte } from "drizzle-orm"
 import { tripLabel, tripsByTransaction } from "./agent/trip-spending"
+
+export { displayName }
 import { budgetStatus, type BudgetStatus } from "./budgets"
 import { classifyCashFlow, summarizeCashFlow } from "./cash-flow"
 import { LATER_BILL_PATTERN, median, payeeOf } from "./daily-message"
-import { describeTransaction } from "./describe-transaction"
 import { db } from "./db"
+import { displayName } from "./payee-name"
 import { withOwedShares } from "./owed"
 import { transactions } from "./schema"
 
@@ -33,20 +35,6 @@ export function groupOf(category: string): string {
   return (
     GROUPS.find((g) => (g.categories as readonly string[]).includes(category))
       ?.name ?? OTHER.name
-  )
-}
-
-// A short name for the message: the alert's Payee, else the tidied bank text
-export function displayName(row: {
-  payee: string | null
-  description: string
-}) {
-  const name = row.payee ?? describeTransaction(row.description).title
-  return (
-    name
-      .replace(/\s+(?:SINGAPORE|SGP?)\b.*$/i, "")
-      .replace(/\s·\s.*$/, "")
-      .trim() || name
   )
 }
 
