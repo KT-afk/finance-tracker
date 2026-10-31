@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm"
+import { OFF_BANK } from "../schema"
 /**
  * How proposals and change-log entries name things to the owner, and how
  * share values are stored ("person|amount").
@@ -77,4 +79,55 @@ export function describeTrip(value: string) {
 /** A payment's place in a trip ("in", "out" or ""): added, left out, or neither. */
 export function describeTripMark(value: string) {
   return value === "in" ? "added" : value === "out" ? "left out" : "neither"
+}
+
+/** A cash payment the agent adds, as stored in proposals and the log. */
+export type CashValue = {
+  date: string
+  amount: number // positive: what was spent
+  category: string
+  description: string
+  trip: string | null // a saved trip's key to add it to
+}
+export function encodeCash(cash: CashValue | null) {
+  return cash ? JSON.stringify(cash) : ""
+}
+export function decodeCash(value: string): CashValue | null {
+  return value ? (JSON.parse(value) as CashValue) : null
+}
+/** How a cash payment reads: "$1,000 cash, Travel, 26 Apr 2026", or "none". */
+export function describeCash(value: string) {
+  // Undo can report a plain reason instead of a stored value
+  if (value && !value.startsWith("{")) return value
+  const cash = decodeCash(value)
+  return cash
+    ? `${money(cash.amount)} cash, ${cash.category}, ${day(cash.date)}`
+    : "none"
+}
+
+/**
+ * A conditional insert of a cash payment: every column of the table, in
+ * order, from a one-row source, so it happens only when `where` holds.
+ */
+export function cashPaymentRow(id: string, cash: CashValue, stamp: string) {
+  return {
+    id: sql`${id}`.as("id"),
+    date: sql`${cash.date}`.as("date"),
+    description: sql`${cash.description}`.as("description"),
+    amount: sql`${-cash.amount}`.as("amount"),
+    bank: sql`${OFF_BANK}`.as("bank"),
+    category: sql`${cash.category}`.as("category"),
+    is_corrected: sql`1`.as("is_corrected"),
+    hash: sql`${"manual:" + id}`.as("hash"),
+    uploaded_at: sql`${stamp}`.as("uploaded_at"),
+    // The column's default, as for payments added on the Transactions page
+    source: sql`'statement'`.as("source"),
+    time: sql`null`.as("time"),
+    payee: sql`null`.as("payee"),
+    memo: sql`null`.as("memo"),
+    note: sql`null`.as("note"),
+    foreign_amount: sql`null`.as("foreign_amount"),
+    currency: sql`null`.as("currency"),
+    confirmed_at: sql`null`.as("confirmed_at"),
+  }
 }

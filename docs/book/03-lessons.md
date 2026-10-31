@@ -125,6 +125,8 @@ The Budgets page stores a proposal and confirms it in the same request. If the c
 
 Undoing a forgotten memory ran two statements: write the log row only if no memory with that name exists (ignoring capitals), and put the memory back. The second relied on the table's unique key, which does care about capitals. So with “Rent” saved and “rent” being restored, the log row was skipped but the memory still went in. When a batch has several statements, give every one the same condition, written out, rather than trusting a constraint to match it.
 
+It happened again in ticket 40: adding a cash payment checked “its trip is still saved” for the log row, but the payment's insert relied on its own key, which knows nothing about trips. A test that removed the trip mid-way caught it. A key or constraint is never “the same condition” unless the condition is only about that key.
+
 ## 27. Restarting the branch can drop a pushed commit
 
 After each merge we restart the working branch from `main`. Once, a book commit had been pushed to the branch after the merge, so restarting from `main` dropped it, and the next push was refused. Before restarting, check `git log origin/main..origin/<branch>`: if anything is there, merge it in instead of starting over.

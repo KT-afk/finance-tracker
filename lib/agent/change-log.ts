@@ -16,6 +16,7 @@ import {
   budgets,
   tripPayments,
   trips,
+  OFF_BANK,
   categoryRules,
   changeLog,
   owedEntries,
@@ -27,9 +28,12 @@ import {
   describeBudget,
   describePayment,
   describeShare,
+  decodeCash,
   decodeTrip,
+  describeCash,
   describeTrip,
   describeTripMark,
+  cashPaymentRow,
 } from "./proposal-format"
 import { ProposalError, splitTripTarget } from "./proposals"
 import { tripLabel } from "./trip-spending"
@@ -42,6 +46,7 @@ function shownValue(kind: Entry["kind"], value: string) {
   if (kind === "budget") return describeBudget(value)
   if (kind === "trip") return describeTrip(value)
   if (kind === "trip_payment") return describeTripMark(value)
+  if (kind === "cash_payment") return describeCash(value)
   return value
 }
 
@@ -94,13 +99,15 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
             ? `rule “${e.target}”`
             : e.kind === "budget"
               ? `budget for ${e.target}`
-              : e.kind === "trip"
-                ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
-                : e.kind === "trip_payment"
-                  ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
-                  : tx
-                    ? describePayment(tx)
-                    : "a transaction that no longer exists",
+              : e.kind === "cash_payment"
+                ? `cash payment “${decodeCash(e.after || e.before)?.description ?? e.target}”`
+                : e.kind === "trip"
+                  ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
+                  : e.kind === "trip_payment"
+                    ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
+                    : tx
+                      ? describePayment(tx)
+                      : "a transaction that no longer exists",
       before: shownValue(e.kind, e.before),
       after: shownValue(e.kind, e.after),
       source: e.source,
@@ -258,6 +265,76 @@ export async function undoChange(
             .from(categoryRules)
             .where(eq(categoryRules.keyword, entry.target))
         )[0]?.value ?? ""
+  } else if (entry.kind === "cash_payment") {
+    // Undo removes the payment (and its place in a trip) only if it is
+    // unchanged and nobody split it; undoing that puts it back
+    const removing = Boolean(entry.after)
+    const cash = decodeCash(entry.after || entry.before)!
+    const unchanged = sql`exists (select 1 from ${transactions} where ${transactions.id} = ${entry.target} and ${transactions.amount} = ${-cash.amount} and ${transactions.date} = ${cash.date} and ${transactions.category} = ${cash.category} and ${transactions.description} = ${cash.description}) and not exists (select 1 from ${owedEntries} where ${owedEntries.transaction_id} = ${entry.target})`
+    const absent = sql`not exists (select 1 from ${transactions} where ${transactions.id} = ${entry.target})`
+    // Putting it back into a trip needs the trip still saved, for the
+    // whole batch, as when it was first added
+    const tripSaved = cash.trip
+      ? sql` and exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`
+      : sql``
+    const condition = removing ? unchanged : sql`${absent}${tripSaved}`
+    const stamp = ctx.now.toISOString()
+    const fromEntry = and(eq(changeLog.id, entry.id), condition)
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: entry.after }))
+            .from(changeLog)
+            .where(fromEntry)
+        )
+        .returning({ id: changeLog.id }),
+      ...(removing
+        ? [
+            db
+              .delete(tripPayments)
+              .where(
+                and(eq(tripPayments.transaction_id, entry.target), condition)
+              ),
+            db
+              .delete(transactions)
+              .where(and(eq(transactions.id, entry.target), condition)),
+          ]
+        : [
+            ...(cash.trip
+              ? [
+                  db.insert(tripPayments).select(
+                    db
+                      .select({
+                        trip_key: sql`${cash.trip}`.as("trip_key"),
+                        transaction_id: sql`${entry.target}`.as(
+                          "transaction_id"
+                        ),
+                        included: sql`1`.as("included"),
+                        updated_at: sql`${stamp}`.as("updated_at"),
+                      })
+                      .from(changeLog)
+                      .where(
+                        and(
+                          fromEntry,
+                          sql`not exists (select 1 from ${tripPayments} where ${tripPayments.trip_key} = ${cash.trip} and ${tripPayments.transaction_id} = ${entry.target})`
+                        )
+                      )
+                  ),
+                ]
+              : []),
+            db.insert(transactions).select(
+              db
+                .select(cashPaymentRow(entry.target, cash, stamp))
+                .from(changeLog)
+                .where(fromEntry)
+            ),
+          ]),
+    ] as unknown as Parameters<typeof db.batch>[0])
+    logged = log as { id: number }[]
+    if (!logged.length)
+      current = removing ? "changed or split since" : "already there"
   } else if (
     (entry.kind === "trip" || entry.kind === "trip_payment") &&
     !entry.after

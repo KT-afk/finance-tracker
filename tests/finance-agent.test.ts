@@ -169,6 +169,7 @@ async function main() {
       "trip_spending",
       "propose_trip",
       "propose_trip_payment",
+      "propose_cash_payment",
       "propose_recategorise",
       "propose_memory",
       "propose_note",
@@ -943,6 +944,81 @@ async function main() {
   assert.match(
     JSON.stringify(tripPropReqs[0].system),
     /Saved trips \(use trip_spending with the name\): Japan, 2025-12-01 to 2025-12-08 \(JP\)\./
+  )
+
+  // Cash payments: a proposal on strict input; the instructions say an
+  // ATM withdrawal isn't spending
+  const cashReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const cashCalls: unknown[] = []
+  const withCash = await runFinanceAgent("I spent 1k cash in Korea", {
+    loadMemories: async () => [],
+    createMessage: async (params) => {
+      cashReqs.push(structuredClone(params))
+      if (cashReqs.length === 1)
+        return response("tool_use", [
+          call(
+            "c1",
+            {
+              date: "2026-04-26",
+              amount: 1000,
+              category: "Travel",
+              description: "Korea trip cash",
+              trip: "Korea",
+            },
+            "propose_cash_payment"
+          ),
+          call(
+            "c2",
+            {
+              date: "26 Apr",
+              amount: 1000,
+              category: "Travel",
+              description: "x",
+              trip: null,
+            },
+            "propose_cash_payment"
+          ),
+          call(
+            "c3",
+            {
+              date: "2026-04-26",
+              amount: "1000",
+              category: "Travel",
+              description: "x",
+              trip: null,
+            },
+            "propose_cash_payment"
+          ),
+        ])
+      return done
+    },
+    proposeCashPayment: async (input) => {
+      cashCalls.push([
+        input.date,
+        input.amount,
+        input.category,
+        input.description,
+        input.trip,
+      ])
+      return { id: "cash1", summary: "New cash payment" }
+    },
+  })
+  assert.deepEqual(cashCalls, [
+    ["2026-04-26", 1000, "Travel", "Korea trip cash", "Korea"],
+  ])
+  assert.deepEqual(
+    withCash.proposals.map((p) => p.id),
+    ["cash1"]
+  )
+  const cashPayResults = cashReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    cashPayResults.map((r) => r.is_error),
+    [undefined, true, true]
+  )
+  assert.match(
+    JSON.stringify(cashReqs[0].system),
+    /Taking cash out of an ATM isn't spending/
   )
 
   // Savings review: strict input, the clock passed through, failures not zero

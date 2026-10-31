@@ -316,3 +316,13 @@ After that, “How much did Korea cost?” needs no dates: the agent knows your 
 The monthly review on the 1st now says how much of the month was trips: “Trips (in that total): Korea trip $1,560”, so a trip month doesn't look like ordinary overspending.
 
 **How we checked.** Tests for which trip each payment belongs to (a Singapore payment and a Japan payment aren't in the Korea trip; an added flight is), the page's filter, and the review line. In the browser at phone width, the filter and labels show with no sideways scrolling, and the existing Transactions and dashboard browser tests pass.
+
+## Ticket 40: Telling it about cash (2026-10-31)
+
+**What you asked for.** “So I can't tell it I spent 1k cash in Korea?”
+
+**What we built.** Now you can. Say “I spent $1,000 cash in Korea on 26 Apr” and the agent offers “New cash payment: $1,000 cash, Travel, 26 Apr 2026, “Korea trip cash”, added to the Korea trip”, with ✅ and ❌. Confirming adds it like a payment you'd enter by hand (no bank) and, if you named a saved trip, adds it to the trip too. It's in the change log, and undo removes it, unless you've since split it with someone.
+
+Limits: only cash and other spending no bank statement will show (never card or bank payments), up to $10,000, a spending category, and not a future date. Taking cash out of an ATM isn't spending; this is.
+
+**How we checked.** A database test adds $1,000 of Korea cash, checks Travel spending and the trip total before and after, a second tap, the change log, undo and redo, undo refused after a split, and the refusals. Agent tests cover the tool.

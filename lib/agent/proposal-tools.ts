@@ -333,3 +333,56 @@ export function parseTripPaymentInput(input: unknown) {
     throw new ProposalError("include must be true or false")
   return { trip: trip.trim(), transaction_id: transaction_id.trim(), include }
 }
+
+export const proposeCashPaymentTool = {
+  name: "propose_cash_payment",
+  strict: true,
+  description:
+    "Propose adding a cash payment, or other spending no bank statement shows, as a hand-entered payment (e.g. $1,000 cash spent in Korea). Never for card or bank payments, which come from statements. Up to $10,000; a spending category; a date that isn't in the future. Optionally add it to a saved trip. This stores a proposal and adds nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      date: { type: "string", description: "YYYY-MM-DD; ask if unsure" },
+      amount: { type: "number", description: "What was spent, in SGD" },
+      category: { type: "string", enum: [...CATEGORIES] },
+      description: {
+        type: "string",
+        description: "Short, e.g. Korea trip cash",
+      },
+      trip: {
+        type: ["string", "null"],
+        description: "A saved trip's name to add it to, or null",
+      },
+    },
+    additionalProperties: false,
+    required: ["date", "amount", "category", "description", "trip"],
+  },
+} satisfies Anthropic.Tool
+
+/** Strict check of the propose_cash_payment input. */
+export function parseCashPaymentInput(input: unknown) {
+  const { date, amount, category, description, trip } = strictObject(input, [
+    "date",
+    "amount",
+    "category",
+    "description",
+    "trip",
+  ])
+  if (typeof date !== "string" || !isValidIsoDate(date))
+    throw new ProposalError("date must be a valid YYYY-MM-DD date")
+  if (typeof amount !== "number" || !Number.isFinite(amount))
+    throw new ProposalError("amount must be a number")
+  if (typeof category !== "string")
+    throw new ProposalError("category must be a string")
+  if (typeof description !== "string")
+    throw new ProposalError("description must be a string")
+  if (trip !== null && (typeof trip !== "string" || !trip.trim()))
+    throw new ProposalError("trip must be a saved trip's name, or null")
+  return {
+    date,
+    amount,
+    category,
+    description,
+    trip: trip === null ? null : (trip as string).trim(),
+  }
+}

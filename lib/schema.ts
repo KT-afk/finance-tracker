@@ -255,6 +255,7 @@ export const CHANGE_KINDS = [
   "budget",
   "trip",
   "trip_payment",
+  "cash_payment",
 ] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 

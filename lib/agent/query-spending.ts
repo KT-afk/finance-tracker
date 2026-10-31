@@ -43,8 +43,9 @@ export async function querySpending(
   let count = 0
 
   for (const row of rows) {
-    // Gross matches the bank statement: off-bank rows (covered or forgiven
-    // amounts) never left the owner's accounts
+    // Gross matches the bank statements: off-bank rows (covered or forgiven
+    // amounts, and cash payments, whose money left as an ATM withdrawal)
+    // aren't on them
     if (measure === "gross" && row.bank === OFF_BANK) continue
     const classification = classifyCashFlow(
       measure === "gross" ? { ...row, owedShare: 0 } : row
