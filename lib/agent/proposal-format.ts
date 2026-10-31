@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm"
+import { OFF_BANK } from "../schema"
 /**
  * How proposals and change-log entries name things to the owner, and how
  * share values are stored ("person|amount").
@@ -101,4 +103,31 @@ export function describeCash(value: string) {
   return cash
     ? `${money(cash.amount)} cash, ${cash.category}, ${day(cash.date)}`
     : "none"
+}
+
+/**
+ * A conditional insert of a cash payment: every column of the table, in
+ * order, from a one-row source, so it happens only when `where` holds.
+ */
+export function cashPaymentRow(id: string, cash: CashValue, stamp: string) {
+  return {
+    id: sql`${id}`.as("id"),
+    date: sql`${cash.date}`.as("date"),
+    description: sql`${cash.description}`.as("description"),
+    amount: sql`${-cash.amount}`.as("amount"),
+    bank: sql`${OFF_BANK}`.as("bank"),
+    category: sql`${cash.category}`.as("category"),
+    is_corrected: sql`1`.as("is_corrected"),
+    hash: sql`${"manual:" + id}`.as("hash"),
+    uploaded_at: sql`${stamp}`.as("uploaded_at"),
+    // The column's default, as for payments added on the Transactions page
+    source: sql`'statement'`.as("source"),
+    time: sql`null`.as("time"),
+    payee: sql`null`.as("payee"),
+    memo: sql`null`.as("memo"),
+    note: sql`null`.as("note"),
+    foreign_amount: sql`null`.as("foreign_amount"),
+    currency: sql`null`.as("currency"),
+    confirmed_at: sql`null`.as("confirmed_at"),
+  }
 }

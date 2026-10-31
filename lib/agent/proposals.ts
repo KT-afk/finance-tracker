@@ -40,6 +40,7 @@ import {
   encodeCash,
   encodeTrip,
   type TripValue,
+  cashPaymentRow,
 } from "./proposal-format"
 import {
   cleanTripName,
@@ -1489,14 +1490,24 @@ async function applyCashPayment(
 ): Promise<Result> {
   const conflict = {
     outcome: "conflict" as const,
-    message: "Nothing changed: that payment already exists.",
+    message:
+      "Nothing changed: that payment already exists, or its trip is no longer saved.",
   }
   if (!(await settle("confirmed"))) return lost
   const cash = decodeCash(proposal.after)!
   const stamp = now.toISOString()
   const notThere = sql`not exists (select 1 from ${transactions} where ${transactions.id} = ${proposal.target})`
-  const fromProposal = and(eq(agentProposals.id, proposal.id), notThere)
-  // Log row, payment and trip mark, all on the same condition
+  // With a trip, the trip must still be saved: all or nothing, so the
+  // summary (“added to the Korea trip”) is never half true
+  const fromProposal = and(
+    eq(agentProposals.id, proposal.id),
+    notThere,
+    ...(cash.trip
+      ? [sql`exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`]
+      : [])
+  )
+  // Log row, trip mark, then the payment, all on the same condition. The
+  // payment goes last: once it exists, “not exists” is false for the rest
   let entry: { id: number } | undefined
   try {
     const [rows] = await db.batch([
@@ -1531,31 +1542,16 @@ async function applyCashPayment(
                   updated_at: sql`${stamp}`.as("updated_at"),
                 })
                 .from(agentProposals)
-                .where(
-                  and(
-                    fromProposal,
-                    sql`exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`
-                  )
-                )
+                .where(fromProposal)
             ),
           ]
         : []),
-      // The id is the table's key, so this inserts only when the payment
-      // isn't there: the same condition as the log row
-      db
-        .insert(transactions)
-        .values({
-          id: proposal.target,
-          date: cash.date,
-          description: cash.description,
-          amount: -cash.amount,
-          bank: OFF_BANK,
-          category: cash.category,
-          is_corrected: true,
-          hash: "manual:" + proposal.target,
-          uploaded_at: stamp,
-        })
-        .onConflictDoNothing(),
+      db.insert(transactions).select(
+        db
+          .select(cashPaymentRow(proposal.target, cash, stamp))
+          .from(agentProposals)
+          .where(fromProposal)
+      ),
     ] as unknown as Parameters<typeof db.batch>[0])
     entry = (rows as { id: number }[])[0]
   } catch (error) {

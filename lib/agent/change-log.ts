@@ -33,6 +33,7 @@ import {
   describeCash,
   describeTrip,
   describeTripMark,
+  cashPaymentRow,
 } from "./proposal-format"
 import { ProposalError, splitTripTarget } from "./proposals"
 import { tripLabel } from "./trip-spending"
@@ -271,7 +272,12 @@ export async function undoChange(
     const cash = decodeCash(entry.after || entry.before)!
     const unchanged = sql`exists (select 1 from ${transactions} where ${transactions.id} = ${entry.target} and ${transactions.amount} = ${-cash.amount} and ${transactions.date} = ${cash.date} and ${transactions.category} = ${cash.category} and ${transactions.description} = ${cash.description}) and not exists (select 1 from ${owedEntries} where ${owedEntries.transaction_id} = ${entry.target})`
     const absent = sql`not exists (select 1 from ${transactions} where ${transactions.id} = ${entry.target})`
-    const condition = removing ? unchanged : absent
+    // Putting it back into a trip needs the trip still saved, for the
+    // whole batch, as when it was first added
+    const tripSaved = cash.trip
+      ? sql` and exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`
+      : sql``
+    const condition = removing ? unchanged : sql`${absent}${tripSaved}`
     const stamp = ctx.now.toISOString()
     const fromEntry = and(eq(changeLog.id, entry.id), condition)
     const [log] = await db.batch([
@@ -312,29 +318,18 @@ export async function undoChange(
                       .where(
                         and(
                           fromEntry,
-                          sql`exists (select 1 from ${trips} where ${trips.key} = ${cash.trip})`,
                           sql`not exists (select 1 from ${tripPayments} where ${tripPayments.trip_key} = ${cash.trip} and ${tripPayments.transaction_id} = ${entry.target})`
                         )
                       )
                   ),
                 ]
               : []),
-            // The id is the table's key, so this inserts only when the payment
-            // isn't there: the same condition as the log row
-            db
-              .insert(transactions)
-              .values({
-                id: entry.target,
-                date: cash.date,
-                description: cash.description,
-                amount: -cash.amount,
-                bank: OFF_BANK,
-                category: cash.category,
-                is_corrected: true,
-                hash: "manual:" + entry.target,
-                uploaded_at: stamp,
-              })
-              .onConflictDoNothing(),
+            db.insert(transactions).select(
+              db
+                .select(cashPaymentRow(entry.target, cash, stamp))
+                .from(changeLog)
+                .where(fromEntry)
+            ),
           ]),
     ] as unknown as Parameters<typeof db.batch>[0])
     logged = log as { id: number }[]

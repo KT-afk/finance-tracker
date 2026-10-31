@@ -126,6 +126,31 @@ async function main() {
       "New cash payment: $12.50 cash, Food & Drink, 28 Apr 2026, “Street food”"
     )
 
+    // The trip removed between the proposal and the tap: nothing is added
+    const { trips } = await import("../lib/schema")
+    const late = await proposeCashPayment({
+      date: "2026-05-01",
+      amount: 50,
+      category: "Travel",
+      description: "Late cash",
+      trip: "Korea",
+      ...base,
+    })
+    const tripRow = (await db.select().from(trips))[0]
+    await db.delete(trips).where(eq(trips.key, "korea"))
+    assert.equal(
+      (await decideProposal(late.id, "confirm", now)).outcome,
+      "conflict"
+    )
+    assert.deepEqual(
+      await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.description, "Late cash")),
+      []
+    )
+    await db.insert(trips).values(tripRow)
+
     for (const [change, why] of [
       [{ amount: 0 }, /more than 0/],
       [{ amount: 20_000 }, /Transactions page/],
