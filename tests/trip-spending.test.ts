@@ -112,6 +112,221 @@ async function main() {
         country: "KR",
       }
     )
+    // Saved trips: proposed, confirmed, then a flight from Singapore and a
+    // cash entry added, a payment abroad left out; logged and undoable
+    const { proposeTrip, proposeTripPayment, decideProposal } =
+      await import("../lib/agent/proposals")
+    const { listChanges, undoChange } = await import("../lib/agent/change-log")
+    const { db } = await import("../lib/db")
+    const { transactions } = await import("../lib/schema")
+    await db.insert(transactions).values([
+      {
+        id: "flight",
+        date: "2026-03-02",
+        description: "SINGAPORE AIRLINES SINGAPORE",
+        amount: -780,
+        bank: "uob",
+        category: "Travel",
+        is_corrected: false,
+        hash: "f1",
+        uploaded_at: "x",
+      },
+      {
+        id: "cash",
+        date: "2026-04-26",
+        description: "Korea trip cash",
+        amount: -1000,
+        bank: "off_bank",
+        category: "Travel",
+        is_corrected: false,
+        hash: "c1",
+        uploaded_at: "x",
+      },
+    ])
+    const now = new Date("2026-10-31T04:00:00Z")
+    const ctx = { source: "web" as const, request: "undo", now }
+    const confirm = async (p: Promise<{ id: string; summary: string }>) => {
+      const proposal = await p
+      assert.equal(
+        (await decideProposal(proposal.id, "confirm", now)).outcome,
+        "applied",
+        proposal.summary
+      )
+      return proposal
+    }
+    const saved = await confirm(
+      proposeTrip({
+        name: " Korea ",
+        date_from: "2026-04-26",
+        date_to: "2026-05-13",
+        country: "KR",
+        source: "telegram",
+        request: "save korea",
+        now,
+      })
+    )
+    assert.equal(
+      saved.summary,
+      "Trip: Korea, 26 Apr 2026 to 13 May 2026 (KR): 4 payments abroad, $584.96"
+    )
+    await confirm(
+      proposeTripPayment({
+        trip: "korea",
+        transactionId: "flight",
+        include: true,
+        source: "web",
+        request: "x",
+        now,
+      })
+    )
+    await confirm(
+      proposeTripPayment({
+        trip: "Korea",
+        transactionId: "cash",
+        include: true,
+        source: "web",
+        request: "x",
+        now,
+      })
+    )
+    const left = await confirm(
+      proposeTripPayment({
+        trip: "Korea",
+        transactionId: "taxi",
+        include: false,
+        source: "web",
+        request: "x",
+        now,
+      })
+    )
+    assert.equal(
+      left.summary,
+      "Leave out of Korea trip: Kakao Mobility 16448830 KR $14.79 on 8 May 2026"
+    )
+
+    const trip = await tripSpending({ trip: "KOREA" })
+    // 584.96 − taxi 14.79 + flight 780 + cash 1,000
+    assert.equal(trip.trip, "Korea")
+    assert.equal(trip.total, 2350.17)
+    assert.equal(trip.count, 5)
+    assert.equal(trip.left_out, 1)
+    assert.deepEqual(
+      trip.added.map((a) => [a.date, a.amount]),
+      [
+        ["2026-03-02", 780],
+        ["2026-04-26", 1000],
+      ]
+    )
+    await assert.rejects(
+      tripSpending({ trip: "Japan" }),
+      /No saved trip called “Japan”\. Saved trips: Korea\./
+    )
+
+    // Refusals
+    await assert.rejects(
+      proposeTripPayment({
+        trip: "Japan",
+        transactionId: "flight",
+        include: true,
+        source: "web",
+        request: "x",
+        now,
+      }),
+      /propose_trip first/
+    )
+    await assert.rejects(
+      proposeTripPayment({
+        trip: "Korea",
+        transactionId: "flight",
+        include: true,
+        source: "web",
+        request: "x",
+        now,
+      }),
+      /already added/
+    )
+    await assert.rejects(
+      proposeTrip({
+        name: "Korea",
+        date_from: "2026-04-26",
+        date_to: "2026-05-13",
+        country: "KR",
+        source: "web",
+        request: "x",
+        now,
+      }),
+      /already saved/
+    )
+
+    // Changing the dates says what it replaces
+    const moved = await confirm(
+      proposeTrip({
+        name: "Korea",
+        date_from: "2026-04-25",
+        date_to: "2026-05-13",
+        country: "KR",
+        source: "web",
+        request: "x",
+        now,
+      })
+    )
+    assert.match(
+      moved.summary,
+      /\(replaces Korea, 26 Apr 2026 to 13 May 2026 \(KR\)\)$/
+    )
+
+    // The log reads well, and undo works for both kinds
+    const log = await listChanges({ limit: 5 })
+    assert.deepEqual(
+      log.map((c) => [c.kind, c.what, c.before, c.after]),
+      [
+        [
+          "trip",
+          "trip “Korea”",
+          "Korea, 26 Apr 2026 to 13 May 2026 (KR)",
+          "Korea, 25 Apr 2026 to 13 May 2026 (KR)",
+        ],
+        [
+          "trip_payment",
+          "korea trip: Kakao Mobility 16448830 KR $14.79 on 8 May 2026",
+          "neither",
+          "left out",
+        ],
+        [
+          "trip_payment",
+          "korea trip: Korea trip cash $1,000 on 26 Apr 2026",
+          "neither",
+          "added",
+        ],
+        [
+          "trip_payment",
+          "korea trip: SINGAPORE AIRLINES SINGAPORE $780 on 2 Mar 2026",
+          "neither",
+          "added",
+        ],
+        [
+          "trip",
+          "trip “Korea”",
+          "none",
+          "Korea, 26 Apr 2026 to 13 May 2026 (KR)",
+        ],
+      ]
+    )
+    assert.equal((await undoChange(log[0].id, ctx)).outcome, "undone")
+    assert.equal(
+      (await tripSpending({ trip: "Korea" })).date_from,
+      "2026-04-26"
+    )
+    assert.equal((await undoChange(log[1].id, ctx)).outcome, "undone")
+    assert.equal((await tripSpending({ trip: "Korea" })).left_out, 0)
+    // Undo the trip itself: gone; undo that undo: back
+    const created = log[4]
+    assert.equal((await undoChange(created.id, ctx)).outcome, "undone")
+    await assert.rejects(tripSpending({ trip: "Korea" }), /No saved trip/)
+    const [undoEntry] = await listChanges({ limit: 1 })
+    assert.equal((await undoChange(undoEntry.id, ctx)).outcome, "undone")
+    assert.equal((await tripSpending({ trip: "Korea" })).trip, "Korea")
+
     console.log("trip spending test passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

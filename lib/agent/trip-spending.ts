@@ -1,20 +1,27 @@
 /**
- * Trip spending: payments made abroad between two dates. “Abroad” is a
- * foreign currency, or a country code other than SG at the end of the
- * bank's text (“OLIVE YOUNG SEOUL KR”). Flights and hotels paid from
- * Singapore, and cash, don't look foreign, so they are never included.
+ * Trip spending. A trip's payments are those made abroad between its dates
+ * (a foreign currency, or a country code other than SG at the end of the
+ * bank's text, “OLIVE YOUNG SEOUL KR”), plus payments the owner added to
+ * it (flights, hotels, a cash entry), minus payments they left out. A
+ * saved trip has a name; dates alone give the abroad part only.
  */
 import type Anthropic from "@anthropic-ai/sdk"
-import { and, gte, lte } from "drizzle-orm"
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { classifyCashFlow } from "../cash-flow"
 import { db } from "../db"
 import { displayName } from "../monthly-recap"
 import { isValidIsoDate, withOwedShares } from "../owed"
-import { transactions } from "../schema"
+import { transactions, tripPayments, trips } from "../schema"
+
+export type Trip = typeof trips.$inferSelect
+
+type Payment = { date: string; name: string; amount: number; category: string }
 
 export type TripSpending = {
+  trip: string | null // the saved trip's name
   date_from: string
   date_to: string
+  country: string | null
   days: number
   count: number
   total: number // the owner's spending
@@ -24,7 +31,10 @@ export type TripSpending = {
   by_country: { country: string; total: number; count: number }[]
   first_payment: string | null
   last_payment: string | null
-  biggest: { date: string; name: string; amount: number; category: string }[]
+  biggest: Payment[]
+  // Added by the owner (flights, hotels, cash), and how many were left out
+  added: Payment[]
+  left_out: number
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -43,58 +53,134 @@ export function countryOf(row: {
   return null
 }
 
-export async function tripSpending(input: {
-  date_from: string
-  date_to: string
-  country?: string
-}): Promise<TripSpending> {
-  const rows = await withOwedShares(
+/** A saved trip by name, ignoring case. */
+export async function findTrip(name: string): Promise<Trip | undefined> {
+  const [row] = await db
+    .select()
+    .from(trips)
+    .where(eq(trips.key, tripKey(name)))
+    .limit(1)
+  return row
+}
+
+export function tripKey(name: string) {
+  return name.replace(/\s+/g, " ").trim().toLowerCase()
+}
+
+export async function listTrips(): Promise<Trip[]> {
+  return db
+    .select()
+    .from(trips)
+    .orderBy(sql`${trips.date_from} desc`)
+}
+
+/** The owner named a trip that isn't saved; the message goes to the agent. */
+export class TripError extends Error {}
+
+export async function tripSpending(
+  input:
+    { trip: string } | { date_from: string; date_to: string; country?: string }
+): Promise<TripSpending> {
+  let trip: Trip | undefined
+  if ("trip" in input) {
+    trip = await findTrip(input.trip)
+    if (!trip) {
+      const saved = (await listTrips()).map((t) => t.name)
+      throw new TripError(
+        `No saved trip called “${input.trip}”.` +
+          (saved.length
+            ? ` Saved trips: ${saved.join(", ")}.`
+            : " No trips are saved yet.")
+      )
+    }
+  }
+  const range = trip ?? (input as { date_from: string; date_to: string })
+  const country = trip
+    ? (trip.country ?? undefined)
+    : (input as { country?: string }).country
+  const marks = trip
+    ? await db
+        .select()
+        .from(tripPayments)
+        .where(eq(tripPayments.trip_key, trip.key))
+    : []
+  const leftOut = new Set(
+    marks.filter((m) => !m.included).map((m) => m.transaction_id)
+  )
+  const addedIds = marks.filter((m) => m.included).map((m) => m.transaction_id)
+
+  const inRange = await withOwedShares(
     await db
       .select()
       .from(transactions)
       .where(
         and(
-          gte(transactions.date, input.date_from),
-          lte(transactions.date, input.date_to)
+          gte(transactions.date, range.date_from),
+          lte(transactions.date, range.date_to)
         )
       )
   )
+  const addedRows = addedIds.length
+    ? await withOwedShares(
+        await db
+          .select()
+          .from(transactions)
+          .where(inArray(transactions.id, addedIds))
+      )
+    : []
+
   const byCategory = new Map<string, number>()
   const byCountry = new Map<string, { total: number; count: number }>()
-  const found: TripSpending["biggest"] = []
+  const found: Payment[] = []
+  const added: Payment[] = []
+  const counted = new Set<string>()
   let total = 0
   let gross = 0
-  for (const row of rows) {
-    const country = countryOf(row)
-    if (!country) continue
-    if (input.country && country !== input.country) continue
+  const count = (
+    row: (typeof inRange)[number],
+    where: string | null,
+    list: Payment[]
+  ) => {
+    if (counted.has(row.id)) return
     const c = classifyCashFlow(row)
-    if (!c.countsAsSpend) continue
+    if (!c.countsAsSpend) return
+    counted.add(row.id)
     const share = Math.abs(c.effectiveAmount)
     total += share
     gross += Math.abs(row.amount)
     byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + share)
-    const k = byCountry.get(country) ?? { total: 0, count: 0 }
-    byCountry.set(country, { total: k.total + share, count: k.count + 1 })
-    found.push({
+    const label = where ?? "added"
+    const k = byCountry.get(label) ?? { total: 0, count: 0 }
+    byCountry.set(label, { total: k.total + share, count: k.count + 1 })
+    list.push({
       date: row.date,
       name: displayName(row),
       amount: round(share),
       category: c.category,
     })
   }
+  for (const row of addedRows) count(row, null, added)
+  for (const row of inRange) {
+    const where = countryOf(row)
+    if (!where || leftOut.has(row.id)) continue
+    if (country && where !== country) continue
+    count(row, where, found)
+  }
+
   const days =
     Math.round(
-      (Date.parse(`${input.date_to}T00:00:00Z`) -
-        Date.parse(`${input.date_from}T00:00:00Z`)) /
+      (Date.parse(`${range.date_to}T00:00:00Z`) -
+        Date.parse(`${range.date_from}T00:00:00Z`)) /
         86_400_000
     ) + 1
   const dates = found.map((f) => f.date).sort()
   return {
-    date_from: input.date_from,
-    date_to: input.date_to,
+    trip: trip?.name ?? null,
+    date_from: range.date_from,
+    date_to: range.date_to,
+    country: country ?? null,
     days,
-    count: found.length,
+    count: found.length + added.length,
     total: round(total),
     gross_total: round(gross),
     per_day: round(total / days),
@@ -102,15 +188,19 @@ export async function tripSpending(input: {
       .map(([category, t]) => ({ category, total: round(t) }))
       .sort((a, b) => b.total - a.total),
     by_country: [...byCountry]
-      .map(([country, v]) => ({
-        country,
+      .map(([where, v]) => ({
+        country: where,
         total: round(v.total),
         count: v.count,
       }))
       .sort((a, b) => b.total - a.total),
     first_payment: dates[0] ?? null,
     last_payment: dates[dates.length - 1] ?? null,
-    biggest: found.sort((a, b) => b.amount - a.amount).slice(0, 5),
+    biggest: [...found, ...added]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5),
+    added: added.sort((a, b) => a.date.localeCompare(b.date)),
+    left_out: leftOut.size,
   }
 }
 
@@ -118,17 +208,21 @@ export const tripSpendingTool = {
   name: "trip_spending",
   strict: true,
   description:
-    "Spending abroad between two dates, for a trip: payments in a foreign currency or whose bank text ends in a country code other than SG (e.g. SEOUL KR). Optional country is a two-letter code (KR, JP, MY…). Returns the owner's spending total and gross_total, per_day, by_category, by_country, the first and last payment dates, and the 5 biggest payments. Flights and hotels paid from Singapore, and cash, are never included.",
+    "Spending on a trip. Give trip (a saved trip's name), or date_from and date_to for spending abroad between two dates: payments in a foreign currency or whose bank text ends in a country code other than SG (e.g. SEOUL KR); optional country is a two-letter code (KR, JP, MY…). A saved trip also counts the payments the owner added to it (added: flights, hotels, cash) and leaves out the ones they removed. Returns the owner's spending total and gross_total, per_day, by_category, by_country, the first and last payment dates abroad, and the 5 biggest payments. Without a saved trip, flights and hotels paid from Singapore, and cash, are never included.",
   input_schema: {
     type: "object" as const,
     properties: {
+      trip: {
+        type: ["string", "null"],
+        description: "A saved trip's name, or null",
+      },
       date_from: {
-        type: "string",
-        description: "ISO date YYYY-MM-DD, inclusive",
+        type: ["string", "null"],
+        description: "ISO date YYYY-MM-DD, inclusive; null with trip",
       },
       date_to: {
-        type: "string",
-        description: "ISO date YYYY-MM-DD, inclusive",
+        type: ["string", "null"],
+        description: "ISO date YYYY-MM-DD, inclusive; null with trip",
       },
       country: {
         type: ["string", "null"],
@@ -136,26 +230,29 @@ export const tripSpendingTool = {
       },
     },
     additionalProperties: false,
-    required: ["date_from", "date_to", "country"],
+    required: ["trip", "date_from", "date_to", "country"],
   },
 } satisfies Anthropic.Tool
 
 /** Strict check of the trip_spending input. */
-export function parseTripInput(input: unknown): {
-  date_from: string
-  date_to: string
-  country?: string
-} {
+export function parseTripInput(
+  input: unknown
+): { trip: string } | { date_from: string; date_to: string; country?: string } {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Tool input must be an object")
-  const { date_from, date_to, country, ...rest } = input as Record<
+  const { trip, date_from, date_to, country, ...rest } = input as Record<
     string,
     unknown
   >
   if (Object.keys(rest).length)
     throw new Error("Unknown field " + Object.keys(rest)[0])
+  if (trip !== null && trip !== undefined) {
+    if (typeof trip !== "string" || !trip.trim())
+      throw new Error("trip must be a saved trip's name")
+    return { trip: trip.trim() }
+  }
   if (!isValidIsoDate(date_from) || !isValidIsoDate(date_to))
-    throw new Error("Dates must be valid YYYY-MM-DD dates")
+    throw new Error("Give a saved trip's name, or valid YYYY-MM-DD dates")
   if ((date_from as string) > (date_to as string))
     throw new Error("date_to must not be before date_from")
   const days =

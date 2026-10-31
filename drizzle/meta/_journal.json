@@ -92,6 +92,13 @@
       "when": 1793117331207,
       "tag": "0012_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793430984031,
+      "tag": "0013_trips",
+      "breakpoints": true
     }
   ]
 }

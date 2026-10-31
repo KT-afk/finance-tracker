@@ -296,3 +296,15 @@ Checked on your real data (read-only): Korea, 26 Apr to 15 May 2026, 87 payments
 **What we changed.** Search can now look at money coming in: refunds, interest, salary and transfers in. The agent is told to check this before saying something wasn't refunded. Checked on your real data: it finds both UOB refunds.
 
 **How we checked.** A search test for money in, including that a normal search still ignores salary.
+
+## Ticket 39: Saved trips (2026-10-31)
+
+**What we built.** You can now save a trip by asking: “Save my Korea trip, 26 Apr to 13 May 2026.” The agent offers “Trip: Korea, 26 Apr 2026 to 13 May 2026 (KR): 87 payments abroad, $2,519.84”, with ✅ and ❌. Then you can add what the card abroad doesn't show, such as the flight you paid from Singapore or your “Korea trip cash” entry, and leave out anything that wasn't the trip. Each of those is its own ✅ ❌, in the change log, and undoable.
+
+After that, “How much did Korea cost?” needs no dates: the agent knows your saved trips, and the total counts the payments abroad plus the ones you added.
+
+**Not yet.** A trip label on the Transactions page, and trips shown apart in the monthly review, are part two.
+
+**How we checked.** A test saves a trip, adds a flight and a cash entry, leaves out a taxi, checks the total ($584.96 − $14.79 + $780 + $1,000), the refusals, how the change log reads, and undo for each kind. Agent tests cover the new tools and the saved-trips list.
+
+**Needs** migration 0013 on the live database before it's merged.

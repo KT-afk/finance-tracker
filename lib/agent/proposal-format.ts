@@ -51,3 +51,30 @@ export function describeShare(value: string) {
 export function describeBudget(value: string) {
   return value ? money(Number(value)) : "none"
 }
+
+/** A saved trip as stored in proposals and the change log; "" means none. */
+export type TripValue = {
+  name: string
+  date_from: string
+  date_to: string
+  country: string | null
+}
+export function encodeTrip(trip: TripValue | null) {
+  return trip ? JSON.stringify(trip) : ""
+}
+export function decodeTrip(value: string): TripValue | null {
+  return value ? (JSON.parse(value) as TripValue) : null
+}
+/** How a trip reads: "Korea, 26 Apr 2026 to 13 May 2026 (KR)", or "none". */
+export function describeTrip(value: string) {
+  const trip = decodeTrip(value)
+  if (!trip) return "none"
+  return (
+    `${trip.name}, ${day(trip.date_from)} to ${day(trip.date_to)}` +
+    (trip.country ? ` (${trip.country})` : "")
+  )
+}
+/** A payment's place in a trip: "added", "left out", or "" for neither. */
+export function describeTripMark(value: string) {
+  return value === "in" ? "added" : value === "out" ? "left out" : "neither"
+}

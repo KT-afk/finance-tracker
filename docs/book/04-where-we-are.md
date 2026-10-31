@@ -27,7 +27,8 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Tickets 12 and 32 (PR #37, merged): budget pace in the 10pm message; a Budgets page, removing budgets and setting several by chat. No migration.
 - Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
 - Ticket 13 (PR #39, merged): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
-- Ticket 38 (PR #46): search can find money coming in (refunds, interest, transfers in).
+- Ticket 39 (PR #47): saved trips. Needs migration 0013 on the live database before merging. Part two (Transactions label, reviews) is on the ticket.
+- Ticket 38 (PR #46, merged): search can find money coming in (refunds, interest, transfers in).
 - Ticket 37 (PR #45, merged): trip_spending, spending abroad between two dates. The bigger trips version is described on the ticket.
 - Ticket 36 (PR #44, merged): search passes on each payment's bank and bank text, and flags a same-day transfer in.
 - Ticket 35 (PR #43, merged): each question tells the agent what became of recent proposals, so it knows about button taps.
