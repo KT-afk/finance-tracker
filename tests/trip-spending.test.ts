@@ -393,6 +393,37 @@ async function main() {
     await db.insert(tripsTable).values(savedRow)
     assert.equal((await tripSpending({ trip: "Korea" })).left_out, 0)
 
+    // Which trip each payment belongs to, and the Transactions page filter
+    const { tripsByTransaction } = await import("../lib/agent/trip-spending")
+    const inTrips = await tripsByTransaction()
+    assert.equal(inTrips.get("olive"), "Korea")
+    assert.equal(inTrips.get("flight"), "Korea", "added, though months before")
+    assert.equal(inTrips.get("grab"), undefined, "in Singapore")
+    assert.equal(inTrips.get("tokyo"), undefined, "Japan, not Korea")
+    const { GET } = await import("../app/api/transactions/route")
+    const { NextRequest } = await import("next/server")
+    const page = await (
+      await GET(
+        new NextRequest(
+          "http://localhost/api/transactions?trip=korea&month=2026-05"
+        )
+      )
+    ).json()
+    assert.deepEqual(page.trips, [{ key: "korea", name: "Korea" }])
+    const ids = page.transactions.map((t: { id: string }) => t.id)
+    assert.ok(
+      ids.includes("flight") && ids.includes("olive"),
+      "the whole trip, whatever the month"
+    )
+    assert.ok(!ids.includes("grab") && !ids.includes("rent"))
+    assert.ok(
+      page.transactions.every((t: { trip: string }) => t.trip === "Korea")
+    )
+    const unknown = await (
+      await GET(new NextRequest("http://localhost/api/transactions?trip=mars"))
+    ).json()
+    assert.equal(unknown.total, 0)
+
     console.log("trip spending test passed")
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

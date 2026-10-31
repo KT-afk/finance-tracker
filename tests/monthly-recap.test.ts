@@ -52,6 +52,11 @@ function seed(dbPath: string) {
     INSERT INTO transactions
       (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at)
     VALUES ${rows.join(",\n")};
+    INSERT INTO trips (key, name, date_from, date_to, country, updated_at)
+      VALUES ('weekend away', 'Weekend away', '2026-10-03', '2026-10-05', NULL, 'x');
+    INSERT INTO trip_payments (trip_key, transaction_id, included, updated_at)
+      SELECT 'weekend away', id, 1, 'x' FROM transactions
+      WHERE description IN ('MADE UP AIRLINE', 'MADE UP HOTEL');
     INSERT INTO budgets (category, monthly_limit, updated_at) VALUES
       ('Food & Drink', 600, 'x'),
       ('Travel', 500, 'x');
@@ -127,6 +132,10 @@ async function main() {
       text,
       /\nBudgets in October:\n✅ Food & Drink: \$530 of \$600 \(88%\) · within budget, \$70 left\n⚠️ Travel: \$900 of \$500 \(180%\) · over by \$400$/
     )
+
+    // A saved trip's part of the month
+    assert.deepEqual(r.trips, [{ name: "Weekend away", total: 900 }])
+    assert.match(text, /\nTrips \(in that total\): Weekend away trip \$900\n/)
 
     console.log("monthly recap test passed")
   } finally {
