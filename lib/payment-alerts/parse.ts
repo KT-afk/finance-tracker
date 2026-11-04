@@ -65,6 +65,9 @@ export type ParsedAlert =
   | { kind: "not-an-alert" }
 
 // Subjects of bank emails that never describe money leaving
+// An amount with cents, as every payment alert has: “SGD 12.50”, “$1,277.00”
+const HAS_AMOUNT = /\d\.\d{2}\b/
+
 const NOT_SPENDING_SUBJECTS = [
   /e-?Statement/i,
   /eAdvice/i,
@@ -551,8 +554,22 @@ export function parsePaymentAlert(email: AlertEmail): ParsedAlert {
   if (bank && NOT_SPENDING_SUBJECTS.some((p) => p.test(email.subject))) {
     return { kind: "ignored", bank, reason: email.subject }
   }
-  if (bank === "ocbc") return parseOcbc(email)
-  if (bank === "uob") return parseUob(email)
-  if (bank === "trust") return parseTrust(email)
-  return { kind: "not-an-alert" }
+  const parsed =
+    bank === "ocbc"
+      ? parseOcbc(email)
+      : bank === "uob"
+        ? parseUob(email)
+        : bank === "trust"
+          ? parseTrust(email)
+          : ({ kind: "not-an-alert" } as const)
+  // Banks send promotions from the same addresses (“Start investing with
+  // zero commission”). Every payment alert has an amount with cents, so an
+  // email we can't read and that has none is not a payment
+  if (parsed.kind === "unrecognised" && !HAS_AMOUNT.test(email.body))
+    return {
+      kind: "ignored",
+      bank: parsed.bank,
+      reason: `${email.subject}: no amount, so not a payment`,
+    }
+  return parsed
 }

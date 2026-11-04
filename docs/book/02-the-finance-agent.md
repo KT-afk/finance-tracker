@@ -326,3 +326,11 @@ The monthly review on the 1st now says how much of the month was trips: “Trips
 Limits: only cash and other spending no bank statement will show (never card or bank payments), up to $10,000, a spending category, and not a future date. Taking cash out of an ATM isn't spending; this is.
 
 **How we checked.** A database test adds $1,000 of Korea cash, checks Travel spending and the trip total before and after, a second tap, the change log, undo and redo, undo refused after a split, and the refusals. Agent tests cover the tool.
+
+## Ticket 41: “Bank emails I couldn't read” (2026-11-04)
+
+**What happened.** The 10pm message kept warning about bank emails it couldn't read. Four of the five were promotions (Trust's investing offers, a card-lock tip, OCBC's Deepavali e-Packets), sent from the same addresses as payment alerts. The fifth was a real overseas card payment: Trust's email gives the amount in the foreign currency, and the SGD amount only appears on the statement.
+
+**What we changed.** An email we can't read that has no amount with cents (every real payment alert has one, like $12.50) is now treated as not a payment and skipped quietly. Overseas card payments get their own line: “1 overseas card payment not counted yet: the SGD amount comes with the statement.” A truly new kind of alert, with an amount, still gets the warning.
+
+**How we checked.** Tests with the real promotion subjects, an unknown email with an amount (still flagged), and the 10pm warnings.

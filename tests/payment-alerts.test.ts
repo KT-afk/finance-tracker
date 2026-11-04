@@ -11,6 +11,7 @@ import {
 
 const OCBC = "notifications@ocbc.com"
 const UOB = "unialerts@uobgroup.com"
+const TRUST = "notification@trustbank.sg"
 
 function alertOf(from: string, subject: string, body: string) {
   const parsed = parsePaymentAlert({ from, subject, body })
@@ -107,13 +108,36 @@ assert.equal(uobPayNow.payeeMobileEnding, "5555")
 assert.equal(uobPayNow.time, "17:33")
 assert.equal(uobPayNow.amount, -200)
 
-// A bank email we have not seen is surfaced, not dropped
+// A bank email we have not seen, with an amount, is surfaced, not dropped
 const unknown = parsePaymentAlert({
   from: OCBC,
   subject: "OCBC Alerts",
-  body: "Your card statement is ready.",
+  body: "A new kind of debit of SGD 12.50 happened.",
 })
 assert.equal(unknown.kind, "unrecognised")
+
+// Promotions from the same addresses have no amount with cents: not a
+// payment, so read once and never surfaced (seen live, Oct–Nov 2026)
+for (const [from, subject, body] of [
+  [
+    OCBC,
+    "Deepavali e-Packets are now available on OCBC app!",
+    "Send e-Packets to your loved ones this Deepavali. Terms apply.",
+  ],
+  [
+    TRUST,
+    "Start investing with zero commission 🎉",
+    "Invest from $1 with zero commission. Capital at risk.",
+  ],
+  [
+    TRUST,
+    "Lock it today. Keep scammers away.",
+    "Lock your card in the app in one tap.",
+  ],
+] as const) {
+  const promo = parsePaymentAlert({ from, subject, body })
+  assert.equal(promo.kind, "ignored", subject)
+}
 
 // Mail from anyone else is ignored
 assert.equal(
@@ -224,7 +248,7 @@ for (const subject of [
 }
 
 // Trust card spending, local: date before the card
-const TRUST = "notification@trustbank.sg"
+// (TRUST is defined at the top)
 const trustCard = alertOf(
   TRUST,
   "Yay! Transaction successful 😁",

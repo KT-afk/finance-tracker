@@ -138,10 +138,21 @@ export async function buildDailySummary(
   payments.sort((a, b) =>
     `${a.date} ${a.time ?? ""}`.localeCompare(`${b.date} ${b.time ?? ""}`)
   )
-  const unread = recentEmails.filter((e) => e.status === "unrecognised").length
+  // An overseas card payment is known, but its SGD amount only comes with
+  // the Statement; anything else unread may be a payment we missed
+  const isForeign = (e: (typeof recentEmails)[number]) =>
+    e.reason?.includes("foreign amount") ?? false
+  const unrecognised = recentEmails.filter((e) => e.status === "unrecognised")
+  const foreign = unrecognised.filter(isForeign).length
+  const unread = unrecognised.length - foreign
   if (unread > 0) {
     warnings.push(
       `${unread} bank email${unread === 1 ? "" : "s"} I couldn't read, so numbers may be incomplete`
+    )
+  }
+  if (foreign > 0) {
+    warnings.push(
+      `${foreign} overseas card payment${foreign === 1 ? "" : "s"} not counted yet: the SGD amount comes with the statement`
     )
   }
 
