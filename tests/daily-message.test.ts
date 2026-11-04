@@ -46,6 +46,9 @@ function seed(dbPath: string) {
       ('e3', 'ocbc', '2026-10-21T06:00:00Z', 'saved', 'friend', 'x'),
       ('e4', 'ocbc', '2026-10-21T07:00:00Z', 'self-transfer', 'wise', 'x'),
       ('e5', 'uob', '2026-10-21T08:00:00Z', 'unrecognised', NULL, 'x');
+    INSERT INTO alert_emails (message_id, bank, received_at, status, reason, transaction_id, processed_at) VALUES
+      ('e6', 'trust', '2026-10-21T09:00:00Z', 'unrecognised', 'Yay! Overseas transaction successful: foreign amount, SGD not known until the Statement', NULL, 'x'),
+      ('e7', 'trust', '2026-10-21T10:00:00Z', 'ignored', 'Start investing with zero commission: no amount, so not a payment', NULL, 'x');
     INSERT INTO budgets (category, monthly_limit, updated_at) VALUES
       ('Food & Drink', 150, 'x'),
       ('Transport', 2, 'x'),
@@ -90,7 +93,12 @@ async function main() {
     assert.equal(s.salary, 4500)
     assert.equal(s.pace, 1200 + 580 + 128 + (44 / 21) * 31)
     assert.deepEqual(s.unlabelled, { count: 1, total: 30 })
-    assert.equal(s.warnings.length, 1)
+    // One email it couldn't read; the overseas payment has its own line;
+    // the promotion is not mentioned
+    assert.deepEqual(s.warnings, [
+      "1 bank email I couldn't read, so numbers may be incomplete",
+      "1 overseas card payment not counted yet: the SGD amount comes with the statement",
+    ])
     // Budgets: the owner's spending this month against each limit
     assert.deepEqual(
       s.budgets.map((b) => [b.category, b.spent, b.usedPct, b.pace]),
@@ -106,7 +114,7 @@ async function main() {
     // Budget warnings at the top, after the other warnings: 80% and 100%
     assert.match(
       text,
-      /^⚠️ 1 bank email.*\n⚠️ Food & Drink budget 93% used: \$10 left of \$150\n⚠️ Transport budget used up: \$2 of \$2\n\n📅/
+      /^⚠️ 1 bank email.*\n⚠️ 1 overseas card payment not counted yet.*\n⚠️ Food & Drink budget 93% used: \$10 left of \$150\n⚠️ Transport budget used up: \$2 of \$2\n\n📅/
     )
     // Pace for each budget, with words as well as a mark
     assert.match(
