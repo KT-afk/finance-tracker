@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Tests never touch the live database, even when this shell is set up for
+# it (book lessons 1 and 32)
+unset TURSO_DATABASE_URL TURSO_AUTH_TOKEN DATABASE_URL DATABASE_AUTH_TOKEN
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TSX="$ROOT/node_modules/.bin/tsx"
 PASS=0

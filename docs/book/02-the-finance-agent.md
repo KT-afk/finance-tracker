@@ -334,3 +334,13 @@ Limits: only cash and other spending no bank statement will show (never card or 
 **What we changed.** An email we can't read that has no amount with cents (every real payment alert has one, like $12.50) is now treated as not a payment and skipped quietly. Overseas card payments get their own line: “1 overseas card payment not counted yet: the SGD amount comes with the statement.” A truly new kind of alert, with an amount, still gets the warning.
 
 **How we checked.** Tests with the real promotion subjects, an unknown email with an amount (still flagged), and the 10pm warnings.
+
+## Ticket 42: IBKR is investing (2026-11-20)
+
+**What happened.** About $500 goes to Interactive Brokers every month. The app kept it out of spending, but called it a credit card payment, and the OCBC alert for it was named “Chocolate top-up”, because OCBC's alert doesn't say who pulled the money.
+
+**What we changed.** It's now a Self Transfer: your own money moving to your own investment account. The OCBC alert is named “Direct debit (Chocolate or IBKR)”. In your live data, at your request, a rule for “interactive br”, the 28 May payment and a memory about the monthly $500 were added through the usual confirmed changes (#14–#16), so they can be undone.
+
+**A correction.** I had said May looked $500 too expensive. It didn't: the app's built-in rule had already kept that payment out of spending, whatever its label said.
+
+**Found on the way.** One test had been quietly reading the live database's rules (lesson 32). Fixed.

@@ -1,7 +1,28 @@
 import assert from "node:assert/strict"
-import { categorize, getKnownCategory } from "../lib/categorize"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { createRequire } from "node:module"
+import { migratedSchemaSql } from "./migrated-schema"
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
+  DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void }
+}
 
 async function main() {
+  // Its own empty database: rules are looked up, and this must never fall
+  // back to the live one (book lesson 1)
+  const tmpDir = mkdtempSync(path.join(tmpdir(), "finance-categorize-"))
+  const dbPath = path.join(tmpDir, "test.db")
+  const seed = new DatabaseSync(dbPath)
+  seed.exec(migratedSchemaSql())
+  seed.close()
+  process.env.FINANCE_DB_PATH = dbPath
+  delete process.env.DATABASE_URL
+  delete process.env.TURSO_DATABASE_URL
+  delete process.env.TURSO_AUTH_TOKEN
+  delete process.env.DATABASE_AUTH_TOKEN
+  const { categorize, getKnownCategory } = await import("../lib/categorize")
+
   const previousKey = process.env.ANTHROPIC_API_KEY
   delete process.env.ANTHROPIC_API_KEY
 
@@ -74,8 +95,18 @@ async function main() {
         "COLLECTION/TRANSFER OTHR Interactive Br U17113938.839959",
         { amount: -500 }
       ),
-      "Credit Card Payment",
-      "credit card repayments must be excluded from spend"
+      "Self Transfer",
+      "the monthly IBKR debit is investing: the owner's own money, not spend"
+    )
+    assert.equal(
+      await categorize(
+        "COLLECTION/TRANSFER COLL Direct debit (Chocolate or IBKR)",
+        {
+          amount: -500,
+        }
+      ),
+      "Self Transfer",
+      "an OCBC direct-debit alert (Chocolate or IBKR) is not spend"
     )
 
     await assert.rejects(
@@ -88,6 +119,7 @@ async function main() {
     } else {
       process.env.ANTHROPIC_API_KEY = previousKey
     }
+    rmSync(tmpDir, { recursive: true, force: true })
   }
 
   console.log("strict categorization test passed")

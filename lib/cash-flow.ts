@@ -35,7 +35,6 @@ const CC_PAYMENT_PATTERNS = [
   /mBK-UOB\s+Cards?/i,
   /mBK-DBS\s+Cards?/i,
   /mBK-OCBC\s+Cards?/i,
-  /COLLECTION\/TRANSFER.*Interactive/i,
   /BILL\s+PAYMENT.*CARD/i,
   /CREDIT\s+CARD\s+(PAYMENT|BILL)/i,
   /CC\s+BILL\s+PAYMENT/i,
@@ -89,7 +88,11 @@ function categoryFromDescription(
     isSelfTransfer(description) ||
     isAccountHolderLabel(description) ||
     // Top-ups to the user's own Chocolate Finance spending account
-    /\bchocfin\b/i.test(description)
+    /\bchocfin\b/i.test(description) ||
+    // The monthly debit to the user's own Interactive Brokers account
+    /COLLECTION\/TRANSFER.*Interactive/i.test(description) ||
+    // An OCBC alert for either of those direct debits (it doesn't say which)
+    /Direct debit \(Chocolate or IBKR\)/i.test(description)
   ) {
     return "Self Transfer"
   }

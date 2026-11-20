@@ -146,3 +146,7 @@ The trip lookup passed its tests but found $2,053 of Korea spending, not $2,520.
 ## 31. A timestamp doesn't prove your write happened
 
 The first version of trips found its change-log row by “the row this write stamped with this time”. If anything else wrote the same row at the same millisecond, the log would record our change even when our write did nothing. Review caught it. The safe shape, already used by undo: put the log row first in the batch, on exactly the condition the write uses, so both happen or neither does.
+
+## 32. A test with no database of its own used the live one
+
+`categorize-strict` looked up category rules but never set up a test database. In this cloud session the live database settings are set, so for weeks the pre-commit run quietly read the live rules (reading only) and passed. Run without those settings, it failed. It now makes its own empty database, and `scripts/run-tests.sh` clears the live settings before any test runs, so this can't happen again.
