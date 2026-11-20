@@ -289,9 +289,10 @@ function parseOcbc(email: AlertEmail): ParsedAlert {
         date,
         time: parseTime(withdrawal[3]) ?? undefined,
         amount: -value,
-        // OCBC sends this when Chocolate Finance pulls a top-up by direct
-        // debit; the Statement shows it as "COLLECTION/TRANSFER Chocfin"
-        payee: "Chocolate top-up",
+        // OCBC sends this when Chocolate Finance or Interactive Brokers
+        // pulls money by direct debit, without saying which; the Statement
+        // shows "COLLECTION/TRANSFER Chocfin" or "… Interactive Br"
+        payee: "Direct debit (Chocolate or IBKR)",
         payeeKind: "wallet",
         accountEnding: withdrawal[2],
         bankDescription: body,

@@ -56,7 +56,7 @@ export function alertDescription(alert: PaymentAlert): string {
       return `BILL PAYMENT ${alert.payee}`
     case "withdrawal":
       // Worded like the Statement line, so it is recognised as a Self Transfer
-      return "COLLECTION/TRANSFER COLL Chocfin top-up"
+      return "COLLECTION/TRANSFER COLL Direct debit (Chocolate or IBKR)"
     case "card":
       return alert.payee
   }
