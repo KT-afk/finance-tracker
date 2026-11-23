@@ -131,3 +131,37 @@ export function cashPaymentRow(id: string, cash: CashValue, stamp: string) {
     confirmed_at: sql`null`.as("confirmed_at"),
   }
 }
+
+/** A balance the owner told the agent: "$431.20 on 23 Nov 2026". */
+export type BalanceValue = { balance: number; as_of: string }
+export function describeBalance(value: string) {
+  if (!value) return "none"
+  const b = JSON.parse(value) as BalanceValue
+  return `${money(b.balance)} on ${day(b.as_of)}`
+}
+
+/** IBKR as the owner gave it; "" means nothing given yet. */
+export type InvestmentValue = {
+  put_in_before: number | null
+  value: number | null
+  value_as_of: string | null
+}
+export function encodeInvestment(v: InvestmentValue | null) {
+  return v ? JSON.stringify(v) : ""
+}
+export function decodeInvestment(value: string): InvestmentValue | null {
+  return value ? (JSON.parse(value) as InvestmentValue) : null
+}
+export function describeInvestment(value: string) {
+  const v = decodeInvestment(value)
+  if (!v) return "none"
+  const parts = [
+    v.put_in_before !== null
+      ? `put in before records ${money(v.put_in_before)}`
+      : null,
+    v.value !== null
+      ? `worth ${money(v.value)}${v.value_as_of ? ` on ${day(v.value_as_of)}` : ""}`
+      : null,
+  ].filter(Boolean)
+  return parts.length ? parts.join(", ") : "none"
+}

@@ -256,6 +256,8 @@ export const CHANGE_KINDS = [
   "trip",
   "trip_payment",
   "cash_payment",
+  "balance",
+  "investment",
 ] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
@@ -323,3 +325,14 @@ export const tripPayments = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.trip_key, t.transaction_id] })]
 )
+
+// The owner's investment account (IBKR): money put in before the app's
+// records start, and its latest value as the owner gave it. Money put in
+// since is counted from the monthly debits (lib/balance-groups.ts).
+export const investments = sqliteTable("investments", {
+  key: text("key").primaryKey(), // "ibkr"
+  put_in_before: real("put_in_before"),
+  value: real("value"),
+  value_as_of: text("value_as_of"),
+  updated_at: text("updated_at").notNull(),
+})

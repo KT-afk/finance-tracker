@@ -170,6 +170,9 @@ async function main() {
       "propose_trip",
       "propose_trip_payment",
       "propose_cash_payment",
+      "balance_groups",
+      "propose_balance",
+      "propose_investment",
       "propose_recategorise",
       "propose_memory",
       "propose_note",
@@ -1019,6 +1022,85 @@ async function main() {
   assert.match(
     JSON.stringify(cashReqs[0].system),
     /Taking cash out of an ATM isn't spending/
+  )
+
+  // Balances: the three groups, and balances and IBKR told to the agent
+  const balReqs: Anthropic.MessageCreateParamsNonStreaming[] = []
+  const balCalls: unknown[] = []
+  await runFinanceAgent("trust is 430 and ibkr is worth 6100", {
+    loadMemories: async () => [],
+    createMessage: async (params) => {
+      balReqs.push(structuredClone(params))
+      if (balReqs.length === 1)
+        return response("tool_use", [
+          call("g1", {}, "balance_groups"),
+          call(
+            "g2",
+            {
+              bank: "trust",
+              account_type: "savings",
+              balance: 430,
+              as_of: "2026-11-23",
+            },
+            "propose_balance"
+          ),
+          call(
+            "g3",
+            {
+              bank: "trust",
+              account_type: "checking",
+              balance: 430,
+              as_of: "2026-11-23",
+            },
+            "propose_balance"
+          ),
+          call(
+            "g4",
+            { put_in_before: null, value: 6100, value_as_of: null },
+            "propose_investment"
+          ),
+          call(
+            "g5",
+            { put_in_before: "4000", value: null, value_as_of: null },
+            "propose_investment"
+          ),
+        ])
+      return done
+    },
+    balanceGroups: async () => {
+      balCalls.push("groups")
+      throw new Error("private database details")
+    },
+    proposeBalance: async (input) => {
+      balCalls.push([
+        "balance",
+        input.bank,
+        input.accountType,
+        input.balance,
+        input.asOf,
+      ])
+      return { id: "bal1", summary: "Balance" }
+    },
+    proposeInvestment: async (input) => {
+      balCalls.push(["ibkr", input.putInBefore, input.value, input.valueAsOf])
+      return { id: "inv1", summary: "IBKR" }
+    },
+  })
+  assert.deepEqual(balCalls, [
+    "groups",
+    ["balance", "trust", "savings", 430, "2026-11-23"],
+    ["ibkr", null, 6100, null],
+  ])
+  const balResults = balReqs[1].messages.at(-1)!
+    .content as Anthropic.ToolResultBlockParam[]
+  assert.deepEqual(
+    balResults.map((r) => r.is_error),
+    [true, undefined, true, undefined, true]
+  )
+  assert.doesNotMatch(JSON.stringify(balResults), /private database/)
+  assert.match(
+    JSON.stringify(balReqs[0].system),
+    /spending money, savings and investments separately/
   )
 
   // Savings review: strict input, the clock passed through, failures not zero

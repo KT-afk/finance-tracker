@@ -13,6 +13,8 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { db } from "../db"
 import {
   aiMemory,
+  balanceHistory,
+  investments,
   budgets,
   tripPayments,
   trips,
@@ -31,11 +33,14 @@ import {
   decodeCash,
   decodeTrip,
   describeCash,
+  describeBalance,
+  describeInvestment,
+  decodeInvestment,
   describeTrip,
   describeTripMark,
   cashPaymentRow,
 } from "./proposal-format"
-import { ProposalError, splitTripTarget } from "./proposals"
+import { investmentIs, ProposalError, splitTripTarget } from "./proposals"
 import { tripLabel } from "./trip-spending"
 
 type Entry = typeof changeLog.$inferSelect
@@ -47,6 +52,8 @@ function shownValue(kind: Entry["kind"], value: string) {
   if (kind === "trip") return describeTrip(value)
   if (kind === "trip_payment") return describeTripMark(value)
   if (kind === "cash_payment") return describeCash(value)
+  if (kind === "balance") return describeBalance(value)
+  if (kind === "investment") return describeInvestment(value)
   return value
 }
 
@@ -99,15 +106,19 @@ async function describe(entries: Entry[]): Promise<ChangeView[]> {
             ? `rule “${e.target}”`
             : e.kind === "budget"
               ? `budget for ${e.target}`
-              : e.kind === "cash_payment"
-                ? `cash payment “${decodeCash(e.after || e.before)?.description ?? e.target}”`
-                : e.kind === "trip"
-                  ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
-                  : e.kind === "trip_payment"
-                    ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
-                    : tx
-                      ? describePayment(tx)
-                      : "a transaction that no longer exists",
+              : e.kind === "balance"
+                ? `balance of ${e.target.split("|")[0].toUpperCase()} ${e.target.endsWith("credit_card") ? "card" : "account"}`
+                : e.kind === "investment"
+                  ? "IBKR"
+                  : e.kind === "cash_payment"
+                    ? `cash payment “${decodeCash(e.after || e.before)?.description ?? e.target}”`
+                    : e.kind === "trip"
+                      ? `trip “${decodeTrip(e.after || e.before)?.name ?? e.target}”`
+                      : e.kind === "trip_payment"
+                        ? `${tripLabel(tripNames.get(splitTripTarget(e.target)[0]) ?? splitTripTarget(e.target)[0])}: ${tx ? describePayment(tx) : "a transaction that no longer exists"}`
+                        : tx
+                          ? describePayment(tx)
+                          : "a transaction that no longer exists",
       before: shownValue(e.kind, e.before),
       after: shownValue(e.kind, e.after),
       source: e.source,
@@ -265,6 +276,98 @@ export async function undoChange(
             .from(categoryRules)
             .where(eq(categoryRules.keyword, entry.target))
         )[0]?.value ?? ""
+  } else if (entry.kind === "balance") {
+    // Undo removes the balance row this entry added (found by its save
+    // time, the entry's own time); undoing that adds it back
+    const [bank, accountType] = entry.target.split("|")
+    const value = JSON.parse(entry.after || entry.before) as {
+      balance: number
+      as_of: string
+    }
+    const original = entry.reverses_id === null ? entry : null
+    const theRow = original
+      ? and(
+          eq(balanceHistory.bank, bank as never),
+          eq(balanceHistory.account_type, accountType as never),
+          eq(balanceHistory.balance, value.balance),
+          eq(balanceHistory.statement_date, value.as_of),
+          eq(balanceHistory.recorded_at, original.created_at)
+        )
+      : undefined
+    const condition = theRow
+      ? sql`exists (select 1 from ${balanceHistory} where ${theRow})`
+      : sql`1`
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: entry.after }))
+            .from(changeLog)
+            .where(and(eq(changeLog.id, entry.id), condition))
+        )
+        .returning({ id: changeLog.id }),
+      theRow
+        ? db.delete(balanceHistory).where(theRow)
+        : db.insert(balanceHistory).values({
+            bank: bank as never,
+            account_type: accountType as never,
+            balance: value.balance,
+            recorded_at: ctx.now.toISOString(),
+            statement_date: value.as_of,
+          }),
+    ] as unknown as Parameters<typeof db.batch>[0])
+    logged = log as { id: number }[]
+    if (!logged.length) current = ""
+  } else if (entry.kind === "investment") {
+    const before = decodeInvestment(entry.before)
+    const condition = investmentIs(entry.after)
+    const stamp = ctx.now.toISOString()
+    const [log] = await db.batch([
+      db
+        .insert(changeLog)
+        .select(
+          db
+            .select(logRow({ target: entry.target, current: entry.after }))
+            .from(changeLog)
+            .where(and(eq(changeLog.id, entry.id), condition))
+        )
+        .returning({ id: changeLog.id }),
+      before && entry.after
+        ? db
+            .update(investments)
+            .set({ ...before, updated_at: stamp })
+            .where(and(eq(investments.key, "ibkr"), condition))
+        : before
+          ? db.insert(investments).select(
+              db
+                .select({
+                  key: sql`'ibkr'`.as("key"),
+                  put_in_before: sql`${before.put_in_before}`.as(
+                    "put_in_before"
+                  ),
+                  value: sql`${before.value}`.as("value"),
+                  value_as_of: sql`${before.value_as_of}`.as("value_as_of"),
+                  updated_at: sql`${stamp}`.as("updated_at"),
+                })
+                .from(changeLog)
+                .where(and(eq(changeLog.id, entry.id), condition))
+            )
+          : db
+              .delete(investments)
+              .where(and(eq(investments.key, "ibkr"), condition)),
+    ] as unknown as Parameters<typeof db.batch>[0])
+    logged = log as { id: number }[]
+    if (!logged.length) {
+      const [row] = await db.select().from(investments)
+      current = row
+        ? JSON.stringify({
+            put_in_before: row.put_in_before,
+            value: row.value,
+            value_as_of: row.value_as_of,
+          })
+        : ""
+    }
   } else if (entry.kind === "cash_payment") {
     // Undo removes the payment (and its place in a trip) only if it is
     // unchanged and nobody split it; undoing that puts it back
