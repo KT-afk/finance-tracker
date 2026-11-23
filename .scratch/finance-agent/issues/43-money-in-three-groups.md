@@ -13,3 +13,7 @@ Owner (2026-11-20): “separate investments and savings; total balance should ha
 - [x] Tests: grouping, latest balance wins, IBKR debits counted (not Chocolate top-ups), told balances, IBKR updates, undo, refusals; agent tests; phone-width check
 
 Not handled: undoing an undo of a told balance adds it again rather than removing it.
+
+Review (2026-11-23), fixed: IBKR transfers counted from money going out only, so the count, first date and amount agree (a refund back isn't one); a card in credit adds to spending money instead of counting as owed; the page says “as of” or “recorded”, warns in words when cards owe more than the accounts hold, labels IBKR “put in” until a value is given, and uses headings for the three groups.
+
+Known: undo of a told balance finds its row by save time (the log entry's own time); storing the row's id would be safer.

@@ -78,7 +78,8 @@ export async function balanceGroups(): Promise<BalanceGroups> {
   for (const row of latest.values()) {
     const card = row.account_type === "credit_card"
     const group = card ? "spending" : ACCOUNT_GROUPS[row.bank]
-    const countsAs = card ? -Math.abs(row.balance) : row.balance
+    // A card's balance is what's owed; a card in credit (negative) adds
+    const countsAs = card ? -row.balance : row.balance
     groups[group].accounts.push({
       bank: row.bank,
       account_type: row.account_type ?? "savings",
@@ -98,13 +99,14 @@ export async function balanceGroups(): Promise<BalanceGroups> {
       )
   )
 
-  const debits = await db
-    .select({ date: transactions.date, amount: transactions.amount })
-    .from(transactions)
-    .where(like(transactions.description, IBKR_DEBIT))
-  const sinceRecords = debits
-    .filter((d) => d.amount < 0)
-    .reduce((sum, d) => sum + Math.abs(d.amount), 0)
+  // Money going out to IBKR only (a refund back isn't a transfer in)
+  const debits = (
+    await db
+      .select({ date: transactions.date, amount: transactions.amount })
+      .from(transactions)
+      .where(like(transactions.description, IBKR_DEBIT))
+  ).filter((d) => d.amount < 0)
+  const sinceRecords = debits.reduce((sum, d) => sum + Math.abs(d.amount), 0)
   const [ibkr] = await db.select().from(investments)
   groups.investments = {
     put_in_before: ibkr?.put_in_before ?? null,

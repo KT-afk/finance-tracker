@@ -42,7 +42,7 @@ function AccountLines({
           <span className="shrink-0 tabular-nums text-zinc-400">
             {formatSGD(a.counts_as)}{" "}
             <span className="text-xs text-zinc-500">
-              {a.exact ? "" : "saved "}
+              {a.exact ? "as of " : "recorded "}
               {dayLabel(a.as_of)}
             </span>
           </span>
@@ -94,16 +94,23 @@ export function MoneyGroups() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="border-zinc-800 bg-zinc-900">
           <CardContent className="p-4">
-            <p className="text-xs text-zinc-400">Spending money</p>
+            <h3 className="text-xs font-normal text-zinc-400">
+              Spending money
+            </h3>
             <p className="text-xl font-semibold tabular-nums">
               {formatSGD(data.spending.total)}
             </p>
+            {data.spending.total < 0 && (
+              <p className="text-xs text-amber-300">
+                You owe more on cards than these accounts hold
+              </p>
+            )}
             <AccountLines accounts={data.spending.accounts} />
           </CardContent>
         </Card>
         <Card className="border-zinc-800 bg-zinc-900">
           <CardContent className="p-4">
-            <p className="text-xs text-zinc-400">Savings</p>
+            <h3 className="text-xs font-normal text-zinc-400">Savings</h3>
             <p className="text-xl font-semibold tabular-nums">
               {formatSGD(data.savings.total)}
             </p>
@@ -112,7 +119,10 @@ export function MoneyGroups() {
         </Card>
         <Card className="border-zinc-800 bg-zinc-900">
           <CardContent className="p-4">
-            <p className="text-xs text-zinc-400">Investments (IBKR)</p>
+            <h3 className="text-xs font-normal text-zinc-400">
+              Investments (IBKR)
+              {inv.value === null ? ", put in" : ", worth"}
+            </h3>
             <p className="text-xl font-semibold tabular-nums">
               {formatSGD(inv.value ?? inv.put_in)}
             </p>

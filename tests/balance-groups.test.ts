@@ -28,7 +28,10 @@ async function main() {
     INSERT INTO transactions (id, date, description, amount, bank, category, is_corrected, hash, uploaded_at) VALUES
       ('i1', '2026-09-28', 'COLLECTION/TRANSFER OTHR Interactive Br U17113938', -500, 'ocbc', 'Self Transfer', 0, 'h1', 'x'),
       ('i2', '2026-10-28', 'COLLECTION/TRANSFER OTHR Interactive Br U17113938', -500, 'ocbc', 'Self Transfer', 0, 'h2', 'x'),
-      ('c1', '2026-10-14', 'COLLECTION/TRANSFER COLL Chocfin top-up', -100, 'ocbc', 'Self Transfer', 0, 'h3', 'x');
+      ('c1', '2026-10-14', 'COLLECTION/TRANSFER COLL Chocfin top-up', -100, 'ocbc', 'Self Transfer', 0, 'h3', 'x'),
+      ('i3', '2026-10-30', 'COLLECTION/TRANSFER OTHR Interactive Br refund', 20, 'ocbc', 'Self Transfer', 0, 'h4', 'x');
+    INSERT INTO balance_history (bank, balance, account_type, recorded_at, statement_date) VALUES
+      ('dbs', -5, 'credit_card', '2026-11-01T00:00:00Z', '2026-11-01');
   `)
   seed.close()
   process.env.FINANCE_DB_PATH = dbPath
@@ -55,12 +58,14 @@ async function main() {
 
     const g = await balanceGroups()
     // Spending: Trust $31.38 minus what's owed on both cards
-    assert.equal(g.spending.total, 31.38 - 140.22 - 2126.87)
+    // …and a DBS card $5 in credit, which adds
+    assert.equal(g.spending.total, 31.38 - 140.22 - 2126.87 + 5)
     assert.deepEqual(
       g.spending.accounts
         .map((a) => [a.bank, a.account_type, a.counts_as])
         .sort(),
       [
+        ["dbs", "credit_card", 5],
         ["trust", "credit_card", -140.22],
         ["trust", "savings", 31.38],
         ["uob", "credit_card", -2126.87],
@@ -69,7 +74,8 @@ async function main() {
     // Savings: the latest OCBC balance, not the older one
     assert.equal(g.savings.total, 17877.93)
     assert.equal(g.savings.accounts[0].as_of, "2026-10-13")
-    // Investments: two IBKR debits; the Chocolate top-up isn't one
+    // Investments: two IBKR debits; the Chocolate top-up and a refund from
+    // IBKR aren't
     assert.deepEqual(
       [
         g.investments.put_in,

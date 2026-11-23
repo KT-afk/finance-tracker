@@ -359,7 +359,10 @@ export async function undoChange(
     ] as unknown as Parameters<typeof db.batch>[0])
     logged = log as { id: number }[]
     if (!logged.length) {
-      const [row] = await db.select().from(investments)
+      const [row] = await db
+        .select()
+        .from(investments)
+        .where(eq(investments.key, "ibkr"))
       current = row
         ? JSON.stringify({
             put_in_before: row.put_in_before,
