@@ -28,7 +28,7 @@ Last updated: 2026-10-27, in a cloud session on branch `ccr-f84f8aa4-x0x6n3` (af
 - Review fixes for those (PR #38, merged). Remaining smells are in ticket 31.
 - Ticket 13 (PR #39, merged): weekly review on Sundays, monthly review on the 1st, each instead of the daily message. No migration.
 - Ticket 41 (PR #50): promotions no longer count as unread bank emails; overseas card payments get their own 10pm line.
-- Ticket 43 (PR #52): money in three groups. Needs migration 0014 on the live database before merging.
+- Ticket 43 (PR #52, merged): money in three groups. Migration 0014 is applied to the live database (15 migrations recorded).
 - Ticket 40 (PR #49, merged): cash payments from chat (propose_cash_payment). No migration.
 - Ticket 39 part two (PR #48, merged): trip filter and ✈ label on the Transactions page; trips in the monthly review. No migration.
 - Ticket 39 (PR #47, merged): saved trips. Migration 0013 is applied to the live database (14 migrations recorded).
