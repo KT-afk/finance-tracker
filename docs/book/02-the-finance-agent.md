@@ -344,3 +344,19 @@ Limits: only cash and other spending no bank statement will show (never card or 
 **A correction.** I had said May looked $500 too expensive. It didn't: the app's built-in rule had already kept that payment out of spending, whatever its label said.
 
 **Found on the way.** One test had been quietly reading the live database's rules (lesson 32). Fixed.
+
+## Ticket 43: Your money in three groups (2026-11-23)
+
+**What you asked for.** Separate savings from investments, with the total split three ways.
+
+**What we built.** The Accounts page now opens with “Your money”:
+
+- **Spending money:** Trust, Wise and Chocolate, minus what you owe on your cards.
+- **Savings:** OCBC, DBS and UOB's account.
+- **Investments:** IBKR. What you've put in is counted automatically from the monthly $500 debits, plus whatever you put in before December 2025. If you tell the bot what it's worth (“IBKR is at $6,100”), that shows too, with its date.
+
+Each balance shows the date it was true for, and accounts with no balance yet are named. Ask the bot “how much do I have?” and it answers in the same three groups. Tell it a balance (“Trust is at $430”) or IBKR's details, and it proposes saving it, with ✅ and ❌, in the change log, undoable.
+
+**How we checked.** A database test for the grouping, the latest balance winning, IBKR debits counted but Chocolate top-ups not, told balances, IBKR updates, undo and refusals. Agent tests for the three tools. The page at phone width.
+
+**Needs** migration 0014 on the live database before it's merged.

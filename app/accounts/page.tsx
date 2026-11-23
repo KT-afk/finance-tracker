@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { balanceDateLabel, formatSGD, relativeDate } from "@/lib/display"
 import { BANKS } from "@/lib/schema"
+import { MoneyGroups } from "@/components/MoneyGroups"
 
 interface BankBalance {
   bank: string
@@ -122,6 +123,8 @@ export default function AccountsPage() {
   return (
     <div className="space-y-5 p-4 max-w-2xl mx-auto">
       <h1 className="text-xl font-semibold">Accounts</h1>
+
+      <MoneyGroups />
 
       {/* Loading */}
       {loading && (

@@ -10,6 +10,9 @@ import {
   OwedError,
 } from "../owed"
 import {
+  BANKS,
+  balanceHistory,
+  investments,
   tripPayments,
   trips,
   agentProposals,
@@ -41,6 +44,11 @@ import {
   encodeTrip,
   type TripValue,
   cashPaymentRow,
+  decodeInvestment,
+  describeBalance,
+  describeInvestment,
+  encodeInvestment,
+  type InvestmentValue,
 } from "./proposal-format"
 import {
   cleanTripName,
@@ -190,6 +198,10 @@ export async function decideProposal(
   if (proposal.kind === "budget")
     return applyBudget(proposal, settle, lost, now)
   if (proposal.kind === "trip") return applyTrip(proposal, settle, lost, now)
+  if (proposal.kind === "balance")
+    return applyBalance(proposal, settle, lost, now)
+  if (proposal.kind === "investment")
+    return applyInvestment(proposal, settle, lost, now)
   if (proposal.kind === "cash_payment")
     return applyCashPayment(proposal, settle, lost, now)
   if (proposal.kind === "trip_payment")
@@ -1569,4 +1581,200 @@ async function applyCashPayment(
     outcome: "applied",
     message: `Done: ${proposal.summary}. Change #${entry.id} in the change log.`,
   }
+}
+
+// ---- Balances and IBKR, as the owner tells them ----
+
+const MAX_BALANCE = 10_000_000
+
+function singaporeToday(now: Date) {
+  return new Date(now.getTime() + 8 * 3_600_000).toISOString().slice(0, 10)
+}
+
+const ACCOUNT_NAMES: Record<string, string> = {
+  savings: "account",
+  credit_card: "card (owed)",
+}
+
+/** Store a proposal to record one account's balance on a date. */
+export async function proposeBalance(input: {
+  bank: string
+  accountType: "savings" | "credit_card"
+  balance: number
+  asOf: string
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<Proposal> {
+  if (!(BANKS as readonly string[]).includes(input.bank))
+    throw new ProposalError(`Use one of: ${BANKS.join(", ")}`)
+  if (!Number.isFinite(input.balance) || Math.abs(input.balance) > MAX_BALANCE)
+    throw new ProposalError("That balance doesn't look right")
+  if (input.asOf > singaporeToday(input.now))
+    throw new ProposalError("The date is in the future")
+  const after = JSON.stringify({
+    balance: Math.round(input.balance * 100) / 100,
+    as_of: input.asOf,
+  })
+  const summary = `Balance: ${input.bank.toUpperCase()} ${ACCOUNT_NAMES[input.accountType]} ${describeBalance(after)}`
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "balance",
+    target: `${input.bank}|${input.accountType}`,
+    before: "",
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+async function applyBalance(
+  proposal: ProposalRow,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  if (!(await settle("confirmed"))) return lost
+  const [bank, accountType] = proposal.target.split("|")
+  const value = JSON.parse(proposal.after) as { balance: number; as_of: string }
+  const stamp = now.toISOString()
+  // A new balance row is always added, like a statement upload; the log
+  // row's created_at is the row's recorded_at, so undo can find it
+  return logFirst(
+    proposal,
+    { outcome: "conflict", message: "Nothing changed." },
+    stamp,
+    sql`1`,
+    db.insert(balanceHistory).values({
+      bank: bank as (typeof BANKS)[number],
+      account_type: accountType as "savings" | "credit_card",
+      balance: value.balance,
+      recorded_at: stamp,
+      statement_date: value.as_of,
+    })
+  )
+}
+
+async function currentInvestment(): Promise<string> {
+  const [row] = await db
+    .select()
+    .from(investments)
+    .where(eq(investments.key, "ibkr"))
+  return row
+    ? encodeInvestment({
+        put_in_before: row.put_in_before,
+        value: row.value,
+        value_as_of: row.value_as_of,
+      })
+    : ""
+}
+
+/**
+ * Store a proposal to set what was put into IBKR before the app's records
+ * start, and/or its latest value. Fields left null keep what is saved.
+ */
+export async function proposeInvestment(input: {
+  putInBefore: number | null
+  value: number | null
+  valueAsOf: string | null
+  source: ConversationSource
+  request: string
+  now: Date
+}): Promise<Proposal> {
+  if (input.putInBefore === null && input.value === null)
+    throw new ProposalError(
+      "Give the amount put in before, or the value, or both"
+    )
+  for (const n of [input.putInBefore, input.value])
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > MAX_BALANCE))
+      throw new ProposalError("That amount doesn't look right")
+  const today = singaporeToday(input.now)
+  if (input.valueAsOf && input.valueAsOf > today)
+    throw new ProposalError("The date is in the future")
+  const before = await currentInvestment()
+  const old = decodeInvestment(before)
+  const round = (n: number | null) =>
+    n === null ? null : Math.round(n * 100) / 100
+  const next: InvestmentValue = {
+    put_in_before: round(input.putInBefore) ?? old?.put_in_before ?? null,
+    value: round(input.value) ?? old?.value ?? null,
+    value_as_of:
+      input.value !== null
+        ? (input.valueAsOf ?? today)
+        : (old?.value_as_of ?? null),
+  }
+  const after = encodeInvestment(next)
+  if (after === before) throw new ProposalError("That is already saved")
+  const summary =
+    `IBKR: ${describeInvestment(after)}` +
+    (before ? ` (was ${describeInvestment(before)})` : "")
+  const id = newId()
+  await db.insert(agentProposals).values({
+    id,
+    kind: "investment",
+    target: "ibkr",
+    before,
+    after,
+    summary,
+    source: input.source,
+    request: input.request,
+    created_at: input.now.toISOString(),
+  })
+  return { id, summary }
+}
+
+/** IBKR's row still exactly as `value` (every field), or still not saved. */
+export function investmentIs(value: string): SQL {
+  const v = decodeInvestment(value)
+  return v
+    ? sql`exists (select 1 from ${investments} where ${investments.key} = 'ibkr' and ${investments.put_in_before} is ${v.put_in_before} and ${investments.value} is ${v.value} and ${investments.value_as_of} is ${v.value_as_of})`
+    : sql`not exists (select 1 from ${investments} where ${investments.key} = 'ibkr')`
+}
+
+async function applyInvestment(
+  proposal: ProposalRow,
+  settle: Settle,
+  lost: Lost,
+  now: Date
+): Promise<Result> {
+  const conflict = {
+    outcome: "conflict" as const,
+    message:
+      "Nothing changed: IBKR's details have changed since this was proposed.",
+  }
+  if ((await currentInvestment()) !== proposal.before) {
+    if (!(await settle("conflict"))) return lost
+    return conflict
+  }
+  if (!(await settle("confirmed"))) return lost
+  const stamp = now.toISOString()
+  const condition = investmentIs(proposal.before)
+  const next = decodeInvestment(proposal.after)!
+  return logFirst(
+    proposal,
+    conflict,
+    stamp,
+    condition,
+    proposal.before
+      ? db
+          .update(investments)
+          .set({ ...next, updated_at: stamp })
+          .where(and(eq(investments.key, "ibkr"), condition))
+      : db.insert(investments).select(
+          db
+            .select({
+              key: sql`'ibkr'`.as("key"),
+              put_in_before: sql`${next.put_in_before}`.as("put_in_before"),
+              value: sql`${next.value}`.as("value"),
+              value_as_of: sql`${next.value_as_of}`.as("value_as_of"),
+              updated_at: sql`${stamp}`.as("updated_at"),
+            })
+            .from(agentProposals)
+            .where(and(eq(agentProposals.id, proposal.id), condition))
+        )
+  )
 }

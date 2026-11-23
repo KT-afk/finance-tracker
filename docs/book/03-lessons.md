@@ -150,3 +150,7 @@ The first version of trips found its change-log row by “the row this write sta
 ## 32. A test with no database of its own used the live one
 
 `categorize-strict` looked up category rules but never set up a test database. In this cloud session the live database settings are set, so for weeks the pre-commit run quietly read the live rules (reading only) and passed. Run without those settings, it failed. It now makes its own empty database, and `scripts/run-tests.sh` clears the live settings before any test runs, so this can't happen again.
+
+## 33. A new cloud container may have no packages installed
+
+On 23 Nov the session's container was new and `node_modules` was missing, so `drizzle-kit` said “Please install latest version of drizzle-orm”, which sounds like a version problem but wasn't. Run `npm ci` first in a fresh container.

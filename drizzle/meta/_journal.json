@@ -99,6 +99,13 @@
       "when": 1793430984031,
       "tag": "0013_trips",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795445404514,
+      "tag": "0014_investments",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk"
 import { isValidIsoDate } from "../owed"
-import { CATEGORIES } from "../schema"
+import { BANKS, CATEGORIES } from "../schema"
 import { ProposalError } from "./proposals"
 
 /** An object with only the allowed fields. */
@@ -384,5 +384,93 @@ export function parseCashPaymentInput(input: unknown) {
     category,
     description,
     trip: trip === null ? null : (trip as string).trim(),
+  }
+}
+
+export const proposeBalanceTool = {
+  name: "propose_balance",
+  strict: true,
+  description:
+    "Propose recording one account's balance as the owner tells it (e.g. Trust is at $431 today), when no statement gives it. account_type is savings for a bank or wallet account, credit_card for an amount owed on a card. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      bank: { type: "string", enum: [...BANKS] },
+      account_type: { type: "string", enum: ["savings", "credit_card"] },
+      balance: { type: "number", description: "In SGD" },
+      as_of: {
+        type: "string",
+        description: "YYYY-MM-DD; today if they say now",
+      },
+    },
+    additionalProperties: false,
+    required: ["bank", "account_type", "balance", "as_of"],
+  },
+} satisfies Anthropic.Tool
+
+/** Strict check of the propose_balance input. */
+export function parseBalanceInput(input: unknown) {
+  const { bank, account_type, balance, as_of } = strictObject(input, [
+    "bank",
+    "account_type",
+    "balance",
+    "as_of",
+  ])
+  if (typeof bank !== "string") throw new ProposalError("bank must be a string")
+  if (account_type !== "savings" && account_type !== "credit_card")
+    throw new ProposalError("account_type must be savings or credit_card")
+  if (typeof balance !== "number" || !Number.isFinite(balance))
+    throw new ProposalError("balance must be a number")
+  if (typeof as_of !== "string" || !isValidIsoDate(as_of))
+    throw new ProposalError("as_of must be a valid YYYY-MM-DD date")
+  return {
+    bank,
+    accountType: account_type as "savings" | "credit_card",
+    balance,
+    asOf: as_of,
+  }
+}
+
+export const proposeInvestmentTool = {
+  name: "propose_investment",
+  strict: true,
+  description:
+    "Propose updating IBKR (the owner's investment account): put_in_before is money put in before the app's records start (the monthly debits since are counted automatically); value is what the account is worth now, with value_as_of. Give null for a field to keep what is saved. This stores a proposal and changes nothing until the owner confirms it with a button.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      put_in_before: { type: ["number", "null"], description: "SGD, or null" },
+      value: { type: ["number", "null"], description: "SGD, or null" },
+      value_as_of: {
+        type: ["string", "null"],
+        description: "YYYY-MM-DD for value, or null for today",
+      },
+    },
+    additionalProperties: false,
+    required: ["put_in_before", "value", "value_as_of"],
+  },
+} satisfies Anthropic.Tool
+
+/** Strict check of the propose_investment input. */
+export function parseInvestmentInput(input: unknown) {
+  const { put_in_before, value, value_as_of } = strictObject(input, [
+    "put_in_before",
+    "value",
+    "value_as_of",
+  ])
+  for (const n of [put_in_before, value])
+    if (n !== null && (typeof n !== "number" || !Number.isFinite(n)))
+      throw new ProposalError("Amounts must be numbers or null")
+  if (
+    value_as_of !== null &&
+    (typeof value_as_of !== "string" || !isValidIsoDate(value_as_of))
+  )
+    throw new ProposalError(
+      "value_as_of must be a valid YYYY-MM-DD date or null"
+    )
+  return {
+    putInBefore: put_in_before as number | null,
+    value: value as number | null,
+    valueAsOf: value_as_of as string | null,
   }
 }
